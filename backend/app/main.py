@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.api import health, auth, jobs, users, applications, profile, interview, billing, referrals
+from app.api import health, auth, jobs, users, applications, profile, interview, billing, referrals, interview_coach
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -28,6 +28,7 @@ app.include_router(profile.router, prefix=f"{settings.API_V1_PREFIX}/profile", t
 app.include_router(interview.router, prefix=f"{settings.API_V1_PREFIX}/interview", tags=["Interview Prep"])
 app.include_router(billing.router, prefix=f"{settings.API_V1_PREFIX}/billing", tags=["Billing"])
 app.include_router(referrals.router, prefix=f"{settings.API_V1_PREFIX}/referrals", tags=["Referrals"])
+app.include_router(interview_coach.router, prefix=f"{settings.API_V1_PREFIX}/interview-coach", tags=["Interview Coach"])
 
 
 @app.get("/")
