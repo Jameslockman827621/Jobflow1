@@ -8,6 +8,7 @@ from app.database import SessionLocal
 from app.core.security import get_current_user
 from app.models.user import User
 from app.models.profile import UserProfile, Skill
+from app.services.resume_parser import resume_parser
 
 router = APIRouter()
 
@@ -208,7 +209,7 @@ async def upload_resume(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Upload resume (PDF/TXT)"""
+    """Upload resume (PDF/TXT) - auto-parses and fills profile"""
     profile = db.query(UserProfile).filter(UserProfile.user_id == current_user.id).first()
     if not profile:
         profile = UserProfile(user_id=current_user.id)
@@ -220,13 +221,41 @@ async def upload_resume(
     content = await file.read()
     text = content.decode('utf-8', errors='ignore')
     
-    # Save resume text (in production, save to S3 and parse with AI)
+    # Parse resume
+    parsed = resume_parser.parse(text)
+    
+    # Update profile with parsed data
+    if parsed['contact'].get('location'):
+        profile.location = parsed['contact']['location']
+    
+    if parsed['years_of_experience'] > 0:
+        profile.years_of_experience = parsed['years_of_experience']
+    
     profile.resume_text = text
+    
+    # Add extracted skills (avoid duplicates)
+    existing_skills = {s.name.lower() for s in profile.skills}
+    for skill_data in parsed['skills']:
+        if skill_data['name'].lower() not in existing_skills:
+            skill = Skill(
+                profile_id=profile.id,
+                name=skill_data['name'],
+                category=skill_data.get('category'),
+            )
+            db.add(skill)
+    
     db.commit()
     
     return {
         "status": "uploaded",
         "filename": file.filename,
         "size": len(content),
-        "message": "Resume saved. AI parsing coming soon."
+        "parsed": {
+            "contact": parsed['contact'],
+            "skills_count": len(parsed['skills']),
+            "experience_count": len(parsed['experience']),
+            "education_count": len(parsed['education']),
+            "years_of_experience": parsed['years_of_experience'],
+        },
+        "message": f"Resume parsed! Found {len(parsed['skills'])} skills."
     }
