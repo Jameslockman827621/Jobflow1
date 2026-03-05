@@ -25,12 +25,18 @@ class GreenhouseScraper(BaseScraper):
         async with httpx.AsyncClient(
             headers=self.headers,
             timeout=30.0,
+            follow_redirects=True,
         ) as client:
             try:
                 response = await client.get(url, params=params)
                 response.raise_for_status()
                 data = response.json()
-                return [self._parse_job(job, company_subdomain) for job in data.get("jobs", [])]
+                jobs = data.get("jobs", [])
+                print(f"  API returned {len(jobs)} jobs for {company_subdomain}")
+                return [self._parse_job(job, company_subdomain) for job in jobs]
+            except httpx.HTTPStatusError as e:
+                print(f"HTTP error for {company_subdomain}: {e.response.status_code}")
+                return []
             except Exception as e:
                 print(f"Error scraping {company_subdomain}: {e}")
                 return []
@@ -68,15 +74,25 @@ class GreenhouseScraper(BaseScraper):
         # Parse salary (if available)
         min_salary = None
         max_salary = None
-        # Greenhouse API doesn't always include salary
+        
+        # Parse description - Greenhouse returns it as HTML
+        description_obj = job.get("description", {})
+        description = ""
+        if isinstance(description_obj, dict):
+            description = description_obj.get("content", "")
+            # Also try to get plain text version
+            if not description:
+                description = description_obj.get("text", "")
+        elif isinstance(description_obj, str):
+            description = description_obj
         
         return JobData(
-            title=job.get("title", ""),
+            title=job.get("title", "") or "Unknown Position",
             company=company,
             location=location,
             external_id=str(job.get("id", "")),
             external_url=job.get("absolute_url", ""),
-            description=job.get("description", {}).get("content", ""),
+            description=description,
             remote=remote,
             hybrid=hybrid,
             min_salary=min_salary,

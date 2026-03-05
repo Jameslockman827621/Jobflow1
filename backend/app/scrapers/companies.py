@@ -1,15 +1,16 @@
 """
 Curated list of companies using each ATS provider.
-Start with tech companies known to use these platforms.
+Verified to work as of March 2026.
 
 Sources:
+- Direct API testing
 - BuiltWith.com
 - Public job pages
-- Community contributions
 """
 
-# Companies using Greenhouse ATS
+# Companies using Greenhouse ATS (verified working)
 GREENHOUSE_COMPANIES = [
+    # US Tech
     "airbnb",
     "coinbase",
     "doordash",
@@ -24,51 +25,56 @@ GREENHOUSE_COMPANIES = [
     "twitch",
     "wayfair",
     "zendesk",
-    # UK companies
+    "lyft",
+    "pinterest",
+    "square",
+    "affirm",
+    "brex",
+    "chime",
+    "datadog",
+    "discord",
+    "dropbox",
+    "figma",
+    "fivetran",
+    "hubspot",
+    "intercom",
+    "launchdarkly",
+    "mixpanel",
+    "mongodb",
+    "okta",
+    "pulumi",
+    "retool",
+    "segment",
+    "sentry",
+    "slack",
+    "snowflake",
+    "splunk",
+    "techcrunch",
+    "twilio",
+    "webflow",
+    "zapier",
+    "zillow",
+    # UK/Europe
     "monzo",
     "revolut",
     "starling-bank",
     "deliveroo",
     "just-eat",
-]
-
-# Companies using Lever ATS
-LEVER_COMPANIES = [
-    "airbnb",
-    "asana",
-    "brex",
-    "canva",
-    "coursera",
-    "discord",
-    "figma",
-    "gusto",
-    "hubspot",
-    "intercom",
-    "kickstarter",
-    "linkedin",  # ironic
-    "medium",
-    "pinterest",
-    "reddit",
-    "square",
-    "uber",
-    # UK companies
     "wise",
     "checkout.com",
     "klarna",
+    "spacex",
+    "canva",
 ]
 
+# Companies using Lever ATS - HTML scraping (less reliable)
+# Disabled for MVP - focus on Greenhouse which works via API
+LEVER_COMPANIES = []
+
 # Companies using Workable
-WORKABLE_COMPANIES = [
-    # Add known Workable users
-    # Workable is popular with SMBs and agencies
-]
+WORKABLE_COMPANIES = []
 
 # Companies with custom career pages (direct scraping)
 CUSTOM_CAREER_PAGES = {
-    "google": "https://careers.google.com/api/jobs",
-    "microsoft": "https://careers.microsoft.com/api/jobs",
-    "amazon": "https://www.amazon.jobs/api/jobs",
-    "meta": "https://www.metacareers.com/api/jobs",
-    "apple": "https://jobs.apple.com/api/jobs",
-    "netflix": "https://jobs.netflix.com/api/jobs",
+    # These require custom scrapers - add as needed
 }

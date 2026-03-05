@@ -56,7 +56,8 @@ class JobMatcher:
         total_score = sum(s * w for s, w in zip(scores, weights)) / sum(weights)
         return round(total_score, 2)
     
-    def _skills_match(self, profile: UserProfile, job: Job) -> float:
+    @staticmethod
+    def _skills_match(profile: UserProfile, job: Job) -> float:
         """Calculate skills overlap (0-100)"""
         if not profile.skills and not job.skills_required:
             return 50  # Neutral if no data
@@ -74,11 +75,12 @@ class JobMatcher:
         match_ratio = len(overlap) / len(job_skills)
         return round(match_ratio * 100, 2)
     
-    def _seniority_match(self, profile: UserProfile, job: Job) -> float:
+    @staticmethod
+    def _seniority_match(profile: UserProfile, job: Job) -> float:
         """Check seniority alignment (0-100)"""
         seniority_levels = ["entry", "mid", "senior", "lead", "executive"]
         
-        user_level = self._estimate_user_seniority(profile)
+        user_level = JobMatcher._estimate_user_seniority(profile)
         job_level = job.seniority.lower() if job.seniority else None
         
         if not job_level or not user_level:
@@ -106,7 +108,8 @@ class JobMatcher:
         except ValueError:
             return 50
     
-    def _estimate_user_seniority(self, profile: UserProfile) -> Optional[str]:
+    @staticmethod
+    def _estimate_user_seniority(profile: UserProfile) -> Optional[str]:
         """Estimate user's seniority from experience"""
         if not profile.years_of_experience:
             return None
@@ -123,7 +126,8 @@ class JobMatcher:
         else:
             return "executive"
     
-    def _location_match(self, profile: UserProfile, job: Job) -> float:
+    @staticmethod
+    def _location_match(profile: UserProfile, job: Job) -> float:
         """Check location compatibility (0-100)"""
         # Remote job - always good
         if job.remote and profile.remote_only:
@@ -154,7 +158,8 @@ class JobMatcher:
         
         return 20  # Location mismatch
     
-    def _salary_match(self, profile: UserProfile, job: Job) -> float:
+    @staticmethod
+    def _salary_match(profile: UserProfile, job: Job) -> float:
         """Check salary expectations (0-100)"""
         if not profile.min_salary and not profile.max_salary:
             return 50  # No preference
