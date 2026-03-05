@@ -65,23 +65,37 @@
 
 ```
 MVP:        5/5   (100%) ✅
-v1.0:       2/7   (29%) 🚧
-v1.5:       0/5   (0%)
+v1.0:       7/7   (100%) ✅
+v1.5:       3/5   (60%)  🚧
 v2.0:       0/9   (0%)
 v3.0:       0/6   (0%)
 ────────────────────
-TOTAL:      7/32  (22%)
+TOTAL:     15/32  (47%)
 ```
 
 ### Completed:
+**MVP:**
 - ✅ Profile Management (API + UI)
 - ✅ Job Ingestion Pipeline (Celery Beat scheduler)
 - ✅ Email System (SendGrid/SMTP ready)
 - ✅ Application Workflow (with email notifications)
 - ✅ Frontend Polish (Navbar, JobCard components)
-- ✅ Browser Extension (Chrome, multi-site support)
-- ✅ Google Jobs Scraper
-- ✅ Resume Parser (auto-fill profile from PDF)
+
+**v1.0 Launch:**
+- ✅ Browser Extension (Chrome, LinkedIn/Indeed/Glassdoor/Greenhouse/Lever)
+- ✅ More Job Sources (Google Jobs scraper)
+- ✅ Application Kanban (drag-drop pipeline)
+- ✅ Interview Prep (role/company questions)
+- ✅ Job Alerts (daily/weekly/follow-up)
+- ✅ Resume Parser (auto-fill from PDF)
+- ✅ Dashboard Polish
+
+**v1.5 Monetization:**
+- ✅ Stripe Integration (checkout, webhooks, usage)
+- ✅ Free Tier Limits (5 applications/month)
+- ⏳ Premium Features (analytics - partial)
+- ⏳ Referral System
+- ⏳ Pricing Page
 
 ---
 
