@@ -3,7 +3,7 @@ from app.tasks import celery_app
 from app.scrapers import GreenhouseScraper, LeverScraper
 from app.database import SessionLocal
 from app.models.job import Job, JobSource
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List
 
 
@@ -116,5 +116,57 @@ def scrape_lever_companies(company_subdomains: List[str]):
         db.commit()
         
         return {"status": "completed", "total_jobs": total_jobs}
+    finally:
+        db.close()
+
+
+@celery_app.task
+def cleanup_old_jobs():
+    """Remove jobs older than 90 days or marked inactive"""
+    db = SessionLocal()
+    try:
+        cutoff = datetime.utcnow() - timedelta(days=90)
+        
+        # Delete old jobs
+        deleted = db.query(Job).filter(
+            Job.scraped_at < cutoff
+        ).delete()
+        
+        # Mark very old jobs as inactive instead of deleting
+        very_old = datetime.utcnow() - timedelta(days=180)
+        db.query(Job).filter(
+            Job.scraped_at < very_old,
+            Job.is_active == True
+        ).update({"is_active": False})
+        
+        db.commit()
+        print(f"Cleaned up {deleted} old jobs")
+        return {"status": "completed", "deleted": deleted}
+    finally:
+        db.close()
+
+
+@celery_app.task
+def recalculate_all_matches():
+    """Recalculate match scores for all user-job combinations"""
+    from app.services.matching import JobMatcher
+    from app.models.profile import UserProfile
+    
+    db = SessionLocal()
+    try:
+        profiles = db.query(UserProfile).all()
+        jobs = db.query(Job).filter(Job.is_active == True).all()
+        
+        total_updates = 0
+        for profile in profiles:
+            matcher = JobMatcher(db)
+            for job in jobs:
+                score = matcher.calculate_match_score(profile, job)
+                job.match_score = score
+                total_updates += 1
+        
+        db.commit()
+        print(f"Recalculated {total_updates} match scores")
+        return {"status": "completed", "updates": total_updates}
     finally:
         db.close()

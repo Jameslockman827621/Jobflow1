@@ -8,6 +8,7 @@ from app.core.security import create_access_token, get_current_user
 from app.database import SessionLocal
 from app.models.user import User
 from app.models.profile import UserProfile
+from app.tasks.notifications import send_welcome_email_task
 
 router = APIRouter()
 
@@ -60,6 +61,9 @@ async def register(user_data: UserCreate):
         )
         db.add(profile)
         db.commit()
+        
+        # Send welcome email (async)
+        send_welcome_email_task.delay(user.id)
         
         return UserResponse(
             id=user.id,

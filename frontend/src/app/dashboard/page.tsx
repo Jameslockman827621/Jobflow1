@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Navbar from "../../components/Navbar";
+import JobCard from "../../components/JobCard";
 
 interface Job {
   id: number;
@@ -9,11 +11,13 @@ interface Job {
   company: string;
   location: string;
   remote: boolean;
+  hybrid?: boolean;
   min_salary?: number;
   max_salary?: number;
   seniority?: string;
   match_score?: number;
   external_url: string;
+  posted_date?: string;
 }
 
 interface Application {
@@ -93,26 +97,15 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-xl text-gray-600">Loading your dashboard...</div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-900">JobScale</h1>
-          <button
-            onClick={handleLogout}
-            className="text-sm text-gray-600 hover:text-gray-900"
-          >
-            Logout
-          </button>
-        </div>
-      </header>
+      <Navbar isLoggedIn={true} onLogout={handleLogout} />
 
       {/* Tabs */}
       <div className="max-w-7xl mx-auto px-4 mt-6">
@@ -141,56 +134,25 @@ export default function Dashboard() {
       <main className="max-w-7xl mx-auto px-4 py-6">
         {activeTab === "jobs" && (
           <div>
-            <h2 className="text-xl font-semibold mb-4">Recommended Jobs</h2>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">Recommended Jobs</h2>
+              <span className="text-sm text-gray-500">{jobs.length} jobs found</span>
+            </div>
             {jobs.length === 0 ? (
-              <p className="text-gray-500">No jobs found. Check back later!</p>
+              <div className="text-center py-12">
+                <div className="text-4xl mb-4">🔍</div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No jobs yet</h3>
+                <p className="text-gray-500 mb-4">We're still scraping jobs. Check back soon!</p>
+                <p className="text-sm text-gray-400">Admin: Run job scraper to populate jobs</p>
+              </div>
             ) : (
               <div className="grid gap-4">
                 {jobs.map((job) => (
-                  <div key={job.id} className="bg-white p-4 rounded-lg shadow">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="font-semibold text-lg">{job.title}</h3>
-                        <p className="text-gray-600">{job.company}</p>
-                        <div className="mt-2 text-sm text-gray-500">
-                          <span>{job.location}</span>
-                          {job.remote && <span className="ml-2 px-2 py-1 bg-green-100 text-green-800 rounded">Remote</span>}
-                          {job.min_salary && job.max_salary && (
-                            <span className="ml-2">
-                              ${job.min_salary.toLocaleString()} - ${job.max_salary.toLocaleString()}
-                            </span>
-                          )}
-                        </div>
-                        {job.match_score && (
-                          <div className="mt-2">
-                            <span className={`px-2 py-1 rounded text-sm ${
-                              job.match_score >= 70 ? "bg-green-100 text-green-800" :
-                              job.match_score >= 50 ? "bg-yellow-100 text-yellow-800" :
-                              "bg-red-100 text-red-800"
-                            }`}>
-                              {job.match_score}% match
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex space-x-2">
-                        <a
-                          href={job.external_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
-                        >
-                          View
-                        </a>
-                        <button
-                          onClick={() => handleApply(job.id)}
-                          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                        >
-                          Apply
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+                  <JobCard
+                    key={job.id}
+                    {...job}
+                    onApply={handleApply}
+                  />
                 ))}
               </div>
             )}

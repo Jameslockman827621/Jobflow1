@@ -1,5 +1,6 @@
 from celery import Celery
 from app.core.config import settings
+from .scheduler import beat_schedule
 
 celery_app = Celery(
     "jobscale",
@@ -16,4 +17,5 @@ celery_app.conf.update(
     enable_utc=True,
     task_track_started=True,
     task_time_limit=300,  # 5 minute max per task
+    beat_schedule=beat_schedule,
 )

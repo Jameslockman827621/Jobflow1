@@ -10,6 +10,7 @@ from app.models.job import Job
 from app.core.security import get_current_user
 from app.models.user import User
 from app.tasks.applications import prepare_application
+from app.tasks.notifications import send_application_confirmation_task
 from app.services.matching import JobMatcher
 
 router = APIRouter()
@@ -126,6 +127,9 @@ async def create_application(
     if data.auto_prepare:
         prepare_application.delay(application.id)
         message = "Application created - AI is preparing your CV and cover letter"
+    
+    # Send confirmation email
+    send_application_confirmation_task.delay(application.id)
     
     return ApplicationCreateResponse(
         id=application.id,
