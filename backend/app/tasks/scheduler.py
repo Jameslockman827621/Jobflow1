@@ -46,4 +46,22 @@ beat_schedule = {
         "task": "app.tasks.jobs.recalculate_all_matches",
         "schedule": crontab(minute=0, hour=4),  # 4 AM daily
     },
+    
+    # Daily job alerts
+    "daily-job-alerts": {
+        "task": "app.tasks.alerts.send_daily_job_alerts",
+        "schedule": crontab(minute=0, hour=9),  # 9 AM daily
+    },
+    
+    # Weekly summary (Monday 8 AM)
+    "weekly-summary": {
+        "task": "app.tasks.alerts.send_weekly_summary",
+        "schedule": crontab(minute=0, hour=8, day_of_week=1),
+    },
+    
+    # Follow-up reminders (daily at 10 AM)
+    "followup-reminders": {
+        "task": "app.tasks.alerts.send_follow_up_reminders",
+        "schedule": crontab(minute=0, hour=10),
+    },
 }
