@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     # Scraping
     PROXY_POOL: Optional[List[str]] = None
     REQUEST_DELAY_MS: int = 1000
+    APIFY_API_KEY: Optional[str] = None
     
     # CORS
     CORS_ORIGINS: List[str] = ["http://localhost:3000"]

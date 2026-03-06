@@ -64,4 +64,10 @@ beat_schedule = {
         "task": "app.tasks.alerts.send_follow_up_reminders",
         "schedule": crontab(minute=0, hour=10),
     },
+    
+    # LinkedIn jobs via Apify (daily at 6 AM)
+    "scrape-linkedin-daily": {
+        "task": "app.tasks.apify_scraper.scrape_linkedin_daily",
+        "schedule": crontab(minute=0, hour=6),
+    },
 }
