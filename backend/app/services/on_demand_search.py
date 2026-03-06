@@ -191,17 +191,50 @@ class OnDemandSearchService:
         return all_jobs
     
     async def _search_linkedin(self, preferences: UserPreferences) -> List[Dict]:
-        """Search LinkedIn for jobs matching preferences"""
+        """
+        Search LinkedIn for jobs matching preferences.
+        
+        Maps UserPreferences to LinkedIn scraper parameters:
+        - target_roles → keywords
+        - locations → location
+        - date_posted → date_posted (day/week/month)
+        - employment_types → job_type
+        - remote_preference → remote
+        """
         jobs = []
         
-        for role in preferences.target_roles[:3]:  # Limit to 3 roles to avoid rate limits
+        # Map date_posted to LinkedIn format
+        date_map = {
+            "day": "day",
+            "week": "week",
+            "month": "month",
+            "any": "anytime"
+        }
+        date_posted = date_map.get(preferences.date_posted, "month")
+        
+        # Map employment types to LinkedIn format
+        job_type_map = {
+            "fulltime": "fulltime",
+            "parttime": "parttime",
+            "contract": "contract",
+            "internship": "internship"
+        }
+        job_type = job_type_map.get(preferences.employment_types[0] if preferences.employment_types else "fulltime", "fulltime")
+        
+        # Map remote preference
+        remote = preferences.remote_preference in ["remote_only", "hybrid_ok"]
+        
+        # Search combinations
+        for role in preferences.target_roles[:3]:  # Limit to 3 roles
             for location in preferences.locations[:2]:  # Limit to 2 locations
                 try:
                     search_jobs = await self.linkedin_scraper.search_jobs(
                         keywords=role,
                         location=location,
                         max_jobs=50,
-                        remote=preferences.remote_only or preferences.hybrid_ok
+                        date_posted=date_posted,
+                        job_type=job_type,
+                        remote=remote
                     )
                     
                     for job in search_jobs:
@@ -216,37 +249,87 @@ class OnDemandSearchService:
         return jobs
     
     async def _search_indeed(self, preferences: UserPreferences) -> List[Dict]:
-        """Search Indeed for jobs matching preferences"""
+        """
+        Search Indeed for jobs matching preferences.
+        
+        Maps UserPreferences to Indeed scraper parameters:
+        - target_roles → query
+        - locations → location
+        - countries → country (uk, us, ca, au, etc.)
+        - remote_preference → remote (remote/hybrid/null)
+        - employment_types → job_type
+        - date_posted → from_days (1-30)
+        - seniority_levels → level
+        """
         jobs = []
         
-        for role in preferences.target_roles[:5]:  # Indeed is fast, can do more
-            for location in preferences.locations[:3]:  # Up to 3 locations
-                try:
-                    # Extract country from location (default to UK)
-                    country = "uk"
-                    if "us" in location.lower() or "usa" in location.lower():
-                        country = "us"
-                    elif "canada" in location.lower():
-                        country = "ca"
-                    
-                    search_jobs = await self.indeed_scraper.search_jobs(
-                        query=role,
-                        location=location.split(",")[0].strip(),  # Just city name
-                        country=country,
-                        max_jobs=30,  # Indeed is fast, get good coverage
-                        remote="remote" if preferences.remote_only else None,
-                        job_type="fulltime" if "FULL_TIME" in preferences.employment_types else "parttime",
-                        from_days=14  # Last 2 weeks
-                    )
-                    
-                    for job in search_jobs:
-                        job_dict = job.to_dict()
-                        job_dict["_source"] = "indeed"
-                        jobs.append(job_dict)
+        # Map date_posted to days (Indeed uses 1-30)
+        days_map = {
+            "day": 1,
+            "week": 7,
+            "month": 14,
+            "any": 30
+        }
+        from_days = days_map.get(preferences.date_posted, 14)
+        
+        # Map employment types to Indeed format
+        job_type_map = {
+            "fulltime": "fulltime",
+            "parttime": "parttime",
+            "contract": "contract",
+            "internship": "internship",
+            "temporary": "temporary"
+        }
+        job_type = job_type_map.get(preferences.employment_types[0] if preferences.employment_types else "fulltime", "fulltime")
+        
+        # Map remote preference
+        remote_map = {
+            "remote_only": "remote",
+            "hybrid_ok": "hybrid",
+            "onsite_only": None,
+            "any": None
+        }
+        remote = remote_map.get(preferences.remote_preference, None)
+        
+        # Map seniority levels to Indeed format
+        level_map = {
+            "entry": "entry_level",
+            "mid": "mid_level",
+            "senior": "senior_level",
+            "lead": "senior_level",  # Closest match
+            "director": "director",
+            "executive": "executive"
+        }
+        # Use first seniority level or None
+        level = level_map.get(preferences.seniority_levels[0] if preferences.seniority_levels else "", None)
+        
+        # Get countries (default to UK if not specified)
+        countries = preferences.countries if preferences.countries else ["uk"]
+        
+        # Search combinations: country × role × location
+        for country in countries[:3]:  # Limit to 3 countries
+            for role in preferences.target_roles[:3]:  # Limit to 3 roles
+                for location in preferences.locations[:2]:  # Limit to 2 locations per country
+                    try:
+                        search_jobs = await self.indeed_scraper.search_jobs(
+                            query=role,
+                            location=location.split(",")[0].strip(),  # Just city name
+                            country=country,
+                            max_jobs=30,
+                            remote=remote,
+                            job_type=job_type,
+                            from_days=from_days,
+                            sort="relevance"
+                        )
                         
-                except Exception as e:
-                    print(f"Indeed search error ({role} in {location}): {e}")
-                    continue
+                        for job in search_jobs:
+                            job_dict = job.to_dict()
+                            job_dict["_source"] = "indeed"
+                            jobs.append(job_dict)
+                            
+                    except Exception as e:
+                        print(f"Indeed search error ({role} in {location}, {country}): {e}")
+                        continue
         
         return jobs
     
