@@ -15,6 +15,7 @@ from app.models.job import Job, JobSource
 from app.models.preferences import UserPreferences
 from app.models.search_cache import SearchCache
 from app.scrapers.apify_linkedin import ApifyLinkedInScraper
+from app.scrapers.apify_indeed import ApifyIndeedScraper
 from app.scrapers.greenhouse import GreenhouseScraper
 from app.scrapers.lever import LeverScraper
 from app.core.config import settings
@@ -30,16 +31,24 @@ class OnDemandSearchService:
     3. Deduplicate results
     4. Cache results
     5. Return fresh jobs
+    
+    Sources:
+    - LinkedIn (via Apify)
+    - Indeed (via Apify)
+    - Greenhouse (direct API)
+    - Lever (direct scraping)
     """
     
     def __init__(self, db: Session):
         self.db = db
         self.linkedin_scraper = None
+        self.indeed_scraper = None
         self.greenhouse_scraper = GreenhouseScraper()
         self.lever_scraper = LeverScraper()
         
         if settings.APIFY_API_KEY:
             self.linkedin_scraper = ApifyLinkedInScraper(api_key=settings.APIFY_API_KEY)
+            self.indeed_scraper = ApifyIndeedScraper(api_key=settings.APIFY_API_KEY)
     
     async def search_for_user(
         self,
@@ -153,8 +162,9 @@ class OnDemandSearchService:
         
         Sources:
         1. LinkedIn (via Apify) - broad search
-        2. Greenhouse - target companies
-        3. Lever - target companies
+        2. Indeed (via Apify) - broad search, fast
+        3. Greenhouse - target companies
+        4. Lever - target companies
         """
         all_jobs = []
         
@@ -163,12 +173,17 @@ class OnDemandSearchService:
             linkedin_jobs = await self._search_linkedin(preferences)
             all_jobs.extend(linkedin_jobs)
         
-        # 2. Greenhouse company searches
+        # 2. Indeed search (if API key available) - FAST!
+        if self.indeed_scraper and preferences.target_roles:
+            indeed_jobs = await self._search_indeed(preferences)
+            all_jobs.extend(indeed_jobs)
+        
+        # 3. Greenhouse company searches
         if preferences.target_companies:
             greenhouse_jobs = await self._search_greenhouse(preferences)
             all_jobs.extend(greenhouse_jobs)
         
-        # 3. Lever company searches
+        # 4. Lever company searches
         if preferences.target_companies:
             lever_jobs = await self._search_lever(preferences)
             all_jobs.extend(lever_jobs)
@@ -196,6 +211,41 @@ class OnDemandSearchService:
                         
                 except Exception as e:
                     print(f"LinkedIn search error ({role} in {location}): {e}")
+                    continue
+        
+        return jobs
+    
+    async def _search_indeed(self, preferences: UserPreferences) -> List[Dict]:
+        """Search Indeed for jobs matching preferences"""
+        jobs = []
+        
+        for role in preferences.target_roles[:5]:  # Indeed is fast, can do more
+            for location in preferences.locations[:3]:  # Up to 3 locations
+                try:
+                    # Extract country from location (default to UK)
+                    country = "uk"
+                    if "us" in location.lower() or "usa" in location.lower():
+                        country = "us"
+                    elif "canada" in location.lower():
+                        country = "ca"
+                    
+                    search_jobs = await self.indeed_scraper.search_jobs(
+                        query=role,
+                        location=location.split(",")[0].strip(),  # Just city name
+                        country=country,
+                        max_jobs=30,  # Indeed is fast, get good coverage
+                        remote="remote" if preferences.remote_only else None,
+                        job_type="fulltime" if "FULL_TIME" in preferences.employment_types else "parttime",
+                        from_days=14  # Last 2 weeks
+                    )
+                    
+                    for job in search_jobs:
+                        job_dict = job.to_dict()
+                        job_dict["_source"] = "indeed"
+                        jobs.append(job_dict)
+                        
+                except Exception as e:
+                    print(f"Indeed search error ({role} in {location}): {e}")
                     continue
         
         return jobs
@@ -393,6 +443,14 @@ class OnDemandSearchService:
             "posted_date": job.posted_date.isoformat() if job.posted_date else None,
             "source": job.source.name if job.source else "unknown",
         }
+    
+    def _get_sources_used(self, jobs: List[Dict]) -> Dict[str, int]:
+        """Count jobs by source"""
+        sources = {}
+        for job in jobs:
+            source = job.get("_source", "unknown")
+            sources[source] = sources.get(source, 0) + 1
+        return sources
     
     def _get_sources_used(self, jobs: List[Dict]) -> Dict[str, int]:
         """Count jobs by source"""
