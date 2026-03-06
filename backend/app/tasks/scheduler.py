@@ -70,4 +70,10 @@ beat_schedule = {
         "task": "app.tasks.apify_scraper.scrape_linkedin_daily",
         "schedule": crontab(minute=0, hour=6),
     },
+    
+    # Remove duplicate jobs (daily at 2 AM)
+    "remove-duplicate-jobs": {
+        "task": "app.tasks.deduplication.remove_duplicate_jobs",
+        "schedule": crontab(minute=0, hour=2),
+    },
 }

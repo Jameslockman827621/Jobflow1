@@ -3,13 +3,73 @@ from app.tasks import celery_app
 from app.scrapers import GreenhouseScraper, LeverScraper
 from app.database import SessionLocal
 from app.models.job import Job, JobSource
+from app.scrapers.base import JobData
 from datetime import datetime, timedelta
-from typing import List
+from typing import List, Tuple
 
 
 def _run_async(coro):
     """Helper to run async code in sync Celery task"""
     return asyncio.get_event_loop().run_until_complete(coro)
+
+
+def _check_duplicate(db: SessionLocal, source_id: int, job_data: JobData) -> Tuple[bool, str]:
+    """
+    Check if a job is a duplicate before inserting.
+    
+    Checks:
+    1. Same source + external_id (fastest)
+    2. Same external_url (cross-source)
+    3. Same company + title + location (fuzzy)
+    
+    Returns:
+        Tuple of (is_duplicate, reason)
+    """
+    # Check 1: Same source + external_id
+    if job_data.external_id:
+        existing = db.query(Job).filter_by(
+            source_id=source_id,
+            external_id=job_data.external_id,
+            is_active=True
+        ).first()
+        
+        if existing:
+            return True, f"Duplicate source ID (job #{existing.id})"
+    
+    # Check 2: Same URL (cross-source deduplication)
+    if job_data.external_url:
+        existing = db.query(Job).filter_by(
+            external_url=job_data.external_url,
+            is_active=True
+        ).first()
+        
+        if existing:
+            return True, f"Duplicate URL (job #{existing.id})"
+    
+    # Check 3: Same company + normalized title + location
+    # Only for jobs from different sources (already checked source_id above)
+    existing = db.query(Job).filter(
+        Job.company.ilike(f"%{job_data.company}%"),
+        Job.is_active == True
+    ).limit(50).all()
+    
+    if existing:
+        # Normalize title for comparison
+        import re
+        title_norm = re.sub(r'[^\w\s]', ' ', job_data.title.lower()).strip()
+        title_norm = ' '.join(sorted(title_norm.split()))
+        
+        for job in existing:
+            job_title_norm = re.sub(r'[^\w\s]', ' ', job.title.lower()).strip()
+            job_title_norm = ' '.join(sorted(job_title_norm.split()))
+            
+            # Check if titles are similar (within same company and location)
+            if title_norm == job_title_norm:
+                if job.location and job_data.location:
+                    if job.location.lower() in job_data.location.lower() or job_data.location.lower() in job.location.lower():
+                        return True, f"Duplicate company/title/location (job #{job.id})"
+    
+    return False, ""
 
 
 @celery_app.task
@@ -32,8 +92,18 @@ def scrape_greenhouse_companies(company_subdomains: List[str]):
                 total_jobs += len(jobs)
                 print(f"  {subdomain}: {len(jobs)} jobs")
                 
-                # Save jobs to DB
+                # Save jobs to DB with deduplication
+                saved = 0
+                skipped = 0
+                
                 for job_data in jobs:
+                    # Check for duplicates before inserting
+                    is_dup, reason = _check_duplicate(db, source.id, job_data)
+                    
+                    if is_dup:
+                        skipped += 1
+                        continue
+                    
                     job = Job(
                         source_id=source.id,
                         external_id=job_data.external_id,
@@ -52,8 +122,10 @@ def scrape_greenhouse_companies(company_subdomains: List[str]):
                         posted_date=job_data.posted_date,
                     )
                     db.merge(job)  # Upsert by external_id
+                    saved += 1
                 
                 db.commit()
+                print(f"    Saved: {saved}, Skipped (duplicates): {skipped}")
             except Exception as e:
                 print(f"Error scraping {subdomain}: {e}")
                 continue

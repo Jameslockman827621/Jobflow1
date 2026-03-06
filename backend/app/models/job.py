@@ -70,7 +70,16 @@ class Job(Base, TimestampMixin):
     
     # Indexes
     __table_args__ = (
+        # Performance indexes
         Index('idx_job_location', 'location'),
         Index('idx_job_seniority', 'seniority'),
         Index('idx_job_active', 'is_active'),
+        Index('idx_job_company', 'company'),
+        Index('idx_job_title', 'title'),
+        
+        # Unique constraint: source_id + external_id (prevents same-source duplicates)
+        Index('uix_job_source_external', 'source_id', 'external_id', unique=True),
+        
+        # Index for URL-based deduplication (cross-source)
+        Index('idx_job_external_url', 'external_url'),
     )
