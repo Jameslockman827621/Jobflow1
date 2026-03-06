@@ -65,15 +65,15 @@ beat_schedule = {
         "schedule": crontab(minute=0, hour=10),
     },
     
-    # LinkedIn jobs via Apify (daily at 6 AM)
-    "scrape-linkedin-daily": {
-        "task": "app.tasks.apify_scraper.scrape_linkedin_daily",
-        "schedule": crontab(minute=0, hour=6),
+    # Refresh user job searches (every 6 hours)
+    "refresh-user-searches": {
+        "task": "app.tasks.on_demand_search.refresh_all_user_searches",
+        "schedule": crontab(minute=0, hour="*/6"),
     },
     
-    # Remove duplicate jobs (daily at 2 AM)
-    "remove-duplicate-jobs": {
-        "task": "app.tasks.deduplication.remove_duplicate_jobs",
-        "schedule": crontab(minute=0, hour=2),
+    # Clean expired cache (daily at 3 AM)
+    "clean-expired-cache": {
+        "task": "app.tasks.on_demand_search.clean_expired_cache",
+        "schedule": crontab(minute=0, hour=3),
     },
 }
