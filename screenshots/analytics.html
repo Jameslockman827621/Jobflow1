@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analytics Dashboard - JobScale</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --navy-900: #0f172a; --navy-800: #1e293b; --navy-700: #334155;
+      --teal-500: #14b8a6; --teal-400: #2dd4bf; --teal-300: #5eead4;
+      --coral-500: #f97316; --coral-400: #fb923c;
+      --slate-50: #f8fafc; --slate-100: #f1f5f9; --slate-200: #e2e8f0;
+      --slate-300: #cbd5e1; --slate-600: #475569; --slate-700: #334155;
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1);
+      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1);
+      --shadow-xl: 0 20px 25px -5px rgba(0,0,0,0.1);
+      --radius-md: 10px; --radius-lg: 14px; --radius-xl: 20px;
+    }
+    * { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .bg-grid {
+      background-color: var(--slate-50);
+      background-image: linear-gradient(to right, rgba(148,163,184,0.08) 1px, transparent 1px),
+                        linear-gradient(to bottom, rgba(148,163,184,0.08) 1px, transparent 1px);
+      background-size: 32px 32px;
+    }
+    .surface { background: white; border: 1px solid var(--slate-200); border-radius: var(--radius-xl); box-shadow: var(--shadow-md); }
+    .surface-elevated { background: white; border: 1px solid var(--slate-200); border-radius: var(--radius-xl); box-shadow: var(--shadow-xl); }
+    .heading-xl { font-size: 40px; line-height: 1.2; letter-spacing: -0.015em; font-weight: 700; }
+    .heading-lg { font-size: 32px; line-height: 1.25; letter-spacing: -0.015em; font-weight: 700; }
+    .heading-md { font-size: 24px; line-height: 1.3; letter-spacing: -0.01em; font-weight: 600; }
+    .heading-sm { font-size: 20px; line-height: 1.35; letter-spacing: -0.01em; font-weight: 600; }
+    .body-lg { font-size: 18px; line-height: 1.5; }
+    .body-md { font-size: 16px; line-height: 1.5; }
+    .body-sm { font-size: 14px; line-height: 1.5; }
+    .caption { font-size: 12px; line-height: 1.5; letter-spacing: 0.02em; font-weight: 500; }
+    
+    .stat-card { transition: all 0.2s ease; }
+    .stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+    
+    .trend-up { color: #059669; }
+    .trend-down { color: #dc2626; }
+  </style>
+</head>
+<body class="bg-grid min-h-screen">
+  <!-- Navigation -->
+  <nav class="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-b" style="border-color: var(--slate-200)">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background: var(--navy-900)">
+          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+          </svg>
+        </div>
+        <span class="text-xl font-bold" style="color: var(--navy-900)">JobScale</span>
+      </div>
+      <div class="flex items-center space-x-8">
+        <a href="home.html" class="body-sm" style="color: var(--slate-600)">Dashboard</a>
+        <a href="career.html" class="body-sm" style="color: var(--slate-600)">Career</a>
+        <a href="reviews.html" class="body-sm" style="color: var(--slate-600)">Reviews</a>
+        <div class="w-px h-6" style="background: var(--slate-200)"></div>
+        <div class="flex items-center space-x-3">
+          <div class="w-9 h-9 rounded-full flex items-center justify-center text-white font-semibold body-sm" style="background: var(--teal-500)">JD</div>
+          <span class="body-sm font-medium" style="color: var(--navy-900)">John Doe</span>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <main class="pt-28 pb-16">
+    <div class="max-w-7xl mx-auto px-6">
+      <!-- Header -->
+      <div class="mb-12">
+        <div class="flex items-center space-x-2 caption mb-4" style="color: var(--slate-600)">
+          <a href="home.html" style="color: var(--slate-600)">Dashboard</a>
+          <span>/</span>
+          <span style="color: var(--navy-900)">Analytics</span>
+        </div>
+        <div class="flex justify-between items-end">
+          <div>
+            <h1 class="heading-xl mb-2" style="color: var(--navy-900)">Analytics Dashboard</h1>
+            <p class="body-lg" style="color: var(--slate-600)">Track your job search performance</p>
+          </div>
+          <div class="flex items-center space-x-3">
+            <select class="px-4 py-2.5 body-sm font-semibold rounded-lg border bg-white" style="border-color: var(--slate-200); color: var(--navy-900)">
+              <option>Last 30 days</option>
+              <option>Last 90 days</option>
+              <option>All time</option>
+            </select>
+            <button class="px-5 py-2.5 body-sm font-semibold rounded-lg text-white" style="background: var(--teal-500)">Export Report</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Profile Completeness -->
+      <div class="surface-elevated p-8 mb-8">
+        <div class="flex justify-between items-center mb-6">
+          <div>
+            <h2 class="heading-md mb-1" style="color: var(--navy-900)">Profile Completeness</h2>
+            <p class="body-sm" style="color: var(--slate-600)">Add skills to reach 100%</p>
+          </div>
+          <div class="text-right">
+            <div class="heading-lg" style="color: var(--navy-900)">80%</div>
+            <div class="caption" style="color: var(--slate-600)">Complete</div>
+          </div>
+        </div>
+        <div class="h-2 rounded-full" style="background: var(--slate-200)">
+          <div class="h-full rounded-full" style="background: var(--teal-500); width: 80%"></div>
+        </div>
+        <div class="flex justify-between mt-3 body-sm">
+          <span class="trend-up font-medium">✓ Profile info, resume, preferences</span>
+          <span style="color: var(--coral-500); font-weight: 500">⚠ Add 3 more skills</span>
+        </div>
+      </div>
+
+      <!-- Key Metrics -->
+      <div class="grid md:grid-cols-4 gap-6 mb-8">
+        <div class="stat-card surface p-6">
+          <div class="flex items-center justify-between mb-4">
+            <div class="w-12 h-12 rounded-xl flex items-center justify-center" style="background: var(--navy-900)">
+              <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              </svg>
+            </div>
+            <span class="caption font-semibold trend-up flex items-center">
+              <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z"/></svg>
+              +12%
+            </span>
+          </div>
+          <div class="heading-lg mb-1" style="color: var(--navy-900)">15</div>
+          <div class="body-sm" style="color: var(--slate-600)">Total Applications</div>
+        </div>
+
+        <div class="stat-card surface p-6">
+          <div class="flex items-center justify-between mb-4">
+            <div class="w-12 h-12 rounded-xl flex items-center justify-center" style="background: var(--teal-500)">
+              <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+              </svg>
+            </div>
+            <span class="caption font-semibold trend-up flex items-center">
+              <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z"/></svg>
+              +5%
+            </span>
+          </div>
+          <div class="heading-lg mb-1" style="color: var(--navy-900)">20%</div>
+          <div class="body-sm" style="color: var(--slate-600)">Interview Rate</div>
+        </div>
+
+        <div class="stat-card surface p-6">
+          <div class="flex items-center justify-between mb-4">
+            <div class="w-12 h-12 rounded-xl flex items-center justify-center" style="background: var(--coral-500)">
+              <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
+              </svg>
+            </div>
+            <span class="caption font-semibold trend-up flex items-center">
+              <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z"/></svg>
+              +2%
+            </span>
+          </div>
+          <div class="heading-lg mb-1" style="color: var(--navy-900)">6.7%</div>
+          <div class="body-sm" style="color: var(--slate-600)">Offer Rate</div>
+        </div>
+
+        <div class="stat-card surface p-6">
+          <div class="flex items-center justify-between mb-4">
+            <div class="w-12 h-12 rounded-xl flex items-center justify-center" style="background: #6366f1">
+              <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+              </svg>
+            </div>
+            <span class="caption font-semibold" style="color: var(--slate-600)">Stable</span>
+          </div>
+          <div class="heading-lg mb-1" style="color: var(--navy-900)">73%</div>
+          <div class="body-sm" style="color: var(--slate-600)">Response Rate</div>
+        </div>
+      </div>
+
+      <div class="grid lg:grid-cols-3 gap-8">
+        <!-- Application Funnel -->
+        <div class="lg:col-span-2 surface-elevated p-8">
+          <h2 class="heading-md mb-8" style="color: var(--navy-900)">Application Funnel</h2>
+          <div class="space-y-6">
+            <!-- Applied -->
+            <div>
+              <div class="flex justify-between items-center mb-3">
+                <div class="flex items-center space-x-3">
+                  <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background: var(--navy-900)">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <div class="font-semibold body-md" style="color: var(--navy-900)">Applied</div>
+                    <div class="body-sm" style="color: var(--slate-600)">15 jobs total</div>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <div class="heading-md" style="color: var(--navy-900)">100%</div>
+                  <div class="body-sm" style="color: var(--slate-600)">15/15</div>
+                </div>
+              </div>
+              <div class="h-2 rounded-full" style="background: var(--slate-200)">
+                <div class="h-full rounded-full" style="background: var(--navy-900); width: 100%"></div>
+              </div>
+            </div>
+
+            <!-- Phone Screen -->
+            <div>
+              <div class="flex justify-between items-center mb-3">
+                <div class="flex items-center space-x-3">
+                  <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background: var(--teal-500)">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <div class="font-semibold body-md" style="color: var(--navy-900)">Phone Screen</div>
+                    <div class="body-sm" style="color: var(--slate-600)">Initial interviews</div>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <div class="heading-md" style="color: var(--navy-900)">53%</div>
+                  <div class="body-sm" style="color: var(--slate-600)">8/15</div>
+                </div>
+              </div>
+              <div class="h-2 rounded-full" style="background: var(--slate-200)">
+                <div class="h-full rounded-full" style="background: var(--teal-500); width: 53%"></div>
+              </div>
+            </div>
+
+            <!-- Technical Interview -->
+            <div>
+              <div class="flex justify-between items-center mb-3">
+                <div class="flex items-center space-x-3">
+                  <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background: var(--coral-500)">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <div class="font-semibold body-md" style="color: var(--navy-900)">Technical Interview</div>
+                    <div class="body-sm" style="color: var(--slate-600)">Coding & system design</div>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <div class="heading-md" style="color: var(--navy-900)">33%</div>
+                  <div class="body-sm" style="color: var(--slate-600)">5/15</div>
+                </div>
+              </div>
+              <div class="h-2 rounded-full" style="background: var(--slate-200)">
+                <div class="h-full rounded-full" style="background: var(--coral-500); width: 33%"></div>
+              </div>
+            </div>
+
+            <!-- Offer -->
+            <div>
+              <div class="flex justify-between items-center mb-3">
+                <div class="flex items-center space-x-3">
+                  <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background: #059669">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <div class="font-semibold body-md" style="color: var(--navy-900)">Offer</div>
+                    <div class="body-sm" style="color: var(--slate-600)">Successful outcomes</div>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <div class="heading-md trend-up">7%</div>
+                  <div class="body-sm" style="color: var(--slate-600)">1/15</div>
+                </div>
+              </div>
+              <div class="h-2 rounded-full" style="background: var(--slate-200)">
+                <div class="h-full rounded-full" style="background: #059669; width: 7%"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Top Companies -->
+        <div class="surface-elevated p-8">
+          <h2 class="heading-md mb-6" style="color: var(--navy-900)">Top Hiring Companies</h2>
+          <div class="space-y-4">
+            <div class="flex items-center justify-between p-4 rounded-xl" style="background: #f0fdfa">
+              <div class="flex items-center space-x-4">
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold body-sm" style="background: var(--navy-900)">S</div>
+                <div>
+                  <div class="font-semibold body-sm" style="color: var(--navy-900)">Stripe</div>
+                  <div class="body-sm" style="color: var(--slate-600)">Fintech • San Francisco</div>
+                </div>
+              </div>
+              <div class="text-right">
+                <div class="heading-sm" style="color: var(--navy-900)">566</div>
+                <div class="caption" style="color: var(--slate-600)">open jobs</div>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between p-4 rounded-xl surface">
+              <div class="flex items-center space-x-4">
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold body-sm" style="background: #ff5a5f">A</div>
+                <div>
+                  <div class="font-semibold body-sm" style="color: var(--navy-900)">Airbnb</div>
+                  <div class="body-sm" style="color: var(--slate-600)">Travel • San Francisco</div>
+                </div>
+              </div>
+              <div class="text-right">
+                <div class="heading-sm" style="color: var(--navy-900)">234</div>
+                <div class="caption" style="color: var(--slate-600)">open jobs</div>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between p-4 rounded-xl surface">
+              <div class="flex items-center space-x-4">
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold body-sm" style="background: #fc6d26">G</div>
+                <div>
+                  <div class="font-semibold body-sm" style="color: var(--navy-900)">GitLab</div>
+                  <div class="body-sm" style="color: var(--slate-600)">DevTools • Remote</div>
+                </div>
+              </div>
+              <div class="text-right">
+                <div class="heading-sm" style="color: var(--navy-900)">161</div>
+                <div class="caption" style="color: var(--slate-600)">open jobs</div>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between p-4 rounded-xl surface">
+              <div class="flex items-center space-x-4">
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold body-sm" style="background: #0d99ff">F</div>
+                <div>
+                  <div class="font-semibold body-sm" style="color: var(--navy-900)">Figma</div>
+                  <div class="body-sm" style="color: var(--slate-600)">Design • San Francisco</div>
+                </div>
+              </div>
+              <div class="text-right">
+                <div class="heading-sm" style="color: var(--navy-900)">171</div>
+                <div class="caption" style="color: var(--slate-600)">open jobs</div>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between p-4 rounded-xl surface">
+              <div class="flex items-center space-x-4">
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold body-sm" style="background: #142d46">M</div>
+                <div>
+                  <div class="font-semibold body-sm" style="color: var(--navy-900)">Monzo</div>
+                  <div class="body-sm" style="color: var(--slate-600)">Fintech • London</div>
+                </div>
+              </div>
+              <div class="text-right">
+                <div class="heading-sm" style="color: var(--navy-900)">60</div>
+                <div class="caption" style="color: var(--slate-600)">open jobs</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Market Insights -->
+      <div class="mt-8 surface-elevated p-8">
+        <h2 class="heading-md mb-8" style="color: var(--navy-900)">Market Insights</h2>
+        <div class="grid md:grid-cols-2 gap-8">
+          <!-- Trending Skills -->
+          <div>
+            <h3 class="font-semibold body-md mb-4 flex items-center" style="color: var(--navy-900)">
+              <div class="w-2 h-2 rounded-full mr-3" style="background: var(--teal-500)"></div>
+              Trending Skills
+            </h3>
+            <div class="flex flex-wrap gap-3">
+              <span class="px-4 py-2 rounded-lg caption font-semibold text-white" style="background: var(--navy-900)">Python</span>
+              <span class="px-4 py-2 rounded-lg caption font-semibold text-white" style="background: var(--teal-500)">React</span>
+              <span class="px-4 py-2 rounded-lg caption font-semibold text-white" style="background: var(--coral-500)">AWS</span>
+              <span class="px-4 py-2 rounded-lg caption font-semibold text-white" style="background: var(--navy-800)">Kubernetes</span>
+              <span class="px-4 py-2 rounded-lg caption font-semibold text-white" style="background: var(--navy-700)">TypeScript</span>
+              <span class="px-4 py-2 rounded-lg caption font-semibold text-white" style="background: #059669)">Node.js</span>
+              <span class="px-4 py-2 rounded-lg caption font-semibold text-white" style="background: var(--navy-800)">PostgreSQL</span>
+              <span class="px-4 py-2 rounded-lg caption font-semibold text-white" style="background: var(--teal-400)">Docker</span>
+            </div>
+          </div>
+
+          <!-- Remote Jobs -->
+          <div>
+            <h3 class="font-semibold body-md mb-4 flex items-center" style="color: var(--navy-900)">
+              <div class="w-2 h-2 rounded-full mr-3" style="background: var(--coral-500)"></div>
+              Remote Opportunities
+            </h3>
+            <div class="flex items-center space-x-6">
+              <div class="relative w-32 h-32">
+                <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="40" stroke="#e2e8f0" stroke-width="12" fill="none"/>
+                  <circle cx="50" cy="50" r="40" stroke="#14b8a6" stroke-width="12" fill="none" stroke-dasharray="251.2" stroke-dashoffset="163.28" stroke-linecap="round"/>
+                </svg>
+                <div class="absolute inset-0 flex items-center justify-center">
+                  <div class="text-center">
+                    <div class="heading-lg" style="color: var(--navy-900)">35%</div>
+                    <div class="caption" style="color: var(--slate-600)">Remote</div>
+                  </div>
+                </div>
+              </div>
+              <div class="flex-1">
+                <p class="body-sm mb-3" style="color: var(--slate-600)">Over 1 in 3 jobs now offer remote or hybrid options.</p>
+                <span class="px-3 py-1 rounded-full caption font-semibold trend-up" style="background: #ecfdf5">+8% vs last quarter</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

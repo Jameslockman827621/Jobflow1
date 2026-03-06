@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JobScale - Career Intelligence Platform</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      /* Primary Brand - Deep Navy */
+      --navy-900: #0f172a;
+      --navy-800: #1e293b;
+      --navy-700: #334155;
+      
+      /* Accent - Electric Teal */
+      --teal-500: #14b8a6;
+      --teal-400: #2dd4bf;
+      --teal-300: #5eead4;
+      
+      /* Secondary - Warm Coral */
+      --coral-500: #f97316;
+      --coral-400: #fb923c;
+      
+      /* Neutrals */
+      --slate-50: #f8fafc;
+      --slate-100: #f1f5f9;
+      --slate-200: #e2e8f0;
+      --slate-300: #cbd5e1;
+      --slate-600: #475569;
+      --slate-700: #334155;
+      --slate-900: #0f172a;
+      
+      /* Elevation Shadows */
+      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+      
+      /* Border Radius System */
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --radius-xl: 20px;
+      --radius-2xl: 28px;
+    }
+    
+    * { font-family: 'Plus Jakarta Sans', sans-serif; }
+    
+    /* Layer 1: Background Pattern */
+    .bg-grid {
+      background-color: var(--slate-50);
+      background-image: 
+        linear-gradient(to right, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+      background-size: 32px 32px;
+    }
+    
+    /* Layer 2: Surface Cards */
+    .surface {
+      background: white;
+      border: 1px solid var(--slate-200);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-md);
+    }
+    
+    .surface-elevated {
+      background: white;
+      border: 1px solid var(--slate-200);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-xl);
+    }
+    
+    /* Layer 3: Interactive Elements */
+    .btn-primary {
+      background: var(--navy-900);
+      color: white;
+      border-radius: var(--radius-md);
+      font-weight: 600;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 4px rgba(15, 23, 42, 0.2);
+    }
+    .btn-primary:hover {
+      background: var(--navy-800);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.25);
+    }
+    
+    .btn-accent {
+      background: var(--teal-500);
+      color: white;
+      border-radius: var(--radius-md);
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+    .btn-accent:hover {
+      background: #0d9488;
+      transform: translateY(-1px);
+    }
+    
+    /* Typography Scale */
+    .display-lg { font-size: 64px; line-height: 1.1; letter-spacing: -0.02em; font-weight: 800; }
+    .display-md { font-size: 48px; line-height: 1.15; letter-spacing: -0.02em; font-weight: 800; }
+    .heading-xl { font-size: 40px; line-height: 1.2; letter-spacing: -0.015em; font-weight: 700; }
+    .heading-lg { font-size: 32px; line-height: 1.25; letter-spacing: -0.015em; font-weight: 700; }
+    .heading-md { font-size: 24px; line-height: 1.3; letter-spacing: -0.01em; font-weight: 600; }
+    .heading-sm { font-size: 20px; line-height: 1.35; letter-spacing: -0.01em; font-weight: 600; }
+    .body-lg { font-size: 18px; line-height: 1.5; letter-spacing: 0; font-weight: 400; }
+    .body-md { font-size: 16px; line-height: 1.5; letter-spacing: 0; font-weight: 400; }
+    .body-sm { font-size: 14px; line-height: 1.5; letter-spacing: 0.01em; font-weight: 400; }
+    .caption { font-size: 12px; line-height: 1.5; letter-spacing: 0.02em; font-weight: 500; }
+    
+    /* Feature Card Hover */
+    .feature-card {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .feature-card:hover {
+      border-color: var(--teal-300);
+      box-shadow: var(--shadow-lg);
+      transform: translateY(-4px);
+    }
+    
+    /* Icon Containers */
+    .icon-box {
+      width: 48px;
+      height: 48px;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .icon-box-primary { background: var(--navy-900); color: white; }
+    .icon-box-accent { background: var(--teal-500); color: white; }
+    .icon-box-secondary { background: #fef3c7; color: #92400e; }
+  </style>
+</head>
+<body class="bg-grid min-h-screen">
+  <!-- Navigation - Layer: Fixed Overlay -->
+  <nav class="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-b border-slate-200">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-navy-900 flex items-center justify-center" style="background: var(--navy-900)">
+          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+          </svg>
+        </div>
+        <span class="text-xl font-bold" style="color: var(--navy-900)">JobScale</span>
+      </div>
+      <div class="flex items-center space-x-8">
+        <a href="#" class="body-sm" style="color: var(--slate-600)">Product</a>
+        <a href="#" class="body-sm" style="color: var(--slate-600)">Pricing</a>
+        <a href="#" class="body-sm" style="color: var(--slate-600)">Company</a>
+        <a href="login.html" class="body-sm font-semibold" style="color: var(--navy-900)">Sign In</a>
+        <a href="login.html" class="btn-primary px-5 py-2.5 body-sm">Get Started</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="pt-32 pb-24">
+    <!-- Hero Section - Layer: Content -->
+    <div class="max-w-7xl mx-auto px-6">
+      <div class="max-w-4xl mx-auto text-center mb-20">
+        <!-- Badge - Layer: Interactive -->
+        <div class="inline-flex items-center space-x-2 px-4 py-2 rounded-full surface mb-8">
+          <span class="w-2 h-2 rounded-full" style="background: var(--teal-500)"></span>
+          <span class="caption" style="color: var(--slate-600)">Production Ready — 20 Features Complete</span>
+        </div>
+        
+        <!-- Headline -->
+        <h1 class="display-lg mb-6" style="color: var(--navy-900)">
+          Your career, <span style="color: var(--teal-500)">accelerated</span>
+        </h1>
+        
+        <!-- Subheadline -->
+        <p class="body-lg mb-10" style="color: var(--slate-600)">
+          JobScale finds opportunities that match your skills, tailors your applications with AI, 
+          and tracks your path from application to offer.
+        </p>
+        
+        <!-- CTA Group -->
+        <div class="flex justify-center items-center space-x-4">
+          <a href="login.html" class="btn-primary px-8 py-3.5 body-md">Start Free Trial</a>
+          <a href="#" class="px-8 py-3.5 body-md font-semibold rounded-lg border-2 transition-colors" 
+             style="border-color: var(--slate-200); color: var(--navy-900)">
+            View Demo
+          </a>
+        </div>
+        
+        <!-- Social Proof -->
+        <p class="caption mt-6" style="color: var(--slate-600)">
+          No credit card required · 5 free applications per month
+        </p>
+      </div>
+
+      <!-- Stats Bar - Layer: Surface -->
+      <div class="surface-elevated mb-20">
+        <div class="grid grid-cols-4 divide-x" style="border-color: var(--slate-200)">
+          <div class="py-8 text-center">
+            <div class="heading-xl mb-1" style="color: var(--navy-900)">50+</div>
+            <div class="caption" style="color: var(--slate-600)">Companies Tracked</div>
+          </div>
+          <div class="py-8 text-center">
+            <div class="heading-xl mb-1" style="color: var(--navy-900)">958</div>
+            <div class="caption" style="color: var(--slate-600)">Live Jobs</div>
+          </div>
+          <div class="py-8 text-center">
+            <div class="heading-xl mb-1" style="color: var(--navy-900)">77%</div>
+            <div class="caption" style="color: var(--slate-600)">Match Accuracy</div>
+          </div>
+          <div class="py-8 text-center">
+            <div class="heading-xl mb-1" style="color: var(--navy-900)">3</div>
+            <div class="caption" style="color: var(--slate-600)">AI Services</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Features Grid - Layer: Surface Cards -->
+      <div class="mb-20">
+        <div class="text-center mb-16">
+          <h2 class="heading-xl mb-4" style="color: var(--navy-900)">Everything you need</h2>
+          <p class="body-lg" style="color: var(--slate-600)">From discovery to offer negotiation</p>
+        </div>
+        
+        <div class="grid md:grid-cols-3 gap-6">
+          <!-- Feature 1 -->
+          <div class="feature-card surface p-8">
+            <div class="icon-box icon-box-primary mb-6">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+              </svg>
+            </div>
+            <h3 class="heading-md mb-3" style="color: var(--navy-900)">Smart Matching</h3>
+            <p class="body-md mb-4" style="color: var(--slate-600)">
+              Our AI analyzes your skills, experience level, and preferences to surface opportunities you're genuinely qualified for.
+            </p>
+            <a href="#" class="inline-flex items-center body-sm font-semibold" style="color: var(--teal-500)">
+              Learn more
+              <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+              </svg>
+            </a>
+          </div>
+
+          <!-- Feature 2 -->
+          <div class="feature-card surface p-8">
+            <div class="icon-box icon-box-accent mb-6">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+              </svg>
+            </div>
+            <h3 class="heading-md mb-3" style="color: var(--navy-900)">AI Applications</h3>
+            <p class="body-md mb-4" style="color: var(--slate-600)">
+              Generate tailored resumes and cover letters for each application. Stand out with personalized, relevant content.
+            </p>
+            <a href="#" class="inline-flex items-center body-sm font-semibold" style="color: var(--teal-500)">
+              Learn more
+              <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+              </svg>
+            </a>
+          </div>
+
+          <!-- Feature 3 -->
+          <div class="feature-card surface p-8">
+            <div class="icon-box icon-box-secondary mb-6">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+              </svg>
+            </div>
+            <h3 class="heading-md mb-3" style="color: var(--navy-900)">Career Pathing</h3>
+            <p class="body-md mb-4" style="color: var(--slate-600)">
+              See your career trajectory, identify skill gaps, and get actionable milestones to reach your next level.
+            </p>
+            <a href="#" class="inline-flex items-center body-sm font-semibold" style="color: var(--teal-500)">
+              Learn more
+              <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+              </svg>
+            </a>
+          </div>
+
+          <!-- Feature 4 -->
+          <div class="feature-card surface p-8">
+            <div class="icon-box icon-box-primary mb-6">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              </svg>
+            </div>
+            <h3 class="heading-md mb-3" style="color: var(--navy-900)">Analytics Dashboard</h3>
+            <p class="body-md mb-4" style="color: var(--slate-600)">
+              Track application funnel, interview rates, and market trends. Make data-driven decisions about your search.
+            </p>
+            <a href="#" class="inline-flex items-center body-sm font-semibold" style="color: var(--teal-500)">
+              Learn more
+              <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+              </svg>
+            </a>
+          </div>
+
+          <!-- Feature 5 -->
+          <div class="feature-card surface p-8">
+            <div class="icon-box icon-box-accent mb-6">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+              </svg>
+            </div>
+            <h3 class="heading-md mb-3" style="color: var(--navy-900)">Company Reviews</h3>
+            <p class="body-md mb-4" style="color: var(--slate-600)">
+              Read verified reviews from employees. Understand culture, compensation, and work-life balance before applying.
+            </p>
+            <a href="#" class="inline-flex items-center body-sm font-semibold" style="color: var(--teal-500)">
+              Learn more
+              <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+              </svg>
+            </a>
+          </div>
+
+          <!-- Feature 6 -->
+          <div class="feature-card surface p-8">
+            <div class="icon-box icon-box-secondary mb-6">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
+              </svg>
+            </div>
+            <h3 class="heading-md mb-3" style="color: var(--navy-900)">Interview Coach</h3>
+            <p class="body-md mb-4" style="color: var(--slate-600)">
+              Practice with AI-powered mock interviews. Get real-time feedback on your responses and improve your delivery.
+            </p>
+            <a href="#" class="inline-flex items-center body-sm font-semibold" style="color: var(--teal-500)">
+              Learn more
+              <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+              </svg>
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- CTA Section - Layer: Elevated Surface -->
+      <div class="surface-elevated p-12 text-center" style="background: var(--navy-900)">
+        <h2 class="heading-xl mb-4" style="color: white">Ready to accelerate your career?</h2>
+        <p class="body-lg mb-8" style="color: var(--slate-300)">
+          Join thousands of professionals who landed their dream job with JobScale.
+        </p>
+        <a href="login.html" class="btn-accent px-8 py-3.5 body-md inline-block">Get Started Free</a>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer - Layer: Surface -->
+  <footer class="surface border-t" style="border-color: var(--slate-200)">
+    <div class="max-w-7xl mx-auto px-6 py-12">
+      <div class="flex justify-between items-center">
+        <div class="flex items-center space-x-3">
+          <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: var(--navy-900)">
+            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+            </svg>
+          </div>
+          <span class="body-sm font-semibold" style="color: var(--navy-900)">JobScale</span>
+        </div>
+        <div class="flex items-center space-x-8">
+          <a href="#" class="caption" style="color: var(--slate-600)">Privacy</a>
+          <a href="#" class="caption" style="color: var(--slate-600)">Terms</a>
+          <a href="#" class="caption" style="color: var(--slate-600)">Contact</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

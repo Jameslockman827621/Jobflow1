@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Company Reviews - JobScale</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --navy-900: #0f172a; --navy-800: #1e293b; --navy-700: #334155;
+      --teal-500: #14b8a6; --teal-400: #2dd4bf; --teal-300: #5eead4;
+      --coral-500: #f97316; --coral-400: #fb923c;
+      --slate-50: #f8fafc; --slate-100: #f1f5f9; --slate-200: #e2e8f0;
+      --slate-300: #cbd5e1; --slate-600: #475569; --slate-700: #334155;
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1);
+      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1);
+      --shadow-xl: 0 20px 25px -5px rgba(0,0,0,0.1);
+      --radius-md: 10px; --radius-lg: 14px; --radius-xl: 20px;
+    }
+    * { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .bg-grid {
+      background-color: var(--slate-50);
+      background-image: linear-gradient(to right, rgba(148,163,184,0.08) 1px, transparent 1px),
+                        linear-gradient(to bottom, rgba(148,163,184,0.08) 1px, transparent 1px);
+      background-size: 32px 32px;
+    }
+    .surface { background: white; border: 1px solid var(--slate-200); border-radius: var(--radius-xl); box-shadow: var(--shadow-md); }
+    .surface-elevated { background: white; border: 1px solid var(--slate-200); border-radius: var(--radius-xl); box-shadow: var(--shadow-xl); }
+    .heading-xl { font-size: 40px; line-height: 1.2; letter-spacing: -0.015em; font-weight: 700; }
+    .heading-lg { font-size: 32px; line-height: 1.25; letter-spacing: -0.015em; font-weight: 700; }
+    .heading-md { font-size: 24px; line-height: 1.3; letter-spacing: -0.01em; font-weight: 600; }
+    .heading-sm { font-size: 20px; line-height: 1.35; letter-spacing: -0.01em; font-weight: 600; }
+    .body-lg { font-size: 18px; line-height: 1.5; }
+    .body-md { font-size: 16px; line-height: 1.5; }
+    .body-sm { font-size: 14px; line-height: 1.5; }
+    .caption { font-size: 12px; line-height: 1.5; letter-spacing: 0.02em; font-weight: 500; }
+    
+    .company-item { transition: all 0.2s ease; }
+    .company-item:hover { background: var(--slate-50); }
+    .company-item.active { background: #f0fdfa; border-left: 3px solid var(--teal-500); }
+    
+    .review-card { transition: all 0.2s ease; }
+    .review-card:hover { box-shadow: var(--shadow-lg); }
+    
+    .star { color: #fbbf24; }
+  </style>
+</head>
+<body class="bg-grid min-h-screen">
+  <!-- Navigation -->
+  <nav class="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-b" style="border-color: var(--slate-200)">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background: var(--navy-900)">
+          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+          </svg>
+        </div>
+        <span class="text-xl font-bold" style="color: var(--navy-900)">JobScale</span>
+      </div>
+      <div class="flex items-center space-x-8">
+        <a href="home.html" class="body-sm" style="color: var(--slate-600)">Dashboard</a>
+        <a href="career.html" class="body-sm" style="color: var(--slate-600)">Career</a>
+        <a href="analytics.html" class="body-sm" style="color: var(--slate-600)">Analytics</a>
+        <div class="w-px h-6" style="background: var(--slate-200)"></div>
+        <div class="flex items-center space-x-3">
+          <div class="w-9 h-9 rounded-full flex items-center justify-center text-white font-semibold body-sm" style="background: var(--teal-500)">JD</div>
+          <span class="body-sm font-medium" style="color: var(--navy-900)">John Doe</span>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <main class="pt-28 pb-16">
+    <div class="max-w-7xl mx-auto px-6">
+      <!-- Header -->
+      <div class="mb-12">
+        <div class="flex items-center space-x-2 caption mb-4" style="color: var(--slate-600)">
+          <a href="home.html" style="color: var(--slate-600)">Dashboard</a>
+          <span>/</span>
+          <span style="color: var(--navy-900)">Company Reviews</span>
+        </div>
+        <div class="flex justify-between items-end">
+          <div>
+            <h1 class="heading-xl mb-2" style="color: var(--navy-900)">Company Reviews</h1>
+            <p class="body-lg" style="color: var(--slate-600)">Real insights from verified employees</p>
+          </div>
+          <button class="px-6 py-3 body-sm font-semibold rounded-lg text-white flex items-center space-x-2" style="background: var(--teal-500)">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+            </svg>
+            <span>Write a Review</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="grid lg:grid-cols-3 gap-8">
+        <!-- Company List -->
+        <div class="lg:col-span-1">
+          <div class="surface-elevated overflow-hidden">
+            <div class="p-6 border-b" style="border-color: var(--slate-200)">
+              <div class="relative">
+                <input type="text" placeholder="Search companies..." class="w-full px-5 py-3 pl-12 body-sm rounded-xl border bg-white focus:outline-none" style="border-color: var(--slate-200); color: var(--navy-900)">
+                <svg class="w-5 h-5 absolute left-4 top-1/2 transform -translate-y-1/2" style="color: var(--slate-400)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+              </div>
+            </div>
+            <div class="divide-y max-h-[600px] overflow-y-auto" style="border-color: var(--slate-200)">
+              <!-- Company 1 (Active) -->
+              <div class="company-item active p-5 cursor-pointer">
+                <div class="flex justify-between items-start mb-2">
+                  <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold body-sm" style="background: var(--navy-900)">S</div>
+                    <div>
+                      <h3 class="font-semibold body-sm" style="color: var(--navy-900)">Stripe</h3>
+                      <p class="body-sm" style="color: var(--slate-600)">Fintech • San Francisco</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                  <div class="flex">
+                    <span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span>
+                  </div>
+                  <span class="body-sm font-semibold" style="color: var(--navy-900)">4.5</span>
+                  <span class="body-sm" style="color: var(--slate-600)">(127 reviews)</span>
+                </div>
+              </div>
+
+              <!-- Company 2 -->
+              <div class="company-item p-5 cursor-pointer">
+                <div class="flex justify-between items-start mb-2">
+                  <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold body-sm" style="background: #ff5a5f">A</div>
+                    <div>
+                      <h3 class="font-semibold body-sm" style="color: var(--navy-900)">Airbnb</h3>
+                      <p class="body-sm" style="color: var(--slate-600)">Travel • San Francisco</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                  <div class="flex">
+                    <span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span><span style="color: var(--slate-300)">★</span>
+                  </div>
+                  <span class="body-sm font-semibold" style="color: var(--navy-900)">4.2</span>
+                  <span class="body-sm" style="color: var(--slate-600)">(89 reviews)</span>
+                </div>
+              </div>
+
+              <!-- Company 3 -->
+              <div class="company-item p-5 cursor-pointer">
+                <div class="flex justify-between items-start mb-2">
+                  <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold body-sm" style="background: #fc6d26">G</div>
+                    <div>
+                      <h3 class="font-semibold body-sm" style="color: var(--navy-900)">GitLab</h3>
+                      <p class="body-sm" style="color: var(--slate-600)">DevTools • Remote</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                  <div class="flex">
+                    <span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span><span style="color: var(--slate-300)">★</span>
+                  </div>
+                  <span class="body-sm font-semibold" style="color: var(--navy-900)">4.0</span>
+                  <span class="body-sm" style="color: var(--slate-600)">(56 reviews)</span>
+                </div>
+              </div>
+
+              <!-- Company 4 -->
+              <div class="company-item p-5 cursor-pointer">
+                <div class="flex justify-between items-start mb-2">
+                  <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold body-sm" style="background: #0d99ff">F</div>
+                    <div>
+                      <h3 class="font-semibold body-sm" style="color: var(--navy-900)">Figma</h3>
+                      <p class="body-sm" style="color: var(--slate-600)">Design • San Francisco</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                  <div class="flex">
+                    <span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span><span style="color: var(--slate-300)">★</span>
+                  </div>
+                  <span class="body-sm font-semibold" style="color: var(--navy-900)">4.3</span>
+                  <span class="body-sm" style="color: var(--slate-600)">(42 reviews)</span>
+                </div>
+              </div>
+
+              <!-- Company 5 -->
+              <div class="company-item p-5 cursor-pointer">
+                <div class="flex justify-between items-start mb-2">
+                  <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold body-sm" style="background: #142d46">M</div>
+                    <div>
+                      <h3 class="font-semibold body-sm" style="color: var(--navy-900)">Monzo</h3>
+                      <p class="body-sm" style="color: var(--slate-600)">Fintech • London</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                  <div class="flex">
+                    <span class="star">★</span><span class="star">★</span><span class="star">★</span><span style="color: var(--slate-300)">★</span><span style="color: var(--slate-300)">★</span>
+                  </div>
+                  <span class="body-sm font-semibold" style="color: var(--navy-900)">3.8</span>
+                  <span class="body-sm" style="color: var(--slate-600)">(31 reviews)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Review Details -->
+        <div class="lg:col-span-2 space-y-8">
+          <!-- Company Overview -->
+          <div class="surface-elevated p-8">
+            <div class="flex items-start justify-between mb-8">
+              <div class="flex items-center space-x-5">
+                <div class="w-20 h-20 rounded-2xl flex items-center justify-center text-white text-3xl font-bold" style="background: var(--navy-900)">S</div>
+                <div>
+                  <h2 class="heading-lg mb-1" style="color: var(--navy-900)">Stripe</h2>
+                  <p class="body-md" style="color: var(--slate-600)">Financial Services • San Francisco, CA</p>
+                  <div class="flex items-center space-x-4 mt-2">
+                    <div class="flex items-center space-x-2">
+                      <div class="flex">
+                        <span class="star text-xl">★</span><span class="star text-xl">★</span><span class="star text-xl">★</span><span class="star text-xl">★</span><span class="star text-xl">★</span>
+                      </div>
+                      <span class="heading-sm" style="color: var(--navy-900)">4.5</span>
+                    </div>
+                    <span style="color: var(--slate-300)">•</span>
+                    <span class="body-md" style="color: var(--slate-600)">127 reviews</span>
+                  </div>
+                </div>
+              </div>
+              <div class="flex space-x-3">
+                <button class="px-5 py-2.5 body-sm font-semibold rounded-lg border" style="border-color: var(--slate-200); color: var(--navy-900)">Follow</button>
+                <button class="px-5 py-2.5 body-sm font-semibold rounded-lg text-white" style="background: var(--teal-500)">Write Review</button>
+              </div>
+            </div>
+
+            <!-- Ratings Breakdown -->
+            <div class="grid md:grid-cols-2 gap-6">
+              <div>
+                <h3 class="font-semibold body-md mb-4" style="color: var(--navy-900)">Rating Breakdown</h3>
+                <div class="space-y-4">
+                  <div>
+                    <div class="flex justify-between body-sm mb-2">
+                      <span style="color: var(--slate-600)">Work-Life Balance</span>
+                      <span class="font-semibold" style="color: var(--navy-900)">4.2</span>
+                    </div>
+                    <div class="h-2 rounded-full" style="background: var(--slate-200)">
+                      <div class="h-full rounded-full" style="background: var(--teal-500); width: 84%"></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div class="flex justify-between body-sm mb-2">
+                      <span style="color: var(--slate-600)">Culture & Values</span>
+                      <span class="font-semibold" style="color: var(--navy-900)">4.7</span>
+                    </div>
+                    <div class="h-2 rounded-full" style="background: var(--slate-200)">
+                      <div class="h-full rounded-full" style="background: var(--teal-500); width: 94%"></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div class="flex justify-between body-sm mb-2">
+                      <span style="color: var(--slate-600)">Compensation & Benefits</span>
+                      <span class="font-semibold" style="color: var(--navy-900)">4.6</span>
+                    </div>
+                    <div class="h-2 rounded-full" style="background: var(--slate-200)">
+                      <div class="h-full rounded-full" style="background: var(--teal-500); width: 92%"></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div class="flex justify-between body-sm mb-2">
+                      <span style="color: var(--slate-600)">Career Opportunities</span>
+                      <span class="font-semibold" style="color: var(--navy-900)">4.3</span>
+                    </div>
+                    <div class="h-2 rounded-full" style="background: var(--slate-200)">
+                      <div class="h-full rounded-full" style="background: var(--teal-500); width: 86%"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h3 class="font-semibold body-md mb-4" style="color: var(--navy-900)">Recommend to Friend</h3>
+                <div class="flex items-center justify-center h-full">
+                  <div class="text-center">
+                    <div class="relative w-40 h-40 mx-auto mb-4">
+                      <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                        <circle cx="50" cy="50" r="40" stroke="#e2e8f0" stroke-width="12" fill="none"/>
+                        <circle cx="50" cy="50" r="40" stroke="#14b8a6" stroke-width="12" fill="none" stroke-dasharray="251.2" stroke-dashoffset="62.8" stroke-linecap="round"/>
+                      </svg>
+                      <div class="absolute inset-0 flex items-center justify-center">
+                        <div class="text-center">
+                          <div class="heading-lg" style="color: var(--navy-900)">75%</div>
+                          <div class="caption" style="color: var(--slate-600)">Yes</div>
+                        </div>
+                      </div>
+                    </div>
+                    <p class="body-sm" style="color: var(--slate-600)">of employees would recommend Stripe to a friend</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Reviews -->
+          <div class="surface-elevated p-8">
+            <div class="flex justify-between items-center mb-8">
+              <h3 class="heading-md" style="color: var(--navy-900)">Recent Reviews</h3>
+              <select class="px-4 py-2 body-sm font-semibold rounded-lg border bg-white" style="border-color: var(--slate-200); color: var(--navy-900)">
+                <option>Most Recent</option>
+                <option>Highest Rated</option>
+                <option>Lowest Rated</option>
+              </select>
+            </div>
+
+            <div class="space-y-6">
+              <!-- Review 1 -->
+              <div class="review-card surface p-6">
+                <div class="flex justify-between items-start mb-4">
+                  <div>
+                    <h4 class="font-semibold body-md mb-2" style="color: var(--navy-900)">Great place for career growth</h4>
+                    <div class="flex items-center space-x-3">
+                      <div class="flex">
+                        <span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span>
+                      </div>
+                      <span class="body-sm" style="color: var(--slate-600)">Current Employee • Software Engineer</span>
+                    </div>
+                  </div>
+                  <span class="body-sm" style="color: var(--slate-600)">2 weeks ago</span>
+                </div>
+                <div class="space-y-3">
+                  <div class="flex items-start space-x-3">
+                    <span class="font-semibold body-sm flex-shrink-0" style="color: #059669">👍 Pros:</span>
+                    <p class="body-sm" style="color: var(--slate-700)">Excellent compensation package, incredibly smart colleagues, cutting-edge technology stack, amazing learning opportunities, great work-life balance for the industry.</p>
+                  </div>
+                  <div class="flex items-start space-x-3">
+                    <span class="font-semibold body-sm flex-shrink-0" style="color: #dc2626">👎 Cons:</span>
+                    <p class="body-sm" style="color: var(--slate-700)">Can be high pressure during product launches, sometimes long hours expected, very high performance bar.</p>
+                  </div>
+                </div>
+                <div class="flex items-center space-x-4 mt-4 pt-4 border-top" style="border-color: var(--slate-200)">
+                  <button class="body-sm flex items-center space-x-1" style="color: var(--slate-600)">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"/>
+                    </svg>
+                    <span>Helpful (24)</span>
+                  </button>
+                  <button class="body-sm" style="color: var(--slate-600)">Share</button>
+                </div>
+              </div>
+
+              <!-- Review 2 -->
+              <div class="review-card surface p-6">
+                <div class="flex justify-between items-start mb-4">
+                  <div>
+                    <h4 class="font-semibold body-md mb-2" style="color: var(--navy-900)">Best decision I made</h4>
+                    <div class="flex items-center space-x-3">
+                      <div class="flex">
+                        <span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span>
+                      </div>
+                      <span class="body-sm" style="color: var(--slate-600)">Former Employee • Senior Engineer</span>
+                    </div>
+                  </div>
+                  <span class="body-sm" style="color: var(--slate-600)">1 month ago</span>
+                </div>
+                <div class="space-y-3">
+                  <div class="flex items-start space-x-3">
+                    <span class="font-semibold body-sm flex-shrink-0" style="color: #059669">👍 Pros:</span>
+                    <p class="body-sm" style="color: var(--slate-700)">Top-tier engineering culture, excellent benefits (health, 401k, equity), meaningful work that impacts millions, collaborative team environment.</p>
+                  </div>
+                  <div class="flex items-start space-x-3">
+                    <span class="font-semibold body-sm flex-shrink-0" style="color: #dc2626">👎 Cons:</span>
+                    <p class="body-sm" style="color: var(--slate-700)">Very selective hiring process can be lengthy, high expectations from day one.</p>
+                  </div>
+                </div>
+                <div class="flex items-center space-x-4 mt-4 pt-4" style="border-color: var(--slate-200)">
+                  <button class="body-sm flex items-center space-x-1" style="color: var(--slate-600)">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"/>
+                    </svg>
+                    <span>Helpful (18)</span>
+                  </button>
+                  <button class="body-sm" style="color: var(--slate-600)">Share</button>
+                </div>
+              </div>
+
+              <!-- Review 3 -->
+              <div class="review-card surface p-6">
+                <div class="flex justify-between items-start mb-4">
+                  <div>
+                    <h4 class="font-semibold body-md mb-2" style="color: var(--navy-900)">Good but intense</h4>
+                    <div class="flex items-center space-x-3">
+                      <div class="flex">
+                        <span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span><span style="color: var(--slate-300)">★</span>
+                      </div>
+                      <span class="body-sm" style="color: var(--slate-600)">Current Employee • Product Manager</span>
+                    </div>
+                  </div>
+                  <span class="body-sm" style="color: var(--slate-600)">2 months ago</span>
+                </div>
+                <div class="space-y-3">
+                  <div class="flex items-start space-x-3">
+                    <span class="font-semibold body-sm flex-shrink-0" style="color: #059669">👍 Pros:</span>
+                    <p class="body-sm" style="color: var(--slate-700)">Fast-paced environment, great team culture, competitive compensation, excellent growth opportunities.</p>
+                  </div>
+                  <div class="flex items-start space-x-3">
+                    <span class="font-semibold body-sm flex-shrink-0" style="color: #dc2626">👎 Cons:</span>
+                    <p class="body-sm" style="color: var(--slate-700)">Work-life balance can suffer during busy periods, high stress environment.</p>
+                  </div>
+                </div>
+                <div class="flex items-center space-x-4 mt-4 pt-4" style="border-color: var(--slate-200)">
+                  <button class="body-sm flex items-center space-x-1" style="color: var(--slate-600)">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"/>
+                    </svg>
+                    <span>Helpful (12)</span>
+                  </button>
+                  <button class="body-sm" style="color: var(--slate-600)">Share</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

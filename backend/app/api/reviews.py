@@ -18,7 +18,7 @@ Endpoints:
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict
-from sqlalchemy import func, avg
+from sqlalchemy import func
 
 from app.core.security import get_current_user
 from app.models.user import User
