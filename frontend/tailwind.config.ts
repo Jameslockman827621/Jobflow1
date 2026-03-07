@@ -7,6 +7,15 @@ const config: Config = {
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
+    screens: {
+      'sm': '640px',
+      'md': '768px',
+      'lg': '1024px',
+      'xl': '1280px',
+      '2xl': '1536px',
+      'mobile': { 'max': '767px' },
+      'tablet': { 'min': '768px', 'max': '1023px' },
+    },
     extend: {
       colors: {
         // Primary - Deep Navy
@@ -42,16 +51,16 @@ const config: Config = {
         sans: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
       },
       fontSize: {
-        'display-lg': ['64px', { lineHeight: '1.1', letterSpacing: '-0.02em', fontWeight: '800' }],
-        'display-md': ['48px', { lineHeight: '1.15', letterSpacing: '-0.02em', fontWeight: '800' }],
-        'heading-xl': ['40px', { lineHeight: '1.2', letterSpacing: '-0.015em', fontWeight: '700' }],
-        'heading-lg': ['32px', { lineHeight: '1.25', letterSpacing: '-0.015em', fontWeight: '700' }],
-        'heading-md': ['24px', { lineHeight: '1.3', letterSpacing: '-0.01em', fontWeight: '600' }],
-        'heading-sm': ['20px', { lineHeight: '1.35', letterSpacing: '-0.01em', fontWeight: '600' }],
-        'body-lg': ['18px', { lineHeight: '1.5' }],
-        'body-md': ['16px', { lineHeight: '1.5' }],
-        'body-sm': ['14px', { lineHeight: '1.5', letterSpacing: '0.01em' }],
-        'caption': ['12px', { lineHeight: '1.5', letterSpacing: '0.02em', fontWeight: '500' }],
+        'display-lg': ['clamp(2.5rem, 5vw, 4rem)', { lineHeight: '1.1', letterSpacing: '-0.02em', fontWeight: '800' }],
+        'display-md': ['clamp(2rem, 4vw, 3rem)', { lineHeight: '1.15', letterSpacing: '-0.02em', fontWeight: '800' }],
+        'heading-xl': ['clamp(1.75rem, 3vw, 2.5rem)', { lineHeight: '1.2', letterSpacing: '-0.015em', fontWeight: '700' }],
+        'heading-lg': ['clamp(1.5rem, 2.5vw, 2rem)', { lineHeight: '1.25', letterSpacing: '-0.015em', fontWeight: '700' }],
+        'heading-md': ['clamp(1.25rem, 2vw, 1.5rem)', { lineHeight: '1.3', letterSpacing: '-0.01em', fontWeight: '600' }],
+        'heading-sm': ['clamp(1.125rem, 1.5vw, 1.25rem)', { lineHeight: '1.35', letterSpacing: '-0.01em', fontWeight: '600' }],
+        'body-lg': ['clamp(1rem, 1.5vw, 1.125rem)', { lineHeight: '1.5' }],
+        'body-md': ['1rem', { lineHeight: '1.5' }],
+        'body-sm': ['0.875rem', { lineHeight: '1.5', letterSpacing: '0.01em' }],
+        'caption': ['0.75rem', { lineHeight: '1.5', letterSpacing: '0.02em', fontWeight: '500' }],
       },
       borderRadius: {
         'sm': '6px',
@@ -71,6 +80,14 @@ const config: Config = {
       },
       backgroundSize: {
         'grid': '32px 32px',
+      },
+      spacing: {
+        '18': '4.5rem',
+        '88': '22rem',
+        '128': '32rem',
+      },
+      minHeight: {
+        'screen-mobile': '100dvh',
       },
     },
   },
