@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { useToast } from '@/components/ui/Toast';
 
 interface Company {
   name: string;
@@ -30,6 +31,7 @@ interface Preferences {
 export default function OnboardingPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
+  const toast = useToast();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -102,6 +104,7 @@ export default function OnboardingPage() {
     // Validate before submitting
     const validationError = validatePreferences();
     if (validationError) {
+      toast.error(validationError);
       setError(validationError);
       return;
     }
@@ -122,9 +125,12 @@ export default function OnboardingPage() {
         throw new Error(errorData.detail || 'Failed to save preferences');
       }
 
+      toast.success('Preferences saved!');
+
       // Step 2: Run job search
       setSearching(true);
       setSearchProgress(0);
+      toast.loading('Searching for jobs... This takes 2-3 minutes');
 
       // Simulate progress
       const progressInterval = setInterval(() => {
@@ -144,16 +150,34 @@ export default function OnboardingPage() {
       }
 
       const searchData = await searchRes.json();
+      toast.success(`Found ${searchData.total} jobs!`);
 
       setTimeout(() => {
         router.push(`/dashboard?onboarding=complete&jobs=${searchData.total}`);
       }, 1000);
     } catch (err: any) {
+      console.error('Onboarding error:', err);
+      toast.error(err.message || 'Something went wrong');
       setError(err.message || 'Something went wrong');
       setSearching(false);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleStepChange = (newStep: number) => {
+    // Validate current step before proceeding
+    if (newStep > step) {
+      const validationError = validatePreferences();
+      if (validationError) {
+        toast.error(validationError);
+        setError(validationError);
+        return;
+      }
+    }
+    
+    setStep(newStep);
+    setError('');
   };
 
   const toggleRole = (role: string) => {
@@ -250,7 +274,7 @@ export default function OnboardingPage() {
 
             <div className="flex justify-end">
               <button
-                onClick={() => setStep(2)}
+                onClick={() => handleStepChange(2)}
                 disabled={preferences.target_roles.length === 0}
                 className="px-6 py-3 bg-navy-900 text-white rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-navy-800 transition-colors"
               >
@@ -295,13 +319,13 @@ export default function OnboardingPage() {
 
             <div className="flex justify-between">
               <button
-                onClick={() => setStep(1)}
+                onClick={() => handleStepChange(1)}
                 className="px-6 py-3 text-slate-700 font-medium hover:bg-slate-100 rounded-xl transition-colors"
               >
                 Back
               </button>
               <button
-                onClick={() => setStep(3)}
+                onClick={() => handleStepChange(3)}
                 disabled={preferences.seniority_levels.length === 0}
                 className="px-6 py-3 bg-navy-900 text-white rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-navy-800 transition-colors"
               >
@@ -406,13 +430,13 @@ export default function OnboardingPage() {
 
             <div className="flex justify-between">
               <button
-                onClick={() => setStep(2)}
+                onClick={() => handleStepChange(2)}
                 className="px-6 py-3 text-slate-700 font-medium hover:bg-slate-100 rounded-xl transition-colors"
               >
                 Back
               </button>
               <button
-                onClick={() => setStep(4)}
+                onClick={() => handleStepChange(4)}
                 disabled={preferences.locations.length === 0 && preferences.countries.length === 0}
                 className="px-6 py-3 bg-navy-900 text-white rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-navy-800 transition-colors"
               >
@@ -509,13 +533,13 @@ export default function OnboardingPage() {
 
             <div className="flex justify-between">
               <button
-                onClick={() => setStep(3)}
+                onClick={() => handleStepChange(3)}
                 className="px-6 py-3 text-slate-700 font-medium hover:bg-slate-100 rounded-xl transition-colors"
               >
                 Back
               </button>
               <button
-                onClick={() => setStep(5)}
+                onClick={() => handleStepChange(5)}
                 className="px-6 py-3 bg-navy-900 text-white rounded-xl font-medium hover:bg-navy-800 transition-colors"
               >
                 Next
@@ -616,7 +640,7 @@ export default function OnboardingPage() {
 
                 <div className="flex justify-between">
                   <button
-                    onClick={() => setStep(4)}
+                    onClick={() => handleStepChange(4)}
                     className="px-6 py-3 text-slate-700 font-medium hover:bg-slate-100 rounded-xl transition-colors"
                   >
                     Back

@@ -101,7 +101,19 @@ export default function KanbanPage() {
                   
                   {stageApps.length === 0 && (
                     <div className="text-center text-slate-400 text-sm py-8">
-                      No applications
+                      {stage.id === 'wishlist' ? (
+                        <div>
+                          <p className="mb-2">No applications yet</p>
+                          <button
+                            onClick={() => router.push('/dashboard')}
+                            className="text-teal-600 hover:text-teal-700 font-medium text-xs"
+                          >
+                            Browse Jobs →
+                          </button>
+                        </div>
+                      ) : (
+                        <p>No applications</p>
+                      )}
                     </div>
                   )}
                 </div>
