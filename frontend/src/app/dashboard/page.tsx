@@ -1,9 +1,8 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import Navbar from "../../components/Navbar";
-import JobCard from "../../components/JobCard";
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/auth';
 
 interface Job {
   id: number;
@@ -11,212 +10,178 @@ interface Job {
   company: string;
   location: string;
   remote: boolean;
-  hybrid?: boolean;
   min_salary?: number;
   max_salary?: number;
-  seniority?: string;
-  match_score?: number;
+  posted_date: string;
   external_url: string;
-  posted_date?: string;
 }
 
-interface Application {
-  id: number;
-  job_id: number;
-  job_title: string;
-  company: string;
-  status: string;
-  stage: string;
-  match_score?: number;
-  created_at: string;
+interface OnboardingStatus {
+  onboarding_complete: boolean;
+  has_preferences: boolean;
+  has_cached_jobs: boolean;
+  cache?: {
+    is_expired: boolean;
+    expires_at: string;
+  };
 }
 
-export default function Dashboard() {
+export default function DashboardPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"jobs" | "applications" | "profile">("jobs");
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [applications, setApplications] = useState<Application[]>([]);
+  const { user, loading: authLoading, logout } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [token, setToken] = useState<string | null>(null);
+  const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStatus | null>(null);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    const storedToken = localStorage.getItem("token");
-    if (!storedToken) {
-      router.push("/login");
-      return;
+    if (!authLoading && !user) {
+      router.push('/login');
     }
-    setToken(storedToken);
-    fetchData(storedToken);
-  }, [router]);
+  }, [user, authLoading, router]);
 
-  const fetchData = async (authToken: string) => {
-    setLoading(true);
-    const headers = { Authorization: `Bearer ${authToken}` };
-    
+  useEffect(() => {
+    if (user) {
+      loadDashboard();
+    }
+  }, [user]);
+
+  async function loadDashboard() {
     try {
-      const [jobsRes, appsRes] = await Promise.all([
-        fetch(`${process.env.API_URL || "http://localhost:8000/api/v1"}/jobs?limit=20`, { headers }),
-        fetch(`${process.env.API_URL || "http://localhost:8000/api/v1"}/applications/`, { headers }),
-      ]);
+      setLoading(true);
       
-      if (jobsRes.ok) setJobs(await jobsRes.json());
-      if (appsRes.ok) setApplications(await appsRes.json());
-    } catch (error) {
-      console.error("Error fetching data:", error);
+      // Load onboarding status
+      const statusRes = await fetch('/api/v1/onboarding/status');
+      if (statusRes.ok) {
+        const status = await statusRes.json();
+        setOnboardingStatus(status);
+        
+        // If onboarding not complete, redirect
+        if (!status.onboarding_complete) {
+          router.push('/onboarding');
+          return;
+        }
+        
+        // If has cached jobs, load them
+        if (status.has_cached_jobs && !status.cache?.is_expired) {
+          const searchRes = await fetch('/api/v1/onboarding/search');
+          if (searchRes.ok) {
+            const searchData = await searchRes.json();
+            setJobs(searchData.jobs || []);
+          }
+        }
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to load dashboard');
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  const handleApply = async (jobId: number) => {
-    if (!token) return;
-    
-    try {
-      const res = await fetch(`${process.env.API_URL || "http://localhost:8000/api/v1"}/applications/`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ job_id: jobId, auto_prepare: true }),
-      });
-      
-      const data = await res.json();
-      alert(data.message);
-      fetchData(token);
-    } catch (error) {
-      console.error("Error applying:", error);
-      alert("Failed to apply");
-    }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    router.push("/");
-  };
-
-  if (loading) {
+  if (authLoading || loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-xl text-gray-600">Loading your dashboard...</div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500"></div>
       </div>
     );
   }
 
+  if (!onboardingStatus?.onboarding_complete) {
+    return null; // Will redirect
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar isLoggedIn={true} onLogout={handleLogout} />
-
-      {/* Tabs */}
-      <div className="max-w-7xl mx-auto px-4 mt-6">
-        <div className="border-b border-gray-200">
-          <nav className="-mb-px flex space-x-8">
-            {["jobs", "applications", "profile"].map((tab) => (
+    <div className="min-h-screen bg-slate-50">
+      {/* Header */}
+      <header className="bg-white shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex justify-between items-center">
+            <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-slate-600">{user?.email}</span>
               <button
-                key={tab}
-                onClick={() => setActiveTab(tab as any)}
-                className={`
-                  pb-4 px-1 border-b-2 font-medium text-sm capitalize
-                  ${activeTab === tab
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                  }
-                `}
+                onClick={logout}
+                className="px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
               >
-                {tab}
+                Logout
               </button>
-            ))}
-          </nav>
-        </div>
-      </div>
-
-      {/* Content */}
-      <main className="max-w-7xl mx-auto px-4 py-6">
-        {activeTab === "jobs" && (
-          <div>
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">Recommended Jobs</h2>
-              <span className="text-sm text-gray-500">{jobs.length} jobs found</span>
             </div>
-            {jobs.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="text-4xl mb-4">🔍</div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No jobs yet</h3>
-                <p className="text-gray-500 mb-4">We're still scraping jobs. Check back soon!</p>
-                <p className="text-sm text-gray-400">Admin: Run job scraper to populate jobs</p>
-              </div>
-            ) : (
-              <div className="grid gap-4">
-                {jobs.map((job) => (
-                  <JobCard
-                    key={job.id}
-                    {...job}
-                    onApply={handleApply}
-                  />
-                ))}
-              </div>
-            )}
           </div>
-        )}
+        </div>
+      </header>
 
-        {activeTab === "applications" && (
-          <div>
-            <h2 className="text-xl font-semibold mb-4">Your Applications</h2>
-            {applications.length === 0 ? (
-              <p className="text-gray-500">No applications yet. Start applying to jobs!</p>
-            ) : (
-              <div className="grid gap-4">
-                {applications.map((app) => (
-                  <div key={app.id} className="bg-white p-4 rounded-lg shadow">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="font-semibold text-lg">{app.job_title}</h3>
-                        <p className="text-gray-600">{app.company}</p>
-                        <div className="mt-2 flex space-x-3 text-sm">
-                          <span className={`px-2 py-1 rounded ${
-                            app.status === "submitted" ? "bg-green-100 text-green-800" :
-                            app.status === "draft" ? "bg-gray-100 text-gray-800" :
-                            "bg-blue-100 text-blue-800"
-                          }`}>
-                            {app.status}
-                          </span>
-                          <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded">
-                            {app.stage}
-                          </span>
-                          {app.match_score && (
-                            <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded">
-                              {app.match_score}% match
-                            </span>
-                          )}
-                        </div>
-                        <p className="mt-2 text-xs text-gray-400">
-                          Applied: {new Date(app.created_at).toLocaleDateString()}
-                        </p>
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            <div className="text-sm text-slate-600 mb-1">Total Jobs</div>
+            <div className="text-3xl font-bold text-slate-900">{jobs.length}</div>
+          </div>
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            <div className="text-sm text-slate-600 mb-1">Applications</div>
+            <div className="text-3xl font-bold text-slate-900">0</div>
+          </div>
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            <div className="text-sm text-slate-600 mb-1">Cache Status</div>
+            <div className="text-lg font-semibold text-slate-900">
+              {onboardingStatus?.cache?.is_expired ? '⚠️ Expired' : '✅ Fresh'}
+            </div>
+          </div>
+        </div>
+
+        {/* Jobs List */}
+        <div className="bg-white rounded-xl shadow-sm">
+          <div className="p-6 border-b border-slate-200">
+            <h2 className="text-lg font-semibold text-slate-900">Your Jobs</h2>
+          </div>
+          
+          {error && (
+            <div className="p-4 bg-red-50 border border-red-200 text-red-700">
+              {error}
+            </div>
+          )}
+
+          {jobs.length === 0 ? (
+            <div className="p-8 text-center text-slate-600">
+              <p>No jobs found. Try refreshing your search.</p>
+              <button
+                onClick={loadDashboard}
+                className="mt-4 px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-colors"
+              >
+                Refresh Search
+              </button>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-200">
+              {jobs.map((job) => (
+                <div key={job.id} className="p-6 hover:bg-slate-50 transition-colors">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="text-lg font-semibold text-slate-900">{job.title}</h3>
+                      <p className="text-slate-600">{job.company}</p>
+                      <div className="mt-2 flex items-center space-x-4 text-sm text-slate-500">
+                        <span>📍 {job.location}</span>
+                        {job.remote && <span>🏠 Remote</span>}
+                        {job.max_salary && (
+                          <span>💰 £{job.max_salary.toLocaleString()}</span>
+                        )}
                       </div>
                     </div>
+                    <a
+                      href={job.external_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 bg-navy-900 text-white rounded-lg hover:bg-navy-800 transition-colors text-sm"
+                    >
+                      Apply
+                    </a>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === "profile" && (
-          <div>
-            <h2 className="text-xl font-semibold mb-4">Your Profile</h2>
-            <div className="bg-white p-6 rounded-lg shadow">
-              <p className="text-gray-600 mb-4">
-                Profile management coming soon. You'll be able to:
-              </p>
-              <ul className="list-disc list-inside space-y-2 text-gray-600">
-                <li>Edit your skills and experience</li>
-                <li>Upload your resume</li>
-                <li>Set job preferences (salary, location, remote)</li>
-                <li>View match score breakdowns</li>
-              </ul>
+                </div>
+              ))}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </main>
     </div>
   );

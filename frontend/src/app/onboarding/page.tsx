@@ -79,7 +79,33 @@ export default function OnboardingPage() {
     }
   };
 
+  const validatePreferences = (): string | null => {
+    if (preferences.target_roles.length === 0) {
+      return 'Please select at least one role';
+    }
+    if (preferences.seniority_levels.length === 0) {
+      return 'Please select your seniority level';
+    }
+    if (preferences.locations.length === 0 && preferences.countries.length === 0) {
+      return 'Please select at least one location or country';
+    }
+    if (preferences.employment_types.length === 0) {
+      return 'Please select at least one employment type';
+    }
+    if (preferences.min_salary && (preferences.min_salary < 0 || preferences.min_salary > 1000000)) {
+      return 'Salary must be between £0 and £1,000,000';
+    }
+    return null;
+  };
+
   const handleSubmit = async () => {
+    // Validate before submitting
+    const validationError = validatePreferences();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
     setLoading(true);
     setError('');
 
