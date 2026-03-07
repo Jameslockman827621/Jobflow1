@@ -1,0 +1,81 @@
+{
+  "tests": {
+    "test1_basic": {
+      "count": 0,
+      "input": {
+        "country": "uk",
+        "query": "Software Engineer",
+        "location": "London",
+        "maxRows": 20,
+        "jobType": "fulltime",
+        "fromDays": 14,
+        "enableUniqueJobs": true,
+        "includeSimilarJobs": true
+      },
+      "jobs": []
+    },
+    "test2_hybrid": {
+      "count": 0,
+      "input": {
+        "country": "uk",
+        "query": "Software Engineer",
+        "location": "London",
+        "maxRows": 20,
+        "jobType": "fulltime",
+        "fromDays": 14,
+        "enableUniqueJobs": true,
+        "includeSimilarJobs": true,
+        "remote": "hybrid"
+      },
+      "jobs": []
+    },
+    "test3_location": {
+      "count": 0,
+      "input": {
+        "country": "uk",
+        "query": "Software Engineer",
+        "location": "London, UK",
+        "maxRows": 20,
+        "jobType": "fulltime",
+        "fromDays": 14,
+        "enableUniqueJobs": true,
+        "includeSimilarJobs": true
+      },
+      "jobs": []
+    },
+    "test4_senior": {
+      "count": 0,
+      "input": {
+        "country": "uk",
+        "query": "Senior Software Engineer",
+        "location": "London",
+        "maxRows": 20,
+        "jobType": "fulltime",
+        "fromDays": 14,
+        "enableUniqueJobs": true,
+        "includeSimilarJobs": true
+      },
+      "jobs": []
+    },
+    "test5_level": {
+      "count": 0,
+      "input": {
+        "country": "uk",
+        "query": "Software Engineer",
+        "location": "London",
+        "maxRows": 20,
+        "jobType": "fulltime",
+        "fromDays": 14,
+        "enableUniqueJobs": true,
+        "includeSimilarJobs": true,
+        "level": "mid_level"
+      },
+      "jobs": []
+    }
+  },
+  "summary": {
+    "best_test": "Basic Search (no remote)",
+    "best_count": 0,
+    "total_jobs": 0
+  }
+}

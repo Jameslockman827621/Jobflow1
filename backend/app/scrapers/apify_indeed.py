@@ -108,7 +108,7 @@ class ApifyIndeedScraper(BaseScraper):
             "maxRows": max_jobs,
             "sort": sort,
             "jobType": job_type,
-            "fromDays": min(max(from_days, 1), 30),  # Clamp to 1-30
+            "fromDays": str(min(max(from_days, 1), 30)),  # Clamp to 1-30
             "enableUniqueJobs": True,
             "includeSimilarJobs": True,
         }

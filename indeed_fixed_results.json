@@ -1,0 +1,547 @@
+{
+  "fix_applied": "fromDays must be string, not int",
+  "tests": {
+    "test1_london": 20,
+    "test2_senior": 20,
+    "test3_mid_level": 20,
+    "test4_manchester": 20,
+    "test5_hybrid": 20
+  },
+  "total_jobs": 100,
+  "best_test": "Software Engineer, London",
+  "sample_jobs": [
+    {
+      "jobKey": "9fa4b20eef898546",
+      "scrapingInfo": {
+        "page": 1,
+        "index": 20
+      },
+      "title": "Junior QA",
+      "jobType": [
+        "Full-time"
+      ],
+      "descriptionHtml": "<p><b>Overview</b><br/>We are seeking a detail-oriented and motivated Junior QA to join our software quality assurance team. This entry-level position offers an excellent opportunity to develop your skills in testing methodologies, automation, and software development processes. The successful candidate will support the delivery of high-quality software products by executing test cases, analysing defects, and collaborating with development teams to ensure optimal performance and reliability. Prior experience with automation tools and scripting languages is advantageous, but training will be provided for the right candidate.</p><p><b>Responsibilities</b></p><ul><li>Execute manual and automated test cases across various platforms including web, mobile (Android and iOS), and desktop applications.</li><li>Assist in developing and maintaining test automation scripts using tools such as Selenium, TestNG, Cucumber, and Jenkins.</li><li>Conduct functional, system, regression, performance (using LoadRunner), load (using JMeter), and user acceptance testing to verify software quality.</li><li>Analyse root causes of defects through debugging and troubleshooting using tools like Visual Studio, Eclipse, or SQL Server Management Studio.</li><li>Collaborate with developers during SDLC (Software Development Life Cycle) phases to identify issues early and ensure quality standards are met.</li><li>Support release management activities by verifying updates through pre-release testing cycles.</li><li>Participate in requirements gathering sessions to understand business needs and translate them into comprehensive test cases.</li><li>Document test results accurately in tools such as Jira or HP ALM and report issues clearly for prompt resolution.</li><li>Assist in maintaining testing documentation including test plans, scripts, and defect logs.</li></ul><p><b>Skills</b></p><ul><li>Proficiency with test automation tools such as Selenium, TestNG, Cucumber, Jenkins, and GitLab/GitHub version control systems.</li><li>Knowledge of programming languages including Java, Python, C#, or JavaScript for scripting automated tests.</li><li>Familiarity with APIs (REST &amp; SOAP), web services, XML/JSON data formats, and service-oriented architecture (SOA).</li><li>Experience with performance testing tools like LoadRunner or JMeter is desirable.</li><li>Understanding of SDLC models such as Waterfall and Agile/Scrum methodologies.</li><li>Knowledge of databases including MySQL, Oracle, SQL Server, MongoDB with skills in SQL/PL-SQL queries for data validation.</li><li>Awareness of operating systems like Windows and Linux; experience with cloud platforms such as AWS or Azure is a plus.</li><li>Strong analytical skills for data analysis and problem-solving; ability to perform root cause analysis effectively.</li><li>Excellent communication skills for collaboration within multidisciplinary teams; ability to gather business requirements accurately.</li><li>Familiarity with UI/UX principles including HTML/CSS/JSP for front-end testing; understanding of MVC frameworks is advantageous. This role provides a fantastic platform for aspiring QA professionals eager to grow their expertise in software testing within a dynamic environment committed to quality excellence.</li></ul><p>Job Type: Full-time</p><p>Pay: &pound;24,420.00-&pound;47,554.80 per year</p><p>Work Location: In person</p>",
+      "descriptionText": "*Overview*\nWe are seeking a detail-oriented and motivated Junior QA to join our software quality assurance team. This entry-level position offers an excellent opportunity to develop your skills in testing methodologies, automation, and software development processes. The successful candidate will support the delivery of high-quality software products by executing test cases, analysing defects, and collaborating with development teams to ensure optimal performance and reliability. Prior experience with automation tools and scripting languages is advantageous, but training will be provided for the right candidate.\n\n*Responsibilities*\n\n* Execute manual and automated test cases across various platforms including web, mobile (Android and iOS), and desktop applications.\n* Assist in developing and maintaining test automation scripts using tools such as Selenium, TestNG, Cucumber, and Jenkins.\n* Conduct functional, system, regression, performance (using LoadRunner), load (using JMeter), and user acceptance testing to verify software quality.\n* Analyse root causes of defects through debugging and troubleshooting using tools like Visual Studio, Eclipse, or SQL Server Management Studio.\n* Collaborate with developers during SDLC (Software Development Life Cycle) phases to identify issues early and ensure quality standards are met.\n* Support release management activities by verifying updates through pre-release testing cycles.\n* Participate in requirements gathering sessions to understand business needs and translate them into comprehensive test cases.\n* Document test results accurately in tools such as Jira or HP ALM and report issues clearly for prompt resolution.\n* Assist in maintaining testing documentation including test plans, scripts, and defect logs.\n\n*Skills*\n\n* Proficiency with test automation tools such as Selenium, TestNG, Cucumber, Jenkins, and GitLab/GitHub version control systems.\n* Knowledge of programming languages including Java, Python, C#, or JavaScript for scripting automated tests.\n* Familiarity with APIs (REST & SOAP), web services, XML/JSON data formats, and service-oriented architecture (SOA).\n* Experience with performance testing tools like LoadRunner or JMeter is desirable.\n* Understanding of SDLC models such as Waterfall and Agile/Scrum methodologies.\n* Knowledge of databases including MySQL, Oracle, SQL Server, MongoDB with skills in SQL/PL-SQL queries for data validation.\n* Awareness of operating systems like Windows and Linux; experience with cloud platforms such as AWS or Azure is a plus.\n* Strong analytical skills for data analysis and problem-solving; ability to perform root cause analysis effectively.\n* Excellent communication skills for collaboration within multidisciplinary teams; ability to gather business requirements accurately.\n* Familiarity with UI/UX principles including HTML/CSS/JSP for front-end testing; understanding of MVC frameworks is advantageous. This role provides a fantastic platform for aspiring QA professionals eager to grow their expertise in software testing within a dynamic environment committed to quality excellence.\n\nJob Type: Full-time\n\nPay: \u00a324,420.00-\u00a347,554.80 per year\n\nWork Location: In person",
+      "companyName": "PFP Contracting Ltd",
+      "companyUrl": "https://uk.indeed.com/cmp/Pfp-Contracting-Ltd",
+      "location": {
+        "city": "Hounslow",
+        "postalCode": null,
+        "country": "United Kingdom",
+        "countryCode": "GB",
+        "formattedAddressLong": "Hounslow",
+        "formattedAddressShort": "Hounslow",
+        "latitude": 51.46839,
+        "longitude": -0.36092,
+        "streetAddress": null,
+        "fullAddress": "Hounslow"
+      },
+      "salary": {
+        "salaryCurrency": "GBP",
+        "salaryMax": 47554.80078125,
+        "salaryMin": 24420,
+        "salarySource": "EXTRACTION",
+        "salaryText": "\u00a324,420.00 - \u00a347,554.80 a year",
+        "salaryType": "yearly"
+      },
+      "rating": {
+        "rating": 0,
+        "count": 0
+      },
+      "benefits": [],
+      "occupation": [
+        "Technology Occupations",
+        "Software Development & Architecture Occupations",
+        "Software Quality Assurance Occupations"
+      ],
+      "attributes": [
+        "Jira",
+        "HP ALM",
+        "TestNG",
+        "Azure",
+        "Operating systems",
+        "Oracle",
+        "MVC",
+        "CSS",
+        "Waterfall",
+        "XML",
+        "Cucumber (software testing tool)",
+        "Visual Studio",
+        "C#",
+        "iOS",
+        "LoadRunner",
+        "Data analysis skills",
+        "Test automation",
+        "Microsoft SQL Server",
+        "Full-time",
+        "Selenium",
+        "MongoDB",
+        "Windows",
+        "Performance testing",
+        "Java",
+        "SOAP",
+        "SQL",
+        "AWS",
+        "Analysis skills",
+        "Software quality assurance",
+        "JavaScript",
+        "SQL Server Management Studio",
+        "REST",
+        "Scripting",
+        "JSP",
+        "UX",
+        "Scrum",
+        "GitHub",
+        "APIs",
+        "Software testing",
+        "Agile",
+        "Web services",
+        "UI",
+        "Linux",
+        "Eclipse",
+        "In-person",
+        "Service-oriented architecture",
+        "Root cause analysis",
+        "Business requirements",
+        "PL/SQL",
+        "Jenkins",
+        "GitLab",
+        "Communication skills",
+        "Python",
+        "HTML",
+        "MySQL",
+        "SDLC"
+      ],
+      "contacts": [],
+      "shifts": [],
+      "socialInsurance": [],
+      "workingSystem": [],
+      "shiftAndSchedule": [],
+      "postedToday": false,
+      "hiringDemand": {
+        "isHighVolumeHiring": false,
+        "isUrgentHire": false
+      },
+      "datePublished": "2026-02-20",
+      "expired": false,
+      "source": "Indeed",
+      "age": "15 days ago",
+      "isRemote": false,
+      "locale": "uk",
+      "language": "en",
+      "jobUrl": "https://uk.indeed.com/viewjob?jk=9fa4b20eef898546",
+      "applyUrl": "http://uk.indeed.com/job/junior-qa-9fa4b20eef898546",
+      "emails": [],
+      "companyAddresses": [],
+      "companyLinks": {
+        "facebook": null,
+        "instagram": null,
+        "twitter": null,
+        "customLinks": [],
+        "corporateWebsite": null
+      },
+      "companyCeo": {
+        "name": null,
+        "photoUrl": null,
+        "startDate": null
+      },
+      "requirements": []
+    },
+    {
+      "jobKey": "6f0a564f35391a88",
+      "scrapingInfo": {
+        "page": 1,
+        "index": 0
+      },
+      "title": "Software Engineer",
+      "jobType": [
+        "Part-time",
+        "Full-time"
+      ],
+      "descriptionHtml": "<div><p><b>Mercor is hiring experienced Software Engineers</b> to support high-impact research collaborations with leading AI labs. Freelancers will contribute to building training datasets that improve AI model reasoning and problem-solving on real-world coding tasks.</p><p>\nThis is a unique opportunity to apply your software engineering expertise toward shaping the next generation of intelligent systems.</p><p><b>\nAbout the Project</b></p><p>\nYou'll annotate frontier-model trajectories on <b>SWE-bench&ndash;style tasks</b> derived from real open-source repositories. Currently, closed-source models do not expose their internal reasoning traces, making it difficult to understand how LLMs approach problem-solving.</p><p>\nTo address this gap, you'll <b>reconstruct and annotate the reasoning portions</b> of model trajectories&mdash;using your own problem-solving process and the full task context to infer and infill the underlying thought process at each step.</p><p><b>\nKey Responsibilities</b></p><ul><li><p>\nReview model-generated code trajectories on realistic software engineering tasks</p></li><li><p>\nReconstruct chain-of-thought reasoning that explains each step of the solution process</p></li><li><p>\nAnnotate decision points, debugging logic, and problem-solving strategies</p></li><li><p>\nUse full task context (codebase, issue descriptions, test cases) to infer plausible reasoning</p></li><li><p>\nEnsure annotations reflect realistic developer thought processes and technical accuracy</p></li></ul><p><b>\nIdeal Qualifications</b></p><ul><li><p>\n2+ years of experience in software engineering, with hands-on debugging and problem-solving in real codebases</p></li><li><p>\nDegree in Software Engineering, Computer Science, or a related field (Bachelor's minimum; advanced degree preferred)</p></li><li><p>\nStrong proficiency in Python, JavaScript, TypeScript, or other common languages found in open-source projects</p></li><li><p>\nFamiliarity with version control workflows (Git, PRs, issue tracking)</p></li><li><p>\nComfortable articulating technical reasoning in clear, structured writing</p></li></ul><p><b>\nProject Timeline</b></p><ul><li><p><b>\nStart Date:</b> Immediate</p></li><li><p><b>\nDuration:</b> 1&ndash;2 months</p></li><li><p><b>\nCommitment:</b> Part-time (15&ndash;25 hours/week, with flexibility up to 40 hours/week)</p></li></ul><p><b>\nApplication &amp; Onboarding Process</b></p><ul><li><p>\nUpload your resume</p></li><li><p>\nAI interview: A short, 15-minute conversational session to understand your background, experience, and interest in the role</p></li><li><p>\nFollow-up communication within a few days with next steps and onboarding details</p></li></ul><p><b>\nApply today</b> and leverage your software engineering expertise to help build the future of AI-driven systems!</p></div>",
+      "companyLogoUrl": "https://d2q79iu7y748jz.cloudfront.net/s/_squarelogo/256x256/3cbdb5f00f06a9e1d5885be4452f5fe3",
+      "descriptionText": "Mercor is hiring experienced Software Engineers to support high-impact research collaborations with leading AI labs. Freelancers will contribute to building training datasets that improve AI model reasoning and problem-solving on real-world coding tasks.\n\nThis is a unique opportunity to apply your software engineering expertise toward shaping the next generation of intelligent systems.\n\nAbout the Project\n\nYou'll annotate frontier-model trajectories on SWE-bench\u2013style tasks derived from real open-source repositories. Currently, closed-source models do not expose their internal reasoning traces, making it difficult to understand how LLMs approach problem-solving.\n\nTo address this gap, you'll reconstruct and annotate the reasoning portions of model trajectories\u2014using your own problem-solving process and the full task context to infer and infill the underlying thought process at each step.\n\nKey Responsibilities\n\nReview model-generated code trajectories on realistic software engineering tasks\n\nReconstruct chain-of-thought reasoning that explains each step of the solution process\n\nAnnotate decision points, debugging logic, and problem-solving strategies\n\nUse full task context (codebase, issue descriptions, test cases) to infer plausible reasoning\n\nEnsure annotations reflect realistic developer thought processes and technical accuracy\n\nIdeal Qualifications\n\n2+ years of experience in software engineering, with hands-on debugging and problem-solving in real codebases\n\nDegree in Software Engineering, Computer Science, or a related field (Bachelor's minimum; advanced degree preferred)\n\nStrong proficiency in Python, JavaScript, TypeScript, or other common languages found in open-source projects\n\nFamiliarity with version control workflows (Git, PRs, issue tracking)\n\nComfortable articulating technical reasoning in clear, structured writing\n\nProject Timeline\n\nStart Date: Immediate\n\nDuration: 1\u20132 months\n\nCommitment: Part-time (15\u201325 hours/week, with flexibility up to 40 hours/week)\n\nApplication & Onboarding Process\n\nUpload your resume\n\nAI interview: A short, 15-minute conversational session to understand your background, experience, and interest in the role\n\nFollow-up communication within a few days with next steps and onboarding details\n\nApply today and leverage your software engineering expertise to help build the future of AI-driven systems!",
+      "companyName": "MERCOR",
+      "companyUrl": "https://uk.indeed.com/cmp/Mercor",
+      "location": {
+        "city": "London",
+        "postalCode": null,
+        "country": "United Kingdom",
+        "countryCode": "GB",
+        "formattedAddressLong": "London",
+        "formattedAddressShort": "London",
+        "latitude": 51.51334,
+        "longitude": -0.08901,
+        "streetAddress": null,
+        "fullAddress": "London"
+      },
+      "salary": {
+        "salaryCurrency": "GBP",
+        "salaryMax": 130,
+        "salaryMin": 70,
+        "salarySource": "EXTRACTION",
+        "salaryText": "\u00a370 - \u00a3130 an hour",
+        "salaryType": "hourly"
+      },
+      "rating": {
+        "rating": 4.2,
+        "count": 15
+      },
+      "benefits": [],
+      "occupation": [
+        "Software Development Occupations",
+        "Technology Occupations",
+        "Software Development & Architecture Occupations"
+      ],
+      "attributes": [
+        "Computer Science",
+        "Part-time",
+        "Engineering",
+        "Full-time",
+        "Git",
+        "Bachelor's degree",
+        "JavaScript",
+        "AI",
+        "TypeScript",
+        "Python",
+        "Debugging"
+      ],
+      "contacts": [],
+      "shifts": [],
+      "socialInsurance": [],
+      "workingSystem": [],
+      "shiftAndSchedule": [],
+      "postedToday": false,
+      "hiringDemand": {
+        "isHighVolumeHiring": false,
+        "isUrgentHire": false
+      },
+      "datePublished": "2026-02-24",
+      "expired": false,
+      "source": "Mercor",
+      "age": "10 days ago",
+      "isRemote": false,
+      "locale": "uk",
+      "language": "en",
+      "jobUrl": "https://uk.indeed.com/viewjob?jk=6f0a564f35391a88",
+      "emails": [],
+      "companyAddresses": [
+        "San Francisco"
+      ],
+      "companyNumEmployees": "201 to 500",
+      "companyDescription": "Mercor is at the intersection of labor markets and AI research. We partner with leading AI labs and enterprises to provide the human intelligence essential to AI development.\r\n\r\nMercor offers part-time, remote, and well-paid contract opportunities. \r\n\r\nMore than 30,000 professionals across domains like engineering, research, law, and creative services have partnered with Mercor on frontier AI projects.",
+      "companyFounded": {
+        "year": 2023
+      },
+      "companyBriefDescription": "Mercor partners with leading AI labs and enterprises to provide the human intelligence essential to AI development.",
+      "companyLinks": {
+        "facebook": null,
+        "instagram": null,
+        "twitter": null,
+        "customLinks": [],
+        "corporateWebsite": "https://www.mercor.com"
+      },
+      "companyCeo": {
+        "name": null,
+        "photoUrl": null,
+        "startDate": null
+      },
+      "numOfCandidates": null,
+      "requirements": []
+    },
+    {
+      "jobKey": "07a393b1870ebda2",
+      "scrapingInfo": {
+        "page": 1,
+        "index": 1
+      },
+      "title": "Software Engineer - Frontend",
+      "jobType": [
+        "Full-time"
+      ],
+      "descriptionHtml": "<div><div><h3 class=\"jobSectionHeader\"><b>Company Overview</b></h3>\n<p>\nMetrea delivers effects-as-a-service to national security partners across five domains and more than a dozen mission areas&mdash;including airborne ISR, electronic warfare, secure communications, aerial refueling, special mission aviation, aerial firefighting, and advanced simulation.</p>\n<p>\nWherever we operate, we build vertically integrated full stacks of capability&mdash;designing, building, and operating turnkey solutions that let customers scale capacity while benefiting from continuous cycles of innovation. With operators and engineers under one roof, we close the gap between lab and field&mdash;what we call connecting design with effect.</p>\n<p>\nMetrea's solutions are built for elegance: effective, efficient, and evolving. This approach enables our partners to do more with less and achieve outsized, asymmetric advantage against rapidly evolving threats.</p>\n<p>\nHeadquartered in Washington, DC, Metrea has facilities across the United States, the United Kingdom, Europe, and beyond.</p></div><h3 class=\"jobSectionHeader\"><b>\nGroup Overview</b></h3>\n<p>\nThe Digital and Synthetic Capability Unit (D&amp;S) is committed to providing mission-driven information solutions that seamlessly bridge the digital and physical realms. Leveraging cutting-edge technologies and advanced platforms, we empower operational readiness and elevate situational awareness across diverse domains&mdash;including air, maritime, and space.</p>\n<h3 class=\"jobSectionHeader\"><b>\nPosition Summary</b></h3>\n<p>\nMetrea is seeking a dynamic and highly motivated individual to join our software development team, building software solutions that provide geospatial data processing and visualisations.</p>\n<h3 class=\"jobSectionHeader\"><b>\nWhat You'll Do</b></h3>\n<ul><li>Write high quality, and well tested code and documentation in-line with our engineering principles</li>\n<li>Balance short term needs against long term stability when responding to incidents or production issues</li>\n<li>Contribute to the overall design of the product and develops an understanding of the appropriate trade-offs required based on the functional and non-functional requirements</li>\n<li>Collaborate closely with your teammates, including regularly contributing to code reviews, to promote good practices which will improve accessibility, performance, stability, security and overall quality of the code</li>\n<li>Regularly mentor other less experienced engineers and help with on-boarding new engineers to your team</li>\n<li>Examine existing code and identify opportunities for improvement</li>\n<li>Adhere to our Ways of Working when delivering on assigned tasks</li>\n<li>Communicate progress regularly and clearly with your team, and effectively escalate issues to ensure we're accurately tracking our delivery against the product roadmap</li>\n</ul><h3 class=\"jobSectionHeader\"><b>What You Bring</b></h3>\n<ul><li>HND or BSc level qualification in Software Engineering or equivalent Computer Science related discipline</li>\n<li>2+ years of demonstrable experience in an active software development role, developing web-based applications</li>\n<li>Strong understanding and practical experience of web development using JavaScript Frameworks e.g. React/Angular</li>\n<li>Understanding and experience of team delivery in an Agile software development environment</li>\n<li>Drive to learn constantly and further your knowledge</li>\n<li>Strong organisational skills, proactive approach to task delivery and required documentation</li>\n<li>Great interpersonal skills, able to confidently communicate and articulate technical issues to non-technical team members</li>\n</ul>\n<p><b>In addition to the above, any of the following would be beneficial:</b></p>\n<ul>\n<li>Experience working on geospatial visualisation products</li>\n<li>Experience of developing with C#</li>\n<li>Experience using Kafka and/or Kubernetes within a service-based architecture</li>\n<li>Experience working with relational and/or non-relational databases</li>\n</ul><h3 class=\"jobSectionHeader\"><b>Benefits</b></h3>\n<ul><li>Private Medical Insurance</li>\n<li>Subsided gym membership / plans through Wellhub</li>\n<li>Electric Car scheme</li>\n<li>Cycle to work scheme</li>\n<li>Salary sacrificed pension scheme</li>\n<li>Free lunch on office days</li>\n<li>Enhanced Parental Leave</li>\n<li>30 days annual PTO plus b/h</li>\n<li>Yearly Bonus Scheme</li>\n<li>Personal development opportunities</li>\n</ul><h3 class=\"jobSectionHeader\"><b>Right to Work</b></h3>\n<p>\nThe employee will have the legal right to work in the UK and will be able to produce right to work documentation. Employee must be able to have and maintain a SC Clearance as a minimum.</p>\n<h3 class=\"jobSectionHeader\"><b>\nEqual Opportunities Statement</b></h3>\n<p>\nMetrea Mission Data Limited is an Equal Opportunity Employer. Employment decisions are made without regard to race, colour, religion, sex, sexual orientation, gender identity, national origin, disability, or other characteristics protected by law.</p>\n<h3 class=\"jobSectionHeader\"><b>\nPosition Type and Expected Hours of Work</b></h3>\n<p>\nThis is a full-time non-exempt position with typical working hours of Monday through Friday, 9:00 a.m. to 6:00 p.m. Hours and work shifts may change in accordance with department and business needs. Exempt Employees must have the ability to be on-call and available, as business needs require. Non-Exempt employees may be required to work over 40 hours per week with approval from the department manager.</p>\n<h3 class=\"jobSectionHeader\"><b>\nWork Location</b></h3>\n<p>\nHammersmith, London. This role requires the employee to be hybrid, with 3 days per week working from the office in London.</p>\n<h3 class=\"jobSectionHeader\"><b>\nWork Environment</b></h3>\n<p>\nThis job operates in an office setting</p>\n<h3 class=\"jobSectionHeader\"><b>\nTravel</b></h3>\n<p>\nThis role may require occasional travel to other Metrea offices.</p><div><h3 class=\"jobSectionHeader\"><b>\nOur Firmware</b></h3>\n<p>\nAt Metrea, our single core value, Rooted in Humility, and our four cornerstone attributes&mdash;Entrepreneurial, Systematic, Discerning, and Over-Deliver. These form what we call our Teammate Firmware. Just like technical firmware connects software and hardware, our Firmware is the constant interface between our mission and our people. It defines how we show up, how we work together, and how we solve complex problems.</p>\n<p>\nOur team Firmware creates a web-like, hyper-collaborative, dynamically hierarchical way of working that helps us adapt quickly, communicate openly, and distribute decision-making to where expertise actually lives. It enables groups to self-organize around hard problems, shift fluidly as priorities evolve, and operate with the trust, curiosity, and discipline required in a complex mission space. This foundation allows us to deliver elegant, effective solutions and uphold our purpose: protecting our precious inheritance.</p></div></div>",
+      "descriptionText": "Company Overview\n\nMetrea delivers effects-as-a-service to national security partners across five domains and more than a dozen mission areas\u2014including airborne ISR, electronic warfare, secure communications, aerial refueling, special mission aviation, aerial firefighting, and advanced simulation.\n\nWherever we operate, we build vertically integrated full stacks of capability\u2014designing, building, and operating turnkey solutions that let customers scale capacity while benefiting from continuous cycles of innovation. With operators and engineers under one roof, we close the gap between lab and field\u2014what we call connecting design with effect.\n\nMetrea's solutions are built for elegance: effective, efficient, and evolving. This approach enables our partners to do more with less and achieve outsized, asymmetric advantage against rapidly evolving threats.\n\nHeadquartered in Washington, DC, Metrea has facilities across the United States, the United Kingdom, Europe, and beyond.\n\nGroup Overview\n\nThe Digital and Synthetic Capability Unit (D&S) is committed to providing mission-driven information solutions that seamlessly bridge the digital and physical realms. Leveraging cutting-edge technologies and advanced platforms, we empower operational readiness and elevate situational awareness across diverse domains\u2014including air, maritime, and space.\n\nPosition Summary\n\nMetrea is seeking a dynamic and highly motivated individual to join our software development team, building software solutions that provide geospatial data processing and visualisations.\n\nWhat You'll Do\nWrite high quality, and well tested code and documentation in-line with our engineering principles\nBalance short term needs against long term stability when responding to incidents or production issues\nContribute to the overall design of the product and develops an understanding of the appropriate trade-offs required based on the functional and non-functional requirements\nCollaborate closely with your teammates, including regularly contributing to code reviews, to promote good practices which will improve accessibility, performance, stability, security and overall quality of the code\nRegularly mentor other less experienced engineers and help with on-boarding new engineers to your team\nExamine existing code and identify opportunities for improvement\nAdhere to our Ways of Working when delivering on assigned tasks\nCommunicate progress regularly and clearly with your team, and effectively escalate issues to ensure we're accurately tracking our delivery against the product roadmap\nWhat You Bring\nHND or BSc level qualification in Software Engineering or equivalent Computer Science related discipline\n2+ years of demonstrable experience in an active software development role, developing web-based applications\nStrong understanding and practical experience of web development using JavaScript Frameworks e.g. React/Angular\nUnderstanding and experience of team delivery in an Agile software development environment\nDrive to learn constantly and further your knowledge\nStrong organisational skills, proactive approach to task delivery and required documentation\nGreat interpersonal skills, able to confidently communicate and articulate technical issues to non-technical team members\n\nIn addition to the above, any of the following would be beneficial:\n\nExperience working on geospatial visualisation products\nExperience of developing with C#\nExperience using Kafka and/or Kubernetes within a service-based architecture\nExperience working with relational and/or non-relational databases\nBenefits\nPrivate Medical Insurance\nSubsided gym membership / plans through Wellhub\nElectric Car scheme\nCycle to work scheme\nSalary sacrificed pension scheme\nFree lunch on office days\nEnhanced Parental Leave\n30 days annual PTO plus b/h\nYearly Bonus Scheme\nPersonal development opportunities\nRight to Work\n\nThe employee will have the legal right to work in the UK and will be able to produce right to work documentation. Employee must be able to have and maintain a SC Clearance as a minimum.\n\nEqual Opportunities Statement\n\nMetrea Mission Data Limited is an Equal Opportunity Employer. Employment decisions are made without regard to race, colour, religion, sex, sexual orientation, gender identity, national origin, disability, or other characteristics protected by law.\n\nPosition Type and Expected Hours of Work\n\nThis is a full-time non-exempt position with typical working hours of Monday through Friday, 9:00 a.m. to 6:00 p.m. Hours and work shifts may change in accordance with department and business needs. Exempt Employees must have the ability to be on-call and available, as business needs require. Non-Exempt employees may be required to work over 40 hours per week with approval from the department manager.\n\nWork Location\n\nHammersmith, London. This role requires the employee to be hybrid, with 3 days per week working from the office in London.\n\nWork Environment\n\nThis job operates in an office setting\n\nTravel\n\nThis role may require occasional travel to other Metrea offices.\n\nOur Firmware\n\nAt Metrea, our single core value, Rooted in Humility, and our four cornerstone attributes\u2014Entrepreneurial, Systematic, Discerning, and Over-Deliver. These form what we call our Teammate Firmware. Just like technical firmware connects software and hardware, our Firmware is the constant interface between our mission and our people. It defines how we show up, how we work together, and how we solve complex problems.\n\nOur team Firmware creates a web-like, hyper-collaborative, dynamically hierarchical way of working that helps us adapt quickly, communicate openly, and distribute decision-making to where expertise actually lives. It enables groups to self-organize around hard problems, shift fluidly as priorities evolve, and operate with the trust, curiosity, and discipline required in a complex mission space. This foundation allows us to deliver elegant, effective solutions and uphold our purpose: protecting our precious inheritance.",
+      "companyName": "Metrea",
+      "companyUrl": "https://uk.indeed.com/cmp/Metrea",
+      "location": {
+        "city": "London",
+        "postalCode": null,
+        "country": "United Kingdom",
+        "countryCode": "GB",
+        "formattedAddressLong": "London",
+        "formattedAddressShort": "London",
+        "latitude": 51.51334,
+        "longitude": -0.08901,
+        "streetAddress": null,
+        "fullAddress": "London"
+      },
+      "salary": {},
+      "rating": {
+        "rating": 0,
+        "count": 0
+      },
+      "benefits": [
+        "Cycle to work scheme",
+        "Company pension",
+        "Private medical insurance",
+        "Car scheme"
+      ],
+      "occupation": [
+        "Software Development Occupations",
+        "Embedded Software & Firmware Developers",
+        "Technology Occupations",
+        "Software Development & Architecture Occupations"
+      ],
+      "attributes": [
+        "React",
+        "Kubernetes",
+        "Engineering",
+        "C#",
+        "Yearly bonus",
+        "Full-time",
+        "Cycle to work scheme",
+        "Bachelor's degree",
+        "JavaScript",
+        "Company pension",
+        "Travel",
+        "UK work authorisation",
+        "Angular",
+        "Organisational skills",
+        "Software development",
+        "Agile",
+        "IT",
+        "Monday to Friday",
+        "Kafka",
+        "Private medical insurance",
+        "Car scheme"
+      ],
+      "contacts": [],
+      "shifts": [],
+      "socialInsurance": [],
+      "workingSystem": [],
+      "shiftAndSchedule": [
+        "Monday to Friday"
+      ],
+      "postedToday": false,
+      "hiringDemand": {
+        "isHighVolumeHiring": false,
+        "isUrgentHire": false
+      },
+      "datePublished": "2026-03-03",
+      "expired": false,
+      "source": "Metrea",
+      "age": "3 days ago",
+      "isRemote": false,
+      "locale": "uk",
+      "language": "en",
+      "jobUrl": "https://uk.indeed.com/viewjob?jk=07a393b1870ebda2",
+      "emails": [],
+      "companyAddresses": [],
+      "companyLinks": {
+        "facebook": null,
+        "instagram": null,
+        "twitter": null,
+        "customLinks": [],
+        "corporateWebsite": null
+      },
+      "companyCeo": {
+        "name": null,
+        "photoUrl": null,
+        "startDate": null
+      },
+      "numOfCandidates": null,
+      "requirements": []
+    },
+    {
+      "jobKey": "886989b90c599a40",
+      "scrapingInfo": {
+        "page": 1,
+        "index": 2
+      },
+      "title": "Backend Software Engineer (Junior\u2013Mid Level) \u2013 Programmatic",
+      "jobType": [
+        "Full-time"
+      ],
+      "descriptionHtml": "<div><p>Job Advert</p><div><b>\nBackend Software Engineer (Junior&ndash;Mid Level) &ndash; Programmatic</b></div><p></p><div><b><br>\nLocation</b>: Hybrid &ndash; UK</div><div><b>\nContract Type:</b> Permanent</div><div><b>\nHours</b>: Full time</div><div><b>\nSalary</b>: Competitive</div><p></p><div><b><br>\nCOMPANY OVERVIEW</b></div><p></p><div><br>\nMOBKOI is a fast-growing mobile company headquartered in London, with offices across central Europe, US and Asia. We use the latest in mobile ad technology to help premium brands effectively reach and engage with their clients' audiences.</div><p></p><div><br>\nBringing to market the most selective site list of premium global and local publishers enabling brands to be selective of where their ads are going to run and thus ensuring brand safety. MOBKOI prides itself on offering full transparency, bespoke creative builds and local market coordination. We are part of The Brandtech Group, formerly known as You &amp; Mr Jones, working with partners developing the best technology across the globe.</div><p></p><div><b><br>\nROLE OVERVIEW</b></div><p></p><div><br>\nAs a Backend Software Engineer (Junior&ndash;Mid Level) &ndash; Programmatic, you will contribute to the development and evolution of MOBKOI&rsquo;s programmatic advertising platform. You will work closely with experienced engineers on backend systems that power real-time bidding (RTB), campaign delivery, and large-scale integrations with SSPs and DSPs.</div><p></p><div><br>\nThis role is well suited to engineers early in their career who want to deepen their expertise in distributed systems, low-latency services, and cloud-based infrastructure, while gaining exposure to the programmatic advertising ecosystem. You will be supported through mentorship, code reviews, and progressive ownership of backend components.</div><p></p><div><b><br>\nRESPONSIBILITIES</b></div><p></p><ul><li><br>\nContribute to the development and improvement of MOBKOI&rsquo;s programmatic backend systems, including components of the real-time bidding (RTB) pipeline.</li><li>Support the design and implementation of scalable, reliable, and high-performance services handling large volumes of traffic.</li><li>Work alongside senior engineers to help evolve system architecture while balancing performance, cost efficiency, and reliability.</li><li>Assist in monitoring system performance and contribute to initiatives that optimise infrastructure usage and operational cost.</li><li>Participate in diagnosing and resolving issues related to distributed systems, including latency, availability, and scaling challenges.</li><li>Implement backend components following best practices in fault tolerance, load balancing, and resilient design.</li><li>Develop an understanding of the programmatic advertising ecosystem, including SSPs, DSPs, bidding flows, and ad exchanges.</li><li>Contribute to discussions around technology selection, tooling, and build-vs-buy decisions.</li><li>Collaborate with product, data, and business teams to ensure technical solutions align with business needs.</li><li>Actively participate in code reviews, technical discussions, and continuous improvement initiatives.</li></ul><p></p><div><b><br>\nKEY SKILLS &amp; COMPETENCIES</b></div><p></p><ul><li><br>\nExperience in backend software development, gained through a first professional role, internship, or apprenticeship.</li><li>Solid engineering fundamentals with Go (or another backend language with a strong willingness to learn Go).</li><li>Interest in or exposure to distributed systems and high-traffic environments.</li><li>Understanding of core concepts around scalability, reliability, and high availability.</li><li>Familiarity with cloud platforms such as AWS or GCP.</li><li>Awareness of cost-efficient engineering practices and infrastructure optimisation.</li><li>Curiosity about the programmatic advertising landscape and how technical systems support business outcomes.</li><li>Strong collaboration skills and the ability to communicate clearly within a cross-functional team.</li></ul><p></p><div><b><br>\nBEHAVIOURS</b></div><p></p><div><br>\nThis role operates in a fast-moving, high-standards environment and requires someone who is motivated to learn, take ownership, and deliver quality work. The role holder is expected to manage their time effectively, adapt to change, and contribute positively to team and business outcomes.</div><p></p><div><br>\nThe role offers autonomy and is suited to someone who is comfortable balancing independent work with cross-functional collaboration.</div><p></p><div><b><br>\nWhat we&rsquo;re looking for:</b></div><p></p><ul><li><br>\nMotivation to contribute to the growth and success of the business</li><li>A proactive, adaptable mindset with the ability to learn quickly</li><li>Strong ownership and accountability for outcomes</li><li>Clear and professional communication with a range of stakeholders</li></ul></div><div></div>",
+      "descriptionText": "Job Advert\n\nBackend Software Engineer (Junior\u2013Mid Level) \u2013 Programmatic\n\nLocation: Hybrid \u2013 UK\nContract Type: Permanent\nHours: Full time\nSalary: Competitive\n\nCOMPANY OVERVIEW\n\nMOBKOI is a fast-growing mobile company headquartered in London, with offices across central Europe, US and Asia. We use the latest in mobile ad technology to help premium brands effectively reach and engage with their clients' audiences.\n\nBringing to market the most selective site list of premium global and local publishers enabling brands to be selective of where their ads are going to run and thus ensuring brand safety. MOBKOI prides itself on offering full transparency, bespoke creative builds and local market coordination. We are part of The Brandtech Group, formerly known as You & Mr Jones, working with partners developing the best technology across the globe.\n\nROLE OVERVIEW\n\nAs a Backend Software Engineer (Junior\u2013Mid Level) \u2013 Programmatic, you will contribute to the development and evolution of MOBKOI\u2019s programmatic advertising platform. You will work closely with experienced engineers on backend systems that power real-time bidding (RTB), campaign delivery, and large-scale integrations with SSPs and DSPs.\n\nThis role is well suited to engineers early in their career who want to deepen their expertise in distributed systems, low-latency services, and cloud-based infrastructure, while gaining exposure to the programmatic advertising ecosystem. You will be supported through mentorship, code reviews, and progressive ownership of backend components.\n\nRESPONSIBILITIES\n\n\u2022 Contribute to the development and improvement of MOBKOI\u2019s programmatic backend systems, including components of the real-time bidding (RTB) pipeline.\n\u2022 Support the design and implementation of scalable, reliable, and high-performance services handling large volumes of traffic.\n\u2022 Work alongside senior engineers to help evolve system architecture while balancing performance, cost efficiency, and reliability.\n\u2022 Assist in monitoring system performance and contribute to initiatives that optimise infrastructure usage and operational cost.\n\u2022 Participate in diagnosing and resolving issues related to distributed systems, including latency, availability, and scaling challenges.\n\u2022 Implement backend components following best practices in fault tolerance, load balancing, and resilient design.\n\u2022 Develop an understanding of the programmatic advertising ecosystem, including SSPs, DSPs, bidding flows, and ad exchanges.\n\u2022 Contribute to discussions around technology selection, tooling, and build-vs-buy decisions.\n\u2022 Collaborate with product, data, and business teams to ensure technical solutions align with business needs.\n\u2022 Actively participate in code reviews, technical discussions, and continuous improvement initiatives.\n\nKEY SKILLS & COMPETENCIES\n\n\u2022 Experience in backend software development, gained through a first professional role, internship, or apprenticeship.\n\u2022 Solid engineering fundamentals with Go (or another backend language with a strong willingness to learn Go).\n\u2022 Interest in or exposure to distributed systems and high-traffic environments.\n\u2022 Understanding of core concepts around scalability, reliability, and high availability.\n\u2022 Familiarity with cloud platforms such as AWS or GCP.\n\u2022 Awareness of cost-efficient engineering practices and infrastructure optimisation.\n\u2022 Curiosity about the programmatic advertising landscape and how technical systems support business outcomes.\n\u2022 Strong collaboration skills and the ability to communicate clearly within a cross-functional team.\n\nBEHAVIOURS\n\nThis role operates in a fast-moving, high-standards environment and requires someone who is motivated to learn, take ownership, and deliver quality work. The role holder is expected to manage their time effectively, adapt to change, and contribute positively to team and business outcomes.\n\nThe role offers autonomy and is suited to someone who is comfortable balancing independent work with cross-functional collaboration.\n\nWhat we\u2019re looking for:\n\n\u2022 Motivation to contribute to the growth and success of the business\n\u2022 A proactive, adaptable mindset with the ability to learn quickly\n\u2022 Strong ownership and accountability for outcomes\n\u2022 Clear and professional communication with a range of stakeholders",
+      "companyName": "MOBKOI",
+      "companyUrl": "https://uk.indeed.com/cmp/Mobkoi",
+      "location": {
+        "city": "London",
+        "postalCode": null,
+        "country": "United Kingdom",
+        "countryCode": "GB",
+        "formattedAddressLong": "London",
+        "formattedAddressShort": "London",
+        "latitude": 51.51334,
+        "longitude": -0.08901,
+        "streetAddress": null,
+        "fullAddress": "London"
+      },
+      "salary": {},
+      "rating": {
+        "rating": 0,
+        "count": 0
+      },
+      "benefits": [],
+      "occupation": [
+        "Software Development Occupations",
+        "Back End Developers",
+        "Technology Occupations",
+        "Software Development & Architecture Occupations"
+      ],
+      "attributes": [
+        "Cloud infrastructure",
+        "Load balancing",
+        "Full-time",
+        "Google Cloud Platform",
+        "AWS",
+        "Continuous improvement",
+        "Distributed systems",
+        "Back-end development",
+        "Software development",
+        "Hybrid work",
+        "Scalability",
+        "High availability"
+      ],
+      "contacts": [],
+      "shifts": [],
+      "socialInsurance": [],
+      "workingSystem": [],
+      "shiftAndSchedule": [],
+      "postedToday": false,
+      "hiringDemand": {
+        "isHighVolumeHiring": false,
+        "isUrgentHire": false
+      },
+      "datePublished": "2026-03-02",
+      "expired": false,
+      "source": "Mobkoi",
+      "age": "5 days ago",
+      "isRemote": false,
+      "locale": "uk",
+      "language": "en",
+      "jobUrl": "https://uk.indeed.com/viewjob?jk=886989b90c599a40",
+      "emails": [],
+      "companyAddresses": [],
+      "companyDescription": "MOBKOI is a fast growing Mobile start-up, based in London. \r\nWe specialise in custom distribution of Premium Global Mobile & Tablet campaigns. \r\nWe bring to market the most selective whitelist of Local Premium publishers (+300 premium in +15 markets) offering a full transparency (reporting site by site).",
+      "companyLinks": {
+        "facebook": null,
+        "instagram": null,
+        "twitter": null,
+        "customLinks": [],
+        "corporateWebsite": null
+      },
+      "companyCeo": {
+        "name": null,
+        "photoUrl": null,
+        "startDate": null
+      },
+      "numOfCandidates": null,
+      "requirements": []
+    },
+    {
+      "jobKey": "abe0d8d520bbcd61",
+      "scrapingInfo": {
+        "page": 1,
+        "index": 3
+      },
+      "title": "Software Engineer",
+      "jobType": [
+        "Full-time"
+      ],
+      "descriptionHtml": "<div><div><h3 class=\"jobSectionHeader\"><b>Company Overview</b></h3>\n<p>\nMetrea delivers effects-as-a-service to national security partners across five domains and more than a dozen mission areas&mdash;including airborne ISR, electronic warfare, secure communications, aerial refueling, special mission aviation, aerial firefighting, and advanced simulation.</p>\n<p>\nWherever we operate, we build vertically integrated full stacks of capability&mdash;designing, building, and operating turnkey solutions that let customers scale capacity while benefiting from continuous cycles of innovation. With operators and engineers under one roof, we close the gap between lab and field&mdash;what we call connecting design with effect.</p>\n<p>\nMetrea's solutions are built for elegance: effective, efficient, and evolving. This approach enables our partners to do more with less and achieve outsized, asymmetric advantage against rapidly evolving threats.</p>\n<p>\nHeadquartered in Washington, DC, Metrea has facilities across the United States, the United Kingdom, Europe, and beyond.</p></div><h3 class=\"jobSectionHeader\"><b>\nGroup Overview</b></h3>\n<p>\nThe Digital and Synthetic Capability Unit (D&amp;S) is committed to providing mission-driven information solutions that seamlessly bridge the digital and physical realms. Leveraging cutting-edge technologies and advanced platforms, we empower operational readiness and elevate situational awareness across diverse domains&mdash;including air, maritime, and space.</p>\n<h3 class=\"jobSectionHeader\"><b>\nPosition Summary</b></h3>\n<p>\nMetrea is seeking a dynamic and highly motivated individual to join our software development team, building software solutions that provide geospatial data processing and visualisations.</p>\n<h3 class=\"jobSectionHeader\"><b>\nWhat You'll Do</b></h3>\n<ul><li>Write high quality, and well tested code and documentation in-line with our engineering principles</li>\n<li>Balance short term needs against long term stability when responding to incidents or production issues</li>\n<li>Contribute to the overall design of the product and develops an understanding of the appropriate trade-offs required based on the functional and non-functional requirements</li>\n<li>Collaborate closely with your teammates, including regularly contributing to code reviews, to promote good practices which will improve accessibility, performance, stability, security and overall quality of the code</li>\n<li>Regularly mentor other less experienced engineers and help with on-boarding new engineers to your team</li>\n<li>Examine existing code and identify opportunities for improvement</li>\n<li>Adhere to our Ways of Working when delivering on assigned tasks</li>\n<li>Communicate progress regularly and clearly with your team, and effectively escalate issues to ensure we're accurately tracking our delivery against the product roadmap</li>\n</ul><h3 class=\"jobSectionHeader\"><b>What You Bring</b></h3>\n<ul><li>HND or BSc level qualification in Software Engineering or equivalent Computer Science related discipline</li>\n<li>2+ years of demonstrable experience in an active software development role, developing web-based applications</li>\n<li>Strong understanding and practical experience of web development using JavaScript Frameworks e.g. React/Angular</li>\n<li>Understanding and experience of team delivery in an Agile software development environment</li>\n<li>Drive to learn constantly and further your knowledge</li>\n<li>Strong organisational skills, proactive approach to task delivery and required documentation</li>\n<li>Great interpersonal skills, able to confidently communicate and articulate technical issues to non-technical team members</li>\n</ul>\n<p><b>In addition to the above, any of the following would be beneficial:</b></p>\n<ul>\n<li>Experience working on geospatial visualisation products</li>\n<li>Experience of developing with C#</li>\n<li>Experience using Kafka and/or Kubernetes within a service-based architecture</li>\n<li>Experience working with relational and/or non-relational databases</li>\n</ul><h3 class=\"jobSectionHeader\"><b>Benefits</b></h3>\n<ul><li>Private Medical Insurance</li>\n<li>Subsided gym membership / plans through Wellhub</li>\n<li>Electric Car scheme</li>\n<li>Cycle to work scheme</li>\n<li>Salary sacrificed pension scheme</li>\n<li>Free lunch on office days</li>\n<li>Enhanced Parental Leave</li>\n<li>30 days annual PTO plus b/h</li>\n<li>Yearly Bonus Scheme</li>\n<li>Personal development opportunities</li>\n</ul><h3 class=\"jobSectionHeader\"><b>Right to Work</b></h3>\n<p>\nThe employee will have the legal right to work in the UK and will be able to produce right to work documentation. Employee must be able to have and maintain a SC Clearance as a minimum.</p>\n<h3 class=\"jobSectionHeader\"><b>\nEqual Opportunities Statement</b></h3>\n<p>\nMetrea Mission Data Limited is an Equal Opportunity Employer. Employment decisions are made without regard to race, colour, religion, sex, sexual orientation, gender identity, national origin, disability, or other characteristics protected by law.</p>\n<h3 class=\"jobSectionHeader\"><b>\nPosition Type and Expected Hours of Work</b></h3>\n<p>\nThis is a full-time non-exempt position with typical working hours of Monday through Friday, 9:00 a.m. to 6:00 p.m. Hours and work shifts may change in accordance with department and business needs. Exempt Employees must have the ability to be on-call and available, as business needs require. Non-Exempt employees may be required to work over 40 hours per week with approval from the department manager.</p>\n<h3 class=\"jobSectionHeader\"><b>\nWork Location</b></h3>\n<p>\nHammersmith, London. This role requires the employee to be hybrid, with 3 days per week working from the office in London.</p>\n<h3 class=\"jobSectionHeader\"><b>\nWork Environment</b></h3>\n<p>\nThis job operates in an office setting</p>\n<h3 class=\"jobSectionHeader\"><b>\nTravel</b></h3>\n<p>\nThis role may require occasional travel to other Metrea offices.</p><div><h3 class=\"jobSectionHeader\"><b>\nOur Firmware</b></h3>\n<p>\nAt Metrea, our single core value, Rooted in Humility, and our four cornerstone attributes&mdash;Entrepreneurial, Systematic, Discerning, and Over-Deliver. These form what we call our Teammate Firmware. Just like technical firmware connects software and hardware, our Firmware is the constant interface between our mission and our people. It defines how we show up, how we work together, and how we solve complex problems.</p>\n<p>\nOur team Firmware creates a web-like, hyper-collaborative, dynamically hierarchical way of working that helps us adapt quickly, communicate openly, and distribute decision-making to where expertise actually lives. It enables groups to self-organize around hard problems, shift fluidly as priorities evolve, and operate with the trust, curiosity, and discipline required in a complex mission space. This foundation allows us to deliver elegant, effective solutions and uphold our purpose: protecting our precious inheritance.</p></div></div>",
+      "descriptionText": "Company Overview\n\nMetrea delivers effects-as-a-service to national security partners across five domains and more than a dozen mission areas\u2014including airborne ISR, electronic warfare, secure communications, aerial refueling, special mission aviation, aerial firefighting, and advanced simulation.\n\nWherever we operate, we build vertically integrated full stacks of capability\u2014designing, building, and operating turnkey solutions that let customers scale capacity while benefiting from continuous cycles of innovation. With operators and engineers under one roof, we close the gap between lab and field\u2014what we call connecting design with effect.\n\nMetrea's solutions are built for elegance: effective, efficient, and evolving. This approach enables our partners to do more with less and achieve outsized, asymmetric advantage against rapidly evolving threats.\n\nHeadquartered in Washington, DC, Metrea has facilities across the United States, the United Kingdom, Europe, and beyond.\n\nGroup Overview\n\nThe Digital and Synthetic Capability Unit (D&S) is committed to providing mission-driven information solutions that seamlessly bridge the digital and physical realms. Leveraging cutting-edge technologies and advanced platforms, we empower operational readiness and elevate situational awareness across diverse domains\u2014including air, maritime, and space.\n\nPosition Summary\n\nMetrea is seeking a dynamic and highly motivated individual to join our software development team, building software solutions that provide geospatial data processing and visualisations.\n\nWhat You'll Do\nWrite high quality, and well tested code and documentation in-line with our engineering principles\nBalance short term needs against long term stability when responding to incidents or production issues\nContribute to the overall design of the product and develops an understanding of the appropriate trade-offs required based on the functional and non-functional requirements\nCollaborate closely with your teammates, including regularly contributing to code reviews, to promote good practices which will improve accessibility, performance, stability, security and overall quality of the code\nRegularly mentor other less experienced engineers and help with on-boarding new engineers to your team\nExamine existing code and identify opportunities for improvement\nAdhere to our Ways of Working when delivering on assigned tasks\nCommunicate progress regularly and clearly with your team, and effectively escalate issues to ensure we're accurately tracking our delivery against the product roadmap\nWhat You Bring\nHND or BSc level qualification in Software Engineering or equivalent Computer Science related discipline\n2+ years of demonstrable experience in an active software development role, developing web-based applications\nStrong understanding and practical experience of web development using JavaScript Frameworks e.g. React/Angular\nUnderstanding and experience of team delivery in an Agile software development environment\nDrive to learn constantly and further your knowledge\nStrong organisational skills, proactive approach to task delivery and required documentation\nGreat interpersonal skills, able to confidently communicate and articulate technical issues to non-technical team members\n\nIn addition to the above, any of the following would be beneficial:\n\nExperience working on geospatial visualisation products\nExperience of developing with C#\nExperience using Kafka and/or Kubernetes within a service-based architecture\nExperience working with relational and/or non-relational databases\nBenefits\nPrivate Medical Insurance\nSubsided gym membership / plans through Wellhub\nElectric Car scheme\nCycle to work scheme\nSalary sacrificed pension scheme\nFree lunch on office days\nEnhanced Parental Leave\n30 days annual PTO plus b/h\nYearly Bonus Scheme\nPersonal development opportunities\nRight to Work\n\nThe employee will have the legal right to work in the UK and will be able to produce right to work documentation. Employee must be able to have and maintain a SC Clearance as a minimum.\n\nEqual Opportunities Statement\n\nMetrea Mission Data Limited is an Equal Opportunity Employer. Employment decisions are made without regard to race, colour, religion, sex, sexual orientation, gender identity, national origin, disability, or other characteristics protected by law.\n\nPosition Type and Expected Hours of Work\n\nThis is a full-time non-exempt position with typical working hours of Monday through Friday, 9:00 a.m. to 6:00 p.m. Hours and work shifts may change in accordance with department and business needs. Exempt Employees must have the ability to be on-call and available, as business needs require. Non-Exempt employees may be required to work over 40 hours per week with approval from the department manager.\n\nWork Location\n\nHammersmith, London. This role requires the employee to be hybrid, with 3 days per week working from the office in London.\n\nWork Environment\n\nThis job operates in an office setting\n\nTravel\n\nThis role may require occasional travel to other Metrea offices.\n\nOur Firmware\n\nAt Metrea, our single core value, Rooted in Humility, and our four cornerstone attributes\u2014Entrepreneurial, Systematic, Discerning, and Over-Deliver. These form what we call our Teammate Firmware. Just like technical firmware connects software and hardware, our Firmware is the constant interface between our mission and our people. It defines how we show up, how we work together, and how we solve complex problems.\n\nOur team Firmware creates a web-like, hyper-collaborative, dynamically hierarchical way of working that helps us adapt quickly, communicate openly, and distribute decision-making to where expertise actually lives. It enables groups to self-organize around hard problems, shift fluidly as priorities evolve, and operate with the trust, curiosity, and discipline required in a complex mission space. This foundation allows us to deliver elegant, effective solutions and uphold our purpose: protecting our precious inheritance.",
+      "companyName": "Metrea",
+      "companyUrl": "https://uk.indeed.com/cmp/Metrea",
+      "location": {
+        "city": "London",
+        "postalCode": null,
+        "country": "United Kingdom",
+        "countryCode": "GB",
+        "formattedAddressLong": "London",
+        "formattedAddressShort": "London",
+        "latitude": 51.51334,
+        "longitude": -0.08901,
+        "streetAddress": null,
+        "fullAddress": "London"
+      },
+      "salary": {},
+      "rating": {
+        "rating": 0,
+        "count": 0
+      },
+      "benefits": [
+        "Cycle to work scheme",
+        "Company pension",
+        "Private medical insurance",
+        "Car scheme"
+      ],
+      "occupation": [
+        "Software Development Occupations",
+        "Embedded Software & Firmware Developers",
+        "Technology Occupations",
+        "Software Development & Architecture Occupations"
+      ],
+      "attributes": [
+        "React",
+        "Kubernetes",
+        "Engineering",
+        "C#",
+        "Yearly bonus",
+        "Full-time",
+        "Cycle to work scheme",
+        "Bachelor's degree",
+        "JavaScript",
+        "Company pension",
+        "Travel",
+        "UK work authorisation",
+        "Angular",
+        "Organisational skills",
+        "Software development",
+        "Agile",
+        "IT",
+        "Monday to Friday",
+        "Kafka",
+        "Private medical insurance",
+        "Car scheme"
+      ],
+      "contacts": [],
+      "shifts": [],
+      "socialInsurance": [],
+      "workingSystem": [],
+      "shiftAndSchedule": [
+        "Monday to Friday"
+      ],
+      "postedToday": false,
+      "hiringDemand": {
+        "isHighVolumeHiring": false,
+        "isUrgentHire": false
+      },
+      "datePublished": "2026-03-03",
+      "expired": false,
+      "source": "Metrea",
+      "age": "3 days ago",
+      "isRemote": false,
+      "locale": "uk",
+      "language": "en",
+      "jobUrl": "https://uk.indeed.com/viewjob?jk=abe0d8d520bbcd61",
+      "emails": [],
+      "companyAddresses": [],
+      "companyLinks": {
+        "facebook": null,
+        "instagram": null,
+        "twitter": null,
+        "customLinks": [],
+        "corporateWebsite": null
+      },
+      "companyCeo": {
+        "name": null,
+        "photoUrl": null,
+        "startDate": null
+      },
+      "numOfCandidates": null,
+      "requirements": []
+    }
+  ]
+}
