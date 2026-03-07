@@ -1,0 +1,10 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "npm install --legacy-peer-deps && npm run build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install --legacy-peer-deps",
+  "outputDirectory": ".next",
+  "env": {
+    "NEXT_PUBLIC_BACKEND_URL": "@NEXT_PUBLIC_BACKEND_URL"
+  }
+}
