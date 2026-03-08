@@ -1,0 +1,116 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 40px; }
+        .header { border-bottom: 3px solid #2563eb; padding-bottom: 20px; margin-bottom: 25px; }
+        .name { font-size: 32px; font-weight: 700; color: #1e40af; margin-bottom: 8px; }
+        .contact { font-size: 14px; color: #666; }
+        .contact span { margin-right: 15px; }
+        .section { margin-bottom: 25px; }
+        .section-title { font-size: 18px; font-weight: 600; color: #2563eb; border-bottom: 2px solid #e5e7eb; padding-bottom: 8px; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .summary { font-size: 15px; color: #444; text-align: justify; }
+        .position { margin-bottom: 20px; }
+        .position-header { display: flex; justify-content: space-between; margin-bottom: 8px; }
+        .position-title { font-weight: 600; font-size: 16px; color: #1f2937; }
+        .company { color: #2563eb; }
+        .date { color: #6b7280; font-size: 14px; }
+        .description { font-size: 14px; color: #4b5563; margin-top: 8px; white-space: pre-line; }
+        .skills-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+        .skill-tag { background: #eff6ff; color: #1e40af; padding: 6px 14px; border-radius: 4px; font-size: 14px; font-weight: 500; }
+        .education-item { margin-bottom: 15px; }
+        .education-header { display: flex; justify-content: space-between; margin-bottom: 4px; }
+        .degree { font-weight: 600; font-size: 15px; }
+        .institution { color: #4b5563; }
+        .year { color: #6b7280; font-size: 14px; }
+        @media print { body { padding: 20px; } @page { margin: 1.5cm; } }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="name">Alex Chen</div>
+        <div class="contact">
+            <span>📧 alex.chen@example.com</span>
+            <span>📱 +44 7700 900123</span>
+            <span>📍 London, UK</span>
+            <span>💼 LinkedIn</span>
+            <span>🌐 Portfolio</span>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Professional Summary</div>
+        <div class="summary">Backend engineer with 5 years building distributed systems in Python and Go. Built payment processing APIs handling £2M+ daily transactions at Stripe. Reduced API latency by 75% through caching and database optimization. Seeking senior backend roles in fintech or infrastructure.</div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Experience</div>
+        
+        <div class="position">
+            <div class="position-header">
+                <div>
+                    <span class="position-title">Software Engineer</span>
+                    <span class="company"> | Stripe</span>
+                </div>
+                <div class="date">Jan 2022 - Present</div>
+            </div>
+            <div class="description">• Built payment processing APIs handling £2M+ daily transactions with 99.99% uptime
+• Reduced API latency from 400ms to 100ms through Redis caching and query optimization
+• Led migration from monolith to microservices, improving deployment frequency by 10x
+• Mentored 2 junior engineers, both promoted within 12 months</div>
+        </div>
+    
+        <div class="position">
+            <div class="position-header">
+                <div>
+                    <span class="position-title">Junior Software Engineer</span>
+                    <span class="company"> | Revolut</span>
+                </div>
+                <div class="date">Jun 2020 - Dec 2021</div>
+            </div>
+            <div class="description">• Developed fraud detection system reducing false positives by 40%
+• Built internal dashboard used by 200+ support staff daily
+• Implemented automated testing increasing code coverage from 45% to 85%
+• Optimized database queries reducing monthly AWS costs by £15K</div>
+        </div>
+    
+        <div class="position">
+            <div class="position-header">
+                <div>
+                    <span class="position-title">Engineering Intern</span>
+                    <span class="company"> | Monzo</span>
+                </div>
+                <div class="date">Jun 2019 - Sep 2019</div>
+            </div>
+            <div class="description">• Built transaction categorization feature using ML (85% accuracy)
+• Created internal tools saving engineering team 10 hours/week
+• Fixed 30+ bugs across backend services</div>
+        </div>
+    
+    </div>
+
+    <div class="section">
+        <div class="section-title">Education</div>
+        
+        <div class="education-item">
+            <div class="education-header">
+                <div>
+                    <span class="degree">BSc Computer Science</span>
+                    <span class="institution"> | Computer Science</span>
+                    <span class="institution"> | Imperial College London</span>
+                </div>
+                <div class="year">2020</div>
+            </div>
+        </div>
+    
+    </div>
+
+    <div class="section">
+        <div class="section-title">Skills</div>
+        <div class="skills-grid"><span class="skill-tag">Python</span><span class="skill-tag">Go</span><span class="skill-tag">PostgreSQL</span><span class="skill-tag">Redis</span><span class="skill-tag">AWS</span><span class="skill-tag">Docker</span><span class="skill-tag">Kubernetes</span><span class="skill-tag">FastAPI</span><span class="skill-tag">Django</span><span class="skill-tag">gRPC</span><span class="skill-tag">REST APIs</span><span class="skill-tag">Microservices</span><span class="skill-tag">CI/CD</span><span class="skill-tag">Git</span><span class="skill-tag">Linux</span><span class="skill-tag">System Design</span></div>
+    </div>
+</body>
+</html>

@@ -14,7 +14,7 @@ class CVBuilderService:
     
     async def generate_summary(self, experience: List[Dict], skills: List[str], target_role: str) -> str:
         """
-        Generate professional summary using AI
+        Generate professional summary using AI - NO SLOP, just substance
         
         Args:
             experience: List of work experiences
@@ -33,31 +33,64 @@ class CVBuilderService:
             client = AsyncOpenAI(api_key=self.openai_api_key)
             
             experience_text = "\n".join([
-                f"- {exp.get('role', '')} at {exp.get('company', '')} ({exp.get('start_date', '')} - {exp.get('end_date', 'Present')})"
-                for exp in experience
+                f"- {exp.get('role', '')} at {exp.get('company', '')} ({exp.get('start_date', '')} - {exp.get('end_date', 'Present')})\n  {exp.get('description', '')[:200]}"
+                for exp in experience[:3]  # Last 3 roles max
             ])
             
             skills_text = ", ".join(skills[:10])
             
-            prompt = f"""Create a compelling 3-4 sentence professional summary for a job seeker targeting {target_role} roles.
+            # ANTI-SLOP PROMPT: Forces specific, measurable, real content
+            prompt = f"""Write a professional summary for a {target_role} role.
 
-Experience:
+EXPERIENCE:
 {experience_text}
 
-Skills: {skills_text}
+SKILLS: {skills_text}
 
-Write in first person, professional tone, highlight achievements and value proposition."""
+RULES - NO AI SLOP:
+❌ NO: "results-driven", "motivated professional", "proven track record", "excellent communication skills", "team player", "think outside the box", "go-getter", "self-starter"
+❌ NO: Generic fluff, buzzwords, corporate jargon
+✅ YES: Specific technologies, real achievements, measurable impact
+✅ YES: Concrete skills, actual domains, real responsibilities
+✅ YES: Direct, clear, substantive
+
+FORMAT:
+- 3-4 sentences max
+- First person OK but not required
+- Lead with strongest qualification
+- Include 1-2 specific achievements if possible
+- End with what they're seeking next
+
+EXAMPLE OF GOOD:
+"Software engineer with 6 years building backend systems in Python and Go. Built APIs serving 10M+ requests/day at Scale AI. Reduced database query times by 80% through indexing and caching. Seeking senior backend roles in fintech or infrastructure."
+
+EXAMPLE OF BAD:
+"Results-driven professional with proven track record of excellence. Excellent communicator and team player who thinks outside the box."
+
+Write the summary. No intro, no explanation, just the summary."""
 
             response = await client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": "You are a professional resume writer. Write concise, impactful summaries."},
+                    {"role": "system", "content": "You are a no-nonsense resume writer. Write specific, substantive summaries. Zero fluff."},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=200
+                max_tokens=200,
+                temperature=0.7
             )
             
-            return response.choices[0].message.content.strip()
+            summary = response.choices[0].message.content.strip()
+            
+            # Post-process: Remove any remaining slop
+            slop_phrases = [
+                "results-driven", "highly motivated", "proven track record", 
+                "excellent communication", "team player", "think outside the box",
+                "go-getter", "self-starter", "detail-oriented", "ability to work"
+            ]
+            for phrase in slop_phrases:
+                summary = summary.replace(phrase, "").replace("  ", " ")
+            
+            return summary.strip()
             
         except Exception as e:
             print(f"AI summary generation failed: {e}")
@@ -72,7 +105,7 @@ Write in first person, professional tone, highlight achievements and value propo
     
     async def enhance_job_description(self, role: str, company: str, basic_description: str) -> str:
         """
-        Enhance basic job description with AI to make it more impactful
+        Enhance basic job description with AI - REAL achievements, not fluff
         """
         if not self.openai_api_key:
             return basic_description
@@ -81,22 +114,41 @@ Write in first person, professional tone, highlight achievements and value propo
             from openai import AsyncOpenAI
             client = AsyncOpenAI(api_key=self.openai_api_key)
             
-            prompt = f"""Enhance this job description to be more impactful and achievement-oriented. 
-Use action verbs and quantify results where possible. Keep it to 3-4 bullet points.
+            # ANTI-SLOP PROMPT for job descriptions
+            prompt = f"""Transform this basic job description into 3-4 achievement-focused bullet points.
 
-Role: {role}
-Company: {company}
-Description: {basic_description}
+ROLE: {role}
+COMPANY: {company}
+BASIC DESCRIPTION: {basic_description}
 
-Output as bullet points only."""
+RULES - NO AI SLOP:
+❌ NO: "Responsible for", "Tasked with", "Duties included"
+❌ NO: Vague claims without numbers
+❌ NO: "Helped", "Assisted", "Worked on"
+✅ YES: Start with strong action verbs (Built, Led, Created, Reduced, Increased, Launched)
+✅ YES: Include numbers, percentages, scale wherever possible
+✅ YES: Show impact, not just responsibilities
+
+EXAMPLE GOOD:
+• Built REST API serving 50K+ daily users using Python and FastAPI
+• Reduced deployment time from 2 hours to 15 minutes with CI/CD pipeline
+• Led team of 4 engineers to launch mobile app with 4.8★ App Store rating
+
+EXAMPLE BAD:
+• Responsible for developing APIs
+• Helped with deployment processes
+• Worked on mobile application team
+
+Write 3-4 bullet points. No intro, no explanation."""
 
             response = await client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": "You are a professional resume writer. Write impactful, concise bullet points."},
+                    {"role": "system", "content": "You are a resume writer. Write specific, measurable achievement bullets. Zero fluff."},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=300
+                max_tokens=300,
+                temperature=0.7
             )
             
             return response.choices[0].message.content.strip()
@@ -104,6 +156,59 @@ Output as bullet points only."""
         except Exception as e:
             print(f"AI enhancement failed: {e}")
             return basic_description
+    
+    async def suggest_achievements(self, role: str, company: str, duration_months: int) -> List[str]:
+        """
+        Suggest realistic, measurable achievements for a role
+        Helps users who struggle to quantify their impact
+        """
+        if not self.openai_api_key:
+            return self._get_generic_achievement_suggestions(role)
+        
+        try:
+            from openai import AsyncOpenAI
+            client = AsyncOpenAI(api_key=self.openai_api_key)
+            
+            prompt = f"""Suggest 5 realistic, measurable achievements for someone who worked as {role} at {company} for {duration_months} months.
+
+RULES:
+- Each should be specific and measurable (include numbers, %, $, time)
+- Cover different areas: technical, leadership, business impact
+- Realistic for the role level and company
+- No generic fluff
+
+FORMAT: Bullet points only, each 1-2 sentences.
+
+EXAMPLE GOOD ACHIEVEMENTS:
+• Reduced API response time from 500ms to 150ms through caching and query optimization
+• Led migration from monolith to microservices, improving deployment frequency by 10x
+• Mentored 3 junior engineers, all promoted within 12 months"""
+
+            response = await client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are a career coach. Suggest specific, measurable achievements."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=400
+            )
+            
+            suggestions = response.choices[0].message.content.strip().split('\n')
+            return [s.strip().lstrip('•-').strip() for s in suggestions if s.strip()]
+            
+        except Exception as e:
+            print(f"Achievement suggestion failed: {e}")
+            return self._get_generic_achievement_suggestions(role)
+    
+    def _get_generic_achievement_suggestions(self, role: str) -> List[str]:
+        """Fallback achievement suggestions"""
+        return [
+            "Reduced [metric] by X% through [specific action]",
+            "Built [project/system] that served [number] users",
+            "Led [initiative] resulting in [measurable outcome]",
+            "Improved [process] efficiency by X%",
+            "Mentored [number] team members who achieved [result]"
+        ]
     
     async def tailor_cv_for_job(self, cv_data: Dict, job_description: str) -> Dict:
         """
