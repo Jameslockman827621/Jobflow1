@@ -62,7 +62,7 @@ class CV(Base):
     
     # Relationships
     user = relationship("User", back_populates="cvs")
-    applications = relationship("Application", back_populates="cv")
+    applications = relationship("Application", back_populates="cv", cascade="all, delete-orphan")
 
 
 class CVTemplate(Base):

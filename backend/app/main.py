@@ -34,6 +34,7 @@ app.include_router(career.router, prefix=f"{settings.API_V1_PREFIX}/career", tag
 app.include_router(analytics.router, prefix=f"{settings.API_V1_PREFIX}/analytics", tags=["Analytics"])
 app.include_router(reviews.router, prefix=f"{settings.API_V1_PREFIX}/reviews", tags=["Company Reviews"])
 app.include_router(cvs.router, tags=["CVs"])
+app.include_router(applications.router, tags=["Applications"])
 
 
 @app.get("/")

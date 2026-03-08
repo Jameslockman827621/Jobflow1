@@ -1,243 +1,273 @@
-from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
-from typing import List, Optional, Dict
-from datetime import datetime
+"""
+Application Tracking API Routes
+"""
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from typing import List, Optional
+from datetime import datetime
 
-from app.database import SessionLocal
+from app.database import get_db
 from app.models.application import Application
 from app.models.job import Job
-from app.core.security import get_current_user
+from app.models.cv import CV
 from app.models.user import User
-from app.tasks.applications import prepare_application
-from app.tasks.notifications import send_application_confirmation_task
-from app.services.matching import JobMatcher
+from app.api.auth import get_current_user
 
-router = APIRouter()
+router = APIRouter(prefix="/api/v1/applications", tags=["Applications"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-class ApplicationResponse(BaseModel):
-    id: int
-    job_id: int
-    job_title: str
-    company: str
-    status: str
-    stage: str
-    match_score: Optional[float] = None
-    cover_letter: Optional[str] = None
-    submitted_at: Optional[datetime] = None
-    created_at: datetime
-    
-    class Config:
-        from_attributes = True
-
-
-class CreateApplication(BaseModel):
-    job_id: int
-    auto_prepare: bool = True  # Trigger AI CV/cover letter generation
-
-
-class ApplicationCreateResponse(BaseModel):
-    id: int
-    job_id: int
-    status: str
-    message: str
-
-
-@router.get("/", response_model=List[ApplicationResponse])
-async def list_applications(
-    current_user: User = Depends(get_current_user),
+@router.get("")
+async def get_applications(
+    status: Optional[str] = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    """List all applications for current user"""
-    applications = db.query(Application).filter(
-        Application.user_id == current_user.id
-    ).order_by(Application.created_at.desc()).all()
+    """Get all applications for current user"""
+    query = db.query(Application).filter(Application.user_id == current_user.id)
     
-    return [
-        ApplicationResponse(
-            id=app.id,
-            job_id=app.job_id,
-            job_title=app.job.title if app.job else "Unknown",
-            company=app.job.company if app.job else "Unknown",
-            status=app.status,
-            stage=app.stage,
-            match_score=app.confidence_score,
-            cover_letter=app.cover_letter,
-            submitted_at=app.submitted_at,
-            created_at=app.created_at,
-        )
-        for app in applications
-    ]
+    if status:
+        query = query.filter(Application.status == status)
+    
+    applications = query.order_by(Application.created_at.desc()).all()
+    
+    return {
+        "applications": applications,
+        "total": len(applications)
+    }
 
 
-@router.post("/", response_model=ApplicationCreateResponse)
-async def create_application(
-    data: CreateApplication,
-    current_user: User = Depends(get_current_user),
+@router.post("/start")
+async def start_application(
+    job_id: int,
+    cv_id: Optional[int] = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    """Create a new application for a job"""
-    # Verify job exists
-    job = db.query(Job).filter(Job.id == data.job_id).first()
+    """
+    Start a new application - generates application package
+    
+    Returns:
+    - Application ID
+    - CV download URL
+    - Job URL
+    - Application tips
+    """
+    # Get job
+    job = db.query(Job).filter(Job.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     
-    # Check for duplicate
-    existing = db.query(Application).filter(
-        Application.user_id == current_user.id,
-        Application.job_id == data.job_id,
-    ).first()
-    if existing:
-        return ApplicationCreateResponse(
-            id=existing.id,
-            job_id=existing.job_id,
-            status=existing.status,
-            message="Application already exists",
-        )
+    # Get CV (use user's primary CV if not specified)
+    if cv_id:
+        cv = db.query(CV).filter(CV.id == cv_id, CV.user_id == current_user.id).first()
+        if not cv:
+            raise HTTPException(status_code=404, detail="CV not found")
+    else:
+        # Get user's most recent CV
+        cv = db.query(CV).filter(CV.user_id == current_user.id).order_by(CV.created_at.desc()).first()
+        if not cv:
+            raise HTTPException(status_code=400, detail="No CV found. Please create a CV first.")
     
-    # Calculate match score
-    matcher = JobMatcher(db)
-    from app.models.profile import UserProfile
-    profile = db.query(UserProfile).filter(UserProfile.user_id == current_user.id).first()
-    match_score = matcher.calculate_match_score(profile, job) if profile else 50.0
-    
-    # Create application
+    # Create application record
     application = Application(
         user_id=current_user.id,
-        job_id=data.job_id,
-        status="draft",
+        job_id=job_id,
+        cv_id=cv.id,
+        status="in_progress",  # User started but hasn't submitted yet
         stage="not_started",
-        confidence_score=match_score,
+        applied_via="manual"  # Will be updated if they use auto-apply later
     )
+    
     db.add(application)
     db.commit()
     db.refresh(application)
     
-    # Trigger AI preparation if requested
-    message = "Application created"
-    if data.auto_prepare:
-        prepare_application.delay(application.id)
-        message = "Application created - AI is preparing your CV and cover letter"
+    # Generate application package
+    cv_download_url = f"/api/v1/cvs/{cv.id}/export"
     
-    # Send confirmation email
-    send_application_confirmation_task.delay(application.id)
+    # Generate application tips based on job source
+    tips = generate_application_tips(job)
     
-    return ApplicationCreateResponse(
-        id=application.id,
-        job_id=application.job_id,
-        status=application.status,
-        message=message,
-    )
+    return {
+        "application_id": application.id,
+        "cv_download_url": cv_download_url,
+        "job_url": job.external_url,
+        "job_title": job.title,
+        "company": job.company,
+        "application_tips": tips,
+        "status": "in_progress"
+    }
 
 
-@router.patch("/{app_id}")
-async def update_application(
-    app_id: int,
-    status: Optional[str] = None,
-    stage: Optional[str] = None,
-    notes: Optional[str] = None,
-    current_user: User = Depends(get_current_user),
+@router.get("/{application_id}")
+async def get_application(
+    application_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    """Update application status, stage, or notes"""
+    """Get specific application"""
     application = db.query(Application).filter(
-        Application.id == app_id,
-        Application.user_id == current_user.id,
+        Application.id == application_id,
+        Application.user_id == current_user.id
     ).first()
+    
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
     
+    return application
+
+
+@router.put("/{application_id}")
+async def update_application(
+    application_id: int,
+    status: Optional[str] = None,
+    stage: Optional[str] = None,
+    internal_notes: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update application status/notes"""
+    application = db.query(Application).filter(
+        Application.id == application_id,
+        Application.user_id == current_user.id
+    ).first()
+    
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    # Update fields
     if status:
         application.status = status
+        if status == "submitted":
+            application.submitted_at = datetime.utcnow()
+    
     if stage:
         application.stage = stage
-    if notes:
-        application.internal_notes = notes
+    
+    if internal_notes:
+        application.internal_notes = internal_notes
     
     db.commit()
     db.refresh(application)
     
-    return {"status": "updated", "application_id": app_id}
+    return application
 
 
-@router.post("/{app_id}/apply")
+@router.post("/{application_id}/submit")
 async def submit_application(
-    app_id: int,
-    current_user: User = Depends(get_current_user),
+    application_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    """
-    Submit an application - triggers AI to tailor CV and cover letter if not done.
-    """
+    """Mark application as submitted"""
     application = db.query(Application).filter(
-        Application.id == app_id,
-        Application.user_id == current_user.id,
+        Application.id == application_id,
+        Application.user_id == current_user.id
     ).first()
+    
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
     
-    # Check if CV and cover letter are ready
-    if not application.cover_letter:
-        # Trigger AI preparation
-        prepare_application.delay(application.id)
-        return {
-            "status": "preparing",
-            "message": "AI is preparing your CV and cover letter. Check back in a moment.",
-        }
-    
-    # Mark as submitted
-    from datetime import datetime
     application.status = "submitted"
     application.stage = "applied"
     application.submitted_at = datetime.utcnow()
+    
     db.commit()
+    db.refresh(application)
     
     return {
-        "status": "submitted",
-        "message": "Application submitted successfully!",
-        "application_id": app_id,
+        "message": "Application marked as submitted",
+        "application": application
     }
 
 
-@router.get("/{app_id}/match-score")
-async def get_match_score(
-    app_id: int,
-    current_user: User = Depends(get_current_user),
+@router.delete("/{application_id}")
+async def delete_application(
+    application_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    """Get detailed match score breakdown for an application"""
+    """Delete application"""
     application = db.query(Application).filter(
-        Application.id == app_id,
-        Application.user_id == current_user.id,
+        Application.id == application_id,
+        Application.user_id == current_user.id
     ).first()
-    if not application or not application.job:
+    
+    if not application:
         raise HTTPException(status_code=404, detail="Application not found")
     
-    from app.models.profile import UserProfile
-    profile = db.query(UserProfile).filter(UserProfile.user_id == current_user.id).first()
-    if not profile:
-        raise HTTPException(status_code=404, detail="Profile not found")
+    db.delete(application)
+    db.commit()
     
-    matcher = JobMatcher(db)
-    score = matcher.calculate_match_score(profile, application.job)
+    return {"message": "Application deleted"}
+
+
+@router.get("/stats/summary")
+async def get_application_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get application statistics"""
+    applications = db.query(Application).filter(Application.user_id == current_user.id).all()
     
-    return {
-        "application_id": app_id,
-        "job_id": application.job_id,
-        "overall_score": score,
-        "breakdown": {
-            "skills": matcher._skills_match(profile, application.job),
-            "seniority": matcher._seniority_match(profile, application.job),
-            "location": matcher._location_match(profile, application.job),
-            "salary": matcher._salary_match(profile, application.job),
-        }
+    stats = {
+        "total": len(applications),
+        "by_status": {},
+        "by_stage": {},
+        "submitted": len([a for a in applications if a.status == "submitted"]),
+        "interviews": len([a for a in applications if a.stage in ["phone_screen", "technical", "onsite"]]),
+        "offers": len([a for a in applications if a.stage == "offer"])
     }
+    
+    # Count by status
+    for app in applications:
+        stats["by_status"][app.status] = stats["by_status"].get(app.status, 0) + 1
+        stats["by_stage"][app.stage] = stats["by_stage"].get(app.stage, 0) + 1
+    
+    return stats
+
+
+def generate_application_tips(job: Job) -> list:
+    """Generate application tips based on job source"""
+    tips = []
+    
+    # Source-specific tips
+    if "linkedin" in (job.source or "").lower():
+        tips.extend([
+            "LinkedIn Easy Apply: Your profile will be attached automatically",
+            "Make sure your LinkedIn profile is up to date",
+            "Consider adding a note to the recruiter (2-3 sentences)"
+        ])
+    elif "indeed" in (job.source or "").lower():
+        tips.extend([
+            "Indeed Quick Apply uses your Indeed resume",
+            "Upload your tailored CV for better results",
+            "Indeed may ask pre-screening questions - be ready"
+        ])
+    elif "greenhouse" in (job.source or "").lower():
+        tips.extend([
+            "Greenhouse forms typically ask for LinkedIn profile",
+            "They may have custom questions - read carefully",
+            "Upload both CV and cover letter if possible"
+        ])
+    elif "lever" in (job.source or "").lower():
+        tips.extend([
+            "Lever applications are usually straightforward",
+            "They value culture fit - research the company",
+            "Include links to portfolio/GitHub if relevant"
+        ])
+    else:
+        tips.extend([
+            "Company website application - read instructions carefully",
+            "Tailor your CV to match the job description",
+            "Include a cover letter if the option is available"
+        ])
+    
+    # General tips
+    tips.extend([
+        "Double-check all fields before submitting",
+        "Save a copy of your application for follow-up",
+        "Note the date so you can follow up in 1-2 weeks"
+    ])
+    
+    return tips

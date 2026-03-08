@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { useToast } from '@/components/ui/Toast';
 
 interface Job {
   id: number;
@@ -14,6 +15,7 @@ interface Job {
   max_salary?: number;
   posted_date: string;
   external_url: string;
+  source?: string;
 }
 
 interface OnboardingStatus {
@@ -26,10 +28,24 @@ interface OnboardingStatus {
   };
 }
 
+interface ApplicationPackage {
+  application_id: number;
+  cv_download_url: string;
+  job_url: string;
+  job_title: string;
+  company: string;
+  application_tips: string[];
+  status: string;
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const { user, loading: authLoading, logout } = useAuth();
+  const toast = useToast();
   const [loading, setLoading] = useState(true);
+  const [applying, setApplying] = useState<number | null>(null);
+  const [showApplicationModal, setShowApplicationModal] = useState(false);
+  const [currentApplication, setCurrentApplication] = useState<ApplicationPackage | null>(null);
   const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStatus | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [error, setError] = useState('');
@@ -78,6 +94,75 @@ export default function DashboardPage() {
     }
   }
 
+  async function handleApply(job: Job) {
+    setApplying(job.id);
+    
+    try {
+      // Start application
+      const res = await fetch('/api/v1/applications/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: job.id })
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        if (error.detail?.includes('No CV found')) {
+          toast.error('Please create a CV first');
+          router.push('/cv-builder');
+          return;
+        }
+        throw new Error(error.detail || 'Failed to start application');
+      }
+
+      const appPackage: ApplicationPackage = await res.json();
+      
+      // Download CV
+      const cvRes = await fetch(appPackage.cv_download_url);
+      if (cvRes.ok) {
+        const blob = await cvRes.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `CV_${user?.email.split('@')[0]}.pdf`;
+        link.click();
+        window.URL.revokeObjectURL(url);
+      }
+
+      // Open job URL in new tab
+      window.open(appPackage.job_url, '_blank');
+
+      // Show application modal
+      setCurrentApplication(appPackage);
+      setShowApplicationModal(true);
+      toast.success('Application started! Good luck! 🍀');
+
+    } catch (err: any) {
+      console.error('Application error:', err);
+      toast.error(err.message || 'Failed to start application');
+    } finally {
+      setApplying(null);
+    }
+  }
+
+  async function markAsSubmitted(applicationId: number) {
+    try {
+      const res = await fetch(`/api/v1/applications/${applicationId}/submit`, {
+        method: 'POST'
+      });
+
+      if (res.ok) {
+        toast.success('Application submitted! We'll track it for you.');
+        setShowApplicationModal(false);
+        loadDashboard(); // Refresh stats
+      } else {
+        throw new Error('Failed to update application');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update application');
+    }
+  }
+
   if (authLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -90,7 +175,7 @@ export default function DashboardPage() {
   }
 
   if (!onboardingStatus?.onboarding_complete) {
-    return null; // Will redirect
+    return null;
   }
 
   return (
@@ -102,6 +187,12 @@ export default function DashboardPage() {
             <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Dashboard</h1>
             <div className="flex items-center space-x-2 sm:space-x-4">
               <span className="hidden sm:block text-sm text-slate-600 truncate max-w-[150px]">{user?.email}</span>
+              <button
+                onClick={() => router.push('/cv-builder')}
+                className="hidden sm:block px-4 py-2 text-sm text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"
+              >
+                My CVs
+              </button>
               <button
                 onClick={logout}
                 className="px-3 sm:px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
@@ -118,7 +209,7 @@ export default function DashboardPage() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        {/* Stats - Mobile: stacked, Desktop: grid */}
+        {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
           <div className="bg-white rounded-xl shadow-sm p-5 sm:p-6">
             <div className="text-sm text-slate-600 mb-1">Total Jobs</div>
@@ -214,14 +305,25 @@ export default function DashboardPage() {
                         )}
                       </div>
                     </div>
-                    <a
-                      href={job.external_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full sm:w-auto px-4 sm:px-6 py-2.5 sm:py-2 bg-navy-900 text-white rounded-lg hover:bg-navy-800 transition-colors text-sm font-semibold text-center min-h-[44px] flex items-center justify-center"
+                    <button
+                      onClick={() => handleApply(job)}
+                      disabled={applying === job.id}
+                      className="w-full sm:w-auto px-6 py-2.5 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-colors text-sm font-semibold min-h-[44px] flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Apply Now
-                    </a>
+                      {applying === job.id ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          <span>Starting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                          <span>Apply Now</span>
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
               ))}
@@ -229,6 +331,103 @@ export default function DashboardPage() {
           )}
         </div>
       </main>
+
+      {/* Application Modal */}
+      {showApplicationModal && currentApplication && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-slate-200">
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-bold text-slate-900">Application Started!</h3>
+                <button
+                  onClick={() => setShowApplicationModal(false)}
+                  className="text-slate-400 hover:text-slate-600"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Job Info */}
+              <div className="bg-slate-50 rounded-xl p-4">
+                <h4 className="font-semibold text-slate-900 mb-1">{currentApplication.job_title}</h4>
+                <p className="text-sm text-slate-600">{currentApplication.company}</p>
+              </div>
+
+              {/* What Happened */}
+              <div>
+                <h4 className="font-semibold text-slate-900 mb-2">✅ What We Did:</h4>
+                <ul className="space-y-2 text-sm text-slate-600">
+                  <li className="flex items-start space-x-2">
+                    <span className="text-green-500 mt-1">✓</span>
+                    <span>Downloaded your tailored CV</span>
+                  </li>
+                  <li className="flex items-start space-x-2">
+                    <span className="text-green-500 mt-1">✓</span>
+                    <span>Opened the application page in a new tab</span>
+                  </li>
+                  <li className="flex items-start space-x-2">
+                    <span className="text-green-500 mt-1">✓</span>
+                    <span>Created application tracker entry</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Next Steps */}
+              <div>
+                <h4 className="font-semibold text-slate-900 mb-2">📋 Next Steps:</h4>
+                <ol className="space-y-2 text-sm text-slate-600">
+                  <li className="flex items-start space-x-2">
+                    <span className="font-semibold">1.</span>
+                    <span>Complete the application in the other tab</span>
+                  </li>
+                  <li className="flex items-start space-x-2">
+                    <span className="font-semibold">2.</span>
+                    <span>Upload your CV when prompted</span>
+                  </li>
+                  <li className="flex items-start space-x-2">
+                    <span className="font-semibold">3.</span>
+                    <span>Click "I've Submitted" below when done</span>
+                  </li>
+                </ol>
+              </div>
+
+              {/* Application Tips */}
+              {currentApplication.application_tips.length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-slate-900 mb-2">💡 Tips:</h4>
+                  <ul className="space-y-1 text-sm text-slate-600">
+                    {currentApplication.application_tips.slice(0, 4).map((tip, i) => (
+                      <li key={i} className="flex items-start space-x-2">
+                        <span className="text-teal-500 mt-1">•</span>
+                        <span>{tip}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-slate-200 flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => setShowApplicationModal(false)}
+                className="flex-1 px-4 py-3 text-slate-700 font-medium hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                I'll Submit Later
+              </button>
+              <button
+                onClick={() => markAsSubmitted(currentApplication.application_id)}
+                className="flex-1 px-4 py-3 bg-navy-900 text-white font-semibold rounded-lg hover:bg-navy-800 transition-colors"
+              >
+                I've Submitted!
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
