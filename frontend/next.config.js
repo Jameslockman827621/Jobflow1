@@ -35,7 +35,8 @@ const nextConfig = {
   reactStrictMode: process.env.NODE_ENV !== 'production',
 
   // Output configuration
-  output: 'standalone', // Optimize for Docker deployment
+  output: 'export', // Static export for Cloudflare Pages
+  distDir: 'out', // Output directory for static files
 
   // Compression
   compress: true,

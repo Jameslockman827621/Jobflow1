@@ -12,9 +12,11 @@ class Application(Base, TimestampMixin):
     # Relationships
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False)
+    cv_id = Column(Integer, ForeignKey("cvs.id"), nullable=True)
     
     user = relationship("User", back_populates="applications")
     job = relationship("Job", back_populates="applications")
+    cv = relationship("CV", back_populates="applications")
     
     # Application status
     status = Column(String, default="draft")  # draft, submitted, viewed, interviewing, offered, rejected, withdrawn

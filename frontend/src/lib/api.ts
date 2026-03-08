@@ -4,7 +4,9 @@
  * Centralized API client with error handling, retries, and token management.
  */
 
-const API_BASE = '/api/v1';
+// Use environment variable for backend URL, fallback to relative path for local dev
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+const API_BASE = `${BACKEND_URL}/api/v1`;
 
 interface ApiError {
   message: string;
