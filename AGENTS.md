@@ -213,6 +213,27 @@ This is a starting point. Add your own conventions, style, and rules as you figu
 
 ## Cursor Cloud specific instructions
 
+### Project overview
+This is a job-search platform ("JobScale") with a **Python/FastAPI backend** (`backend/`) and a **Next.js frontend** (`frontend/`).
+
+### Backend
+- Python 3.12, dependencies in `backend/requirements.txt`.
+- Run dev server: `cd backend && uvicorn app.main:app --reload`
+- Run tests: `cd backend && pytest`
+- The backend uses SQLAlchemy + Alembic (PostgreSQL). For local dev without a real DB, the app will still import and the `/docs` endpoint is useful for route verification.
+
+### Frontend
+- Node/npm, Next.js 14 app in `frontend/`.
+- Run dev server: `cd frontend && npm run dev`
+- Lint: `cd frontend && npm run lint`
+- Build: `cd frontend && npm run build`
+
+### Gotchas
+- `backend/requirements.txt` lists `httpx` twice (lines 18 and 42). pip handles this silently, but be aware.
+- The backend references several model fields (`is_employed`, `current_salary`, `email_alerts_enabled`, `alert_frequency`, `subscription_plan`) on `User` and attributes like `stage` on `Application`. These are expected ORM columns; ensure Alembic migrations are up to date if you add new model fields.
+
+## Cursor Cloud specific instructions
+
 ### Architecture
 
 JobScale is a multi-service monorepo with three components:
