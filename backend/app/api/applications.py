@@ -12,6 +12,7 @@ from app.models.job import Job
 from app.models.cv import CV
 from app.models.user import User
 from app.api.auth import get_current_user
+from app.tasks.notifications import send_application_confirmation_task
 
 router = APIRouter(prefix="/api/v1/applications", tags=["Applications"])
 
@@ -251,6 +252,12 @@ async def submit_application(
     application.submitted_at = datetime.utcnow()
     
     db.commit()
+    try:
+        job = db.query(Job).filter(Job.id == application.job_id).first()
+        if job:
+            send_application_confirmation_task.delay(application.id)
+    except Exception:
+        pass  # Don't fail submission if email fails
     db.refresh(application)
     
     return {

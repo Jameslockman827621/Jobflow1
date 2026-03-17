@@ -17,12 +17,12 @@ from app.core.config import settings
 class EmailService:
     def __init__(self):
         # Use SendGrid if configured, otherwise SMTP
-        self.sendgrid_api_key = settings.OPENAI_API_KEY  # TODO: Add SENDGRID_API_KEY to config
-        self.smtp_host = "smtp.gmail.com"  # Default, configure in .env
-        self.smtp_port = 587
-        self.smtp_user = ""
-        self.smtp_password = ""
-        self.from_email = "noreply@jobscale.local"
+        self.sendgrid_api_key = settings.SENDGRID_API_KEY
+        self.smtp_host = settings.SMTP_HOST
+        self.smtp_port = settings.SMTP_PORT
+        self.smtp_user = settings.SMTP_USER or ""
+        self.smtp_password = settings.SMTP_PASSWORD or ""
+        self.from_email = settings.FROM_EMAIL
         self.from_name = "JobScale"
     
     def send_email(
