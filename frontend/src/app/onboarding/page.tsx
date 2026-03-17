@@ -30,7 +30,7 @@ interface Preferences {
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, authFetch } = useAuth();
   const toast = useToast();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -67,8 +67,8 @@ export default function OnboardingPage() {
   const fetchSuggestions = async () => {
     try {
       const [companiesRes, rolesRes] = await Promise.all([
-        fetch('/api/v1/onboarding/companies/suggested'),
-        fetch('/api/v1/onboarding/roles/suggested'),
+        authFetch('/api/v1/onboarding/companies/suggested'),
+        authFetch('/api/v1/onboarding/roles/suggested'),
       ]);
 
       const companiesData = await companiesRes.json();
@@ -112,7 +112,7 @@ export default function OnboardingPage() {
     setError('');
 
     try {
-      const saveRes = await fetch('/api/v1/onboarding/preferences', {
+      const saveRes = await authFetch('/api/v1/onboarding/preferences', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(preferences),
@@ -133,7 +133,7 @@ export default function OnboardingPage() {
         setSearchProgress((prev) => Math.min(prev + 5, 90));
       }, 800);
 
-      const searchRes = await fetch('/api/v1/onboarding/search', {
+      const searchRes = await authFetch('/api/v1/onboarding/search', {
         method: 'POST',
       });
 
