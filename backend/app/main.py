@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.api import health, auth, jobs, users, applications, profile, interview, billing, referrals, interview_coach, career, analytics, reviews, onboarding, cvs, career_report
+from app.api import health, auth, jobs, users, applications, profile, interview, billing, referrals, interview_coach, career, analytics, reviews, onboarding, cvs, career_report, salary_alerts
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -36,6 +36,7 @@ app.include_router(reviews.router, prefix=f"{settings.API_V1_PREFIX}/reviews", t
 app.include_router(cvs.router, tags=["CVs"])
 app.include_router(applications.router, tags=["Applications"])
 app.include_router(career_report.router, prefix=f"{settings.API_V1_PREFIX}/reports", tags=["Career Reports"])
+app.include_router(salary_alerts.router, prefix=f"{settings.API_V1_PREFIX}/alerts", tags=["Salary Alerts"])
 
 
 @app.get("/")

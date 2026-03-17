@@ -117,14 +117,14 @@ async def get_subscription(
     ).count()
     
     plan = current_user.subscription_plan or "free"
-    applications_limit = 5 if plan == "free" else 999999
+    limit = {"free": 5, "pro": 999, "premium": 999}.get(plan, 5)
     
     return SubscriptionResponse(
-        status="active",
+        status=current_user.subscription_status or "active",
         plan=plan,
-        current_period_end=None,
+        current_period_end=current_user.subscription_end.isoformat() if current_user.subscription_end else None,
         applications_used=apps_count,
-        applications_limit=applications_limit,
+        applications_limit=limit,
     )
 
 
@@ -201,5 +201,5 @@ async def get_usage(
         "total_applications": total_apps,
         "interviews": interviews,
         "interview_rate": f"{interview_rate}%",
-        "plan": "free",  # Would check subscription in production
+        "plan": current_user.subscription_plan or "free",
     }
