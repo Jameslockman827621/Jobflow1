@@ -227,6 +227,83 @@ async def get_application_stats(
     return stats
 
 
+@router.post("/batch-start")
+async def batch_start_applications(
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Start applications for multiple jobs at once"""
+    job_ids = body.get("job_ids", [])
+    if not job_ids:
+        raise HTTPException(status_code=400, detail="No jobs selected")
+
+    cv = db.query(CV).filter(CV.user_id == current_user.id).order_by(CV.created_at.desc()).first()
+    if not cv:
+        raise HTTPException(status_code=400, detail="No CV found. Please create a CV first.")
+
+    results = []
+    for job_id in job_ids:
+        job = db.query(Job).filter(Job.id == job_id).first()
+        if not job:
+            continue
+
+        existing = db.query(Application).filter(
+            Application.user_id == current_user.id,
+            Application.job_id == job_id
+        ).first()
+        if existing:
+            results.append({
+                "job_id": job_id, "status": "already_applied",
+                "application_id": existing.id, "job_url": job.external_url,
+                "job_title": job.title, "company": job.company
+            })
+            continue
+
+        application = Application(
+            user_id=current_user.id, job_id=job_id, cv_id=cv.id,
+            status="ready_to_apply", stage="not_started", applied_via="extension"
+        )
+        db.add(application)
+        db.commit()
+        db.refresh(application)
+
+        results.append({
+            "job_id": job_id, "application_id": application.id,
+            "status": "ready", "job_url": job.external_url,
+            "job_title": job.title, "company": job.company,
+            "cv_download_url": f"/api/v1/cvs/{cv.id}/export",
+            "application_tips": generate_application_tips(job)
+        })
+
+    return {"applications": results, "total": len(results)}
+
+
+@router.get("/ready-to-apply")
+async def get_ready_to_apply(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get applications ready for auto-apply (used by extension)"""
+    applications = db.query(Application).filter(
+        Application.user_id == current_user.id,
+        Application.status == "ready_to_apply"
+    ).all()
+
+    results = []
+    for app in applications:
+        job = db.query(Job).filter(Job.id == app.job_id).first()
+        if job:
+            results.append({
+                "application_id": app.id, "job_id": job.id,
+                "job_title": job.title, "company": job.company,
+                "job_url": job.external_url, "source": job.source,
+                "cv_download_url": f"/api/v1/cvs/{app.cv_id}/export"
+            })
+
+    return {"applications": results, "total": len(results)}
+
+
 def generate_application_tips(job: Job) -> list:
     """Generate application tips based on job source"""
     tips = []

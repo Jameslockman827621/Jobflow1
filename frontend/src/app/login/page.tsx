@@ -1,15 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth";
 import Link from "next/link";
 
 export default function Login() {
-  const router = useRouter();
+  const { login, register } = useAuth();
   const [isRegister, setIsRegister] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  
+
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -22,54 +22,11 @@ export default function Login() {
     setLoading(true);
     setError("");
 
-    const apiUrl = process.env.API_URL || "http://localhost:8000/api/v1";
-
     try {
       if (isRegister) {
-        const res = await fetch(`${apiUrl}/auth/register`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formData),
-        });
-
-        if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.detail || "Registration failed");
-        }
-
-        // Auto-login after registration
-        const loginRes = await fetch(`${apiUrl}/auth/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({
-            username: formData.email,
-            password: formData.password,
-          }),
-        });
-
-        if (!loginRes.ok) throw new Error("Login after registration failed");
-
-        const data = await loginRes.json();
-        localStorage.setItem("token", data.access_token);
-        router.push("/dashboard");
+        await register(formData.email, formData.password, formData.first_name, formData.last_name);
       } else {
-        const res = await fetch(`${apiUrl}/auth/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({
-            username: formData.email,
-            password: formData.password,
-          }),
-        });
-
-        if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.detail || "Login failed");
-        }
-
-        const data = await res.json();
-        localStorage.setItem("token", data.access_token);
-        router.push("/dashboard");
+        await login(formData.email, formData.password);
       }
     } catch (err: any) {
       setError(err.message);
@@ -176,7 +133,7 @@ export default function Login() {
 
         <div className="text-center">
           <Link href="/" className="text-sm text-gray-600 hover:text-gray-900">
-            ← Back to home
+            &larr; Back to home
           </Link>
         </div>
       </div>
