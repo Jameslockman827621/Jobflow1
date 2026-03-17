@@ -69,6 +69,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  function syncTokenToExtension(token: string | null) {
+    try {
+      if (typeof window !== 'undefined' && (window as any).chrome?.runtime?.sendMessage) {
+        if (token) {
+          (window as any).chrome.runtime.sendMessage({ action: 'setToken', token });
+        } else {
+          (window as any).chrome.runtime.sendMessage({ action: 'clearToken' });
+        }
+      }
+    } catch (e) {
+      // Extension not installed, ignore
+    }
+  }
+
   async function login(email: string, password: string) {
     const response = await fetch('/api/v1/auth/login', {
       method: 'POST',
@@ -83,6 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const data = await response.json();
     localStorage.setItem(TOKEN_KEY, data.access_token);
+    syncTokenToExtension(data.access_token);
 
     const meRes = await fetch('/api/v1/auth/me', {
       headers: { 'Authorization': `Bearer ${data.access_token}` },
@@ -119,6 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const loginData = await loginRes.json();
     localStorage.setItem(TOKEN_KEY, loginData.access_token);
+    syncTokenToExtension(loginData.access_token);
 
     const meRes = await fetch('/api/v1/auth/me', {
       headers: { 'Authorization': `Bearer ${loginData.access_token}` },
@@ -136,6 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   function logout() {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+    syncTokenToExtension(null);
     setUser(null);
     router.push('/login');
   }
