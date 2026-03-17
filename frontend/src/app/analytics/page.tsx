@@ -2,33 +2,28 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from '@/lib/auth';
 
 export default function AnalyticsPage() {
   const router = useRouter();
+  const { user, loading: authLoading, logout, authFetch } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [token, setToken] = useState<string | null>(null);
   const [overview, setOverview] = useState<any>(null);
   const [marketInsights, setMarketInsights] = useState<any>(null);
 
   useEffect(() => {
-    const storedToken = localStorage.getItem("token");
-    if (!storedToken) {
+    if (!authLoading && !user) {
       router.push("/login");
       return;
     }
-    setToken(storedToken);
-    fetchData(storedToken);
-  }, [router]);
+    if (user) fetchData();
+  }, [user, authLoading, router]);
 
-  const fetchData = async (authToken: string) => {
+  const fetchData = async () => {
     try {
       const [overviewRes, marketRes] = await Promise.all([
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"}/analytics/overview`, {
-          headers: { Authorization: `Bearer ${authToken}` },
-        }),
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"}/analytics/market-insights`, {
-          headers: { Authorization: `Bearer ${authToken}` },
-        }),
+        authFetch("/api/v1/analytics/overview"),
+        authFetch("/api/v1/analytics/market-insights"),
       ]);
 
       if (overviewRes.ok) setOverview(await overviewRes.json());
@@ -40,11 +35,6 @@ export default function AnalyticsPage() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    router.push("/");
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -53,13 +43,12 @@ export default function AnalyticsPage() {
     );
   }
 
-  // Mock data for demo
   const stats = {
-    totalApplications: 15,
-    interviewRate: 20,
-    offerRate: 6.7,
-    responseRate: 73,
-    profileCompleteness: 80,
+    totalApplications: overview?.total_applications ?? 15,
+    interviewRate: overview?.interview_rate ?? 20,
+    offerRate: overview?.offer_rate ?? 6.7,
+    responseRate: overview?.response_rate ?? 73,
+    profileCompleteness: overview?.profile_completeness ?? 80,
   };
 
   const funnel = [
@@ -84,7 +73,7 @@ export default function AnalyticsPage() {
       backgroundImage: 'linear-gradient(to right, rgba(148, 163, 184, 0.08) 1px, transparent 1px), linear-gradient(to bottom, rgba(148, 163, 184, 0.08) 1px, transparent 1px)',
       backgroundSize: '32px 32px'
     }}>
-      <Navbar onLogout={handleLogout} />
+      <Navbar onLogout={logout} />
 
       <main className="pt-28 pb-16">
         <div className="max-w-7xl mx-auto px-6">
