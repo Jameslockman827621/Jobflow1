@@ -31,6 +31,19 @@ async def get_user_cvs(
     }
 
 
+@router.get("/templates")
+async def get_templates(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get available CV templates"""
+    templates = get_all_templates()
+    return {
+        "templates": templates,
+        "total": len(templates)
+    }
+
+
 @router.get("/{cv_id}")
 async def get_cv(
     cv_id: int,
@@ -197,19 +210,6 @@ async def check_completeness(
     
     result = cv_builder_service.validate_cv_completeness(cv_data)
     return result
-
-
-@router.get("/templates")
-async def get_templates(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Get available CV templates"""
-    templates = get_all_templates()
-    return {
-        "templates": templates,
-        "total": len(templates)
-    }
 
 
 @router.post("/upload")
