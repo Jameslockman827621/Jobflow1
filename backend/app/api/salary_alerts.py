@@ -85,15 +85,18 @@ async def update_employment_status(
     current_user: User = Depends(get_current_user),
 ):
     """Update employment status and current salary for upgrade tracking"""
+    user = db.query(User).filter(User.id == current_user.id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
     if "is_employed" in body:
-        current_user.is_employed = body["is_employed"]
+        user.is_employed = body["is_employed"]
     if "current_salary" in body:
-        current_user.current_salary = body["current_salary"]
+        user.current_salary = body["current_salary"]
     db.commit()
-    db.refresh(current_user)
+    db.refresh(user)
     return {
-        "is_employed": current_user.is_employed,
-        "current_salary": current_user.current_salary,
+        "is_employed": user.is_employed,
+        "current_salary": user.current_salary,
         "message": "Employment status updated. We'll find you better-paying opportunities!",
     }
 
@@ -118,14 +121,15 @@ async def update_alert_preferences(
     current_user: User = Depends(get_current_user),
 ):
     """Update email alert preferences"""
+    user = db.query(User).filter(User.id == current_user.id).first()
     if "email_alerts_enabled" in body:
-        current_user.email_alerts_enabled = body["email_alerts_enabled"]
+        user.email_alerts_enabled = body["email_alerts_enabled"]
     if "alert_frequency" in body:
         if body["alert_frequency"] in ("daily", "weekly", "off"):
-            current_user.alert_frequency = body["alert_frequency"]
+            user.alert_frequency = body["alert_frequency"]
     db.commit()
     return {
-        "email_alerts_enabled": current_user.email_alerts_enabled,
+        "email_alerts_enabled": user.email_alerts_enabled,
         "alert_frequency": current_user.alert_frequency,
     }
 
