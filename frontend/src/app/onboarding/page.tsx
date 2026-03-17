@@ -159,7 +159,19 @@ export default function OnboardingPage() {
 
   const handleStepChange = (newStep: number) => {
     if (newStep > step) {
-      const validationError = validatePreferences();
+      // Validate only the current step before advancing
+      let validationError: string | null = null;
+      
+      if (step === 1 && preferences.target_roles.length === 0) {
+        validationError = 'Please select at least one role';
+      } else if (step === 2 && preferences.seniority_levels.length === 0) {
+        validationError = 'Please select your seniority level';
+      } else if (step === 3 && preferences.locations.length === 0 && preferences.countries.length === 0) {
+        validationError = 'Please select at least one location or country';
+      } else if (step === 4 && preferences.employment_types.length === 0) {
+        validationError = 'Please select at least one employment type';
+      }
+      
       if (validationError) {
         toast.error(validationError);
         setError(validationError);
