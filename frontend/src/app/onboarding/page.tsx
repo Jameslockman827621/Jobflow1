@@ -11,10 +11,6 @@ interface Company {
   size: string;
 }
 
-interface Role {
-  name: string;
-}
-
 interface Preferences {
   target_roles: string[];
   seniority_levels: string[];
@@ -52,7 +48,7 @@ export default function OnboardingPage() {
   });
 
   const [suggestedCompanies, setSuggestedCompanies] = useState<Company[]>([]);
-  const [suggestedRoles, setSuggestedRoles] = useState<Role[]>([]);
+  const [suggestedRoles, setSuggestedRoles] = useState<string[]>([]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -291,15 +287,15 @@ export default function OnboardingPage() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 mb-6">
                   {suggestedRoles.map((role) => (
                     <button
-                      key={role.name}
-                      onClick={() => toggleRole(role.name)}
+                      key={role}
+                      onClick={() => toggleRole(role)}
                       className={`p-3 sm:p-4 rounded-xl border-2 transition-all text-sm sm:text-base font-medium min-h-[48px] ${
-                        preferences.target_roles.includes(role.name)
+                        preferences.target_roles.includes(role)
                           ? 'border-teal-500 bg-teal-50 text-teal-700'
                           : 'border-slate-200 hover:border-slate-300'
                       }`}
                     >
-                      {role.name}
+                      {role}
                     </button>
                   ))}
                 </div>
