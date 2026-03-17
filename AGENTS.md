@@ -261,7 +261,7 @@ See `README.md` and `QUICKSTART.md` for standard commands. Key notes:
 
 - `apify-client` is a runtime dependency not listed in `requirements.txt` but needed by the scraper imports. Install it manually if the venv is recreated.
 - Frontend `npm install` requires `--legacy-peer-deps` due to a peer dependency conflict between `next@14.2.x` and `@cloudflare/next-on-pages`.
-- `next.config.js` has `output: 'export'` set for production (Cloudflare Pages). The dev server (`npm run dev`) works fine with `rewrites()` despite this setting, but `next build` will warn about it.
+- `next.config.js` has `output: 'export'` and `distDir: 'out'` set for production (Cloudflare Pages). The dev server (`npm run dev`) is unstable with these settings: it serves the first request to each route correctly, but subsequent requests often return 404 because the export cache conflicts with dev mode caching. **Always delete `out/` and `.next/` before starting the dev server**: `rm -rf out .next && npm run dev`. After a `next build`, the `out/` directory will contain stale export files that crash the dev server. The API proxy (`rewrites()`) only works with the dev server, not static export.
 - Pre-existing lint/TS errors exist in `dashboard/page.tsx`, `career/page.tsx`, and `pricing/page.tsx`. These are not blockers for development.
 - No automated test files exist yet. `pytest` is configured in `requirements.txt` but no `tests/` directory exists.
 
