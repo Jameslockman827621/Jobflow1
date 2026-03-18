@@ -1,5 +1,5 @@
 // JobScale Content Script
-// Shows floating button to open dashboard (optional - main flow is via popup)
+// Shows floating button to open dashboard (main flow is via extension popup)
 
 (function() {
   'use strict';

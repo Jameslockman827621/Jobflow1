@@ -17,12 +17,12 @@ from app.core.config import settings
 class EmailService:
     def __init__(self):
         # Use SendGrid if configured, otherwise SMTP
-        self.sendgrid_api_key = settings.OPENAI_API_KEY  # TODO: Add SENDGRID_API_KEY to config
-        self.smtp_host = "smtp.gmail.com"  # Default, configure in .env
-        self.smtp_port = 587
-        self.smtp_user = ""
-        self.smtp_password = ""
-        self.from_email = "noreply@jobscale.local"
+        self.sendgrid_api_key = settings.SENDGRID_API_KEY
+        self.smtp_host = settings.SMTP_HOST
+        self.smtp_port = settings.SMTP_PORT
+        self.smtp_user = settings.SMTP_USER or ""
+        self.smtp_password = settings.SMTP_PASSWORD or ""
+        self.from_email = settings.FROM_EMAIL
         self.from_name = "JobScale"
     
     def send_email(
@@ -241,6 +241,132 @@ class EmailService:
             
             <p>
                 The JobScale Team
+            </p>
+        </body>
+        </html>
+        """
+        return self.send_email(to, subject, html)
+
+    def send_salary_upgrade_alert(self, to: str, name: str, current_salary: int, jobs: List[dict]) -> bool:
+        """Send salary upgrade alert - the post-hire retention email"""
+        subject = f"💰 We found jobs paying more than your £{current_salary:,} salary"
+        
+        jobs_html = ""
+        for job in jobs[:5]:
+            increase = job.get('salary_increase', 0)
+            jobs_html += f"""
+            <div style="border: 1px solid #e5e7eb; padding: 15px; border-radius: 8px; margin-bottom: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <p style="font-weight: bold; margin: 0 0 4px 0; font-size: 15px;">{job['title']}</p>
+                        <p style="color: #666; margin: 0; font-size: 13px;">{job['company']} • {job.get('location', '')}</p>
+                    </div>
+                    <div style="background: #dcfce7; color: #166534; padding: 6px 12px; border-radius: 20px; font-weight: 600; font-size: 13px; white-space: nowrap;">
+                        +£{increase:,}
+                    </div>
+                </div>
+                <p style="margin: 8px 0 0 0;">
+                    <a href="{job.get('url', '#')}" style="color: #2563eb; font-size: 13px;">View & Apply →</a>
+                </p>
+            </div>
+            """
+        
+        html = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto;">
+            <div style="background: linear-gradient(135deg, #059669, #10b981); color: white; padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+                <h1 style="margin: 0; font-size: 24px;">Salary Upgrade Found! 💰</h1>
+                <p style="margin: 8px 0 0 0; opacity: 0.9;">Higher-paying opportunities matched to your profile</p>
+            </div>
+            
+            <div style="padding: 25px; background: white; border: 1px solid #e5e7eb; border-top: none;">
+                <p>Hi {name},</p>
+                
+                <p>Great news! We found <strong>{len(jobs)} jobs</strong> that pay more than your current salary of <strong>£{current_salary:,}</strong>:</p>
+                
+                {jobs_html}
+                
+                <p style="margin-top: 25px; text-align: center;">
+                    <a href="http://localhost:3000/dashboard" 
+                       style="background-color: #059669; color: white; padding: 14px 28px; 
+                              text-decoration: none; border-radius: 8px; display: inline-block; font-weight: 600;">
+                        View All Opportunities
+                    </a>
+                </p>
+                
+                <hr style="margin: 25px 0; border: none; border-top: 1px solid #eee;" />
+                
+                <div style="background: #fef3c7; padding: 15px; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                    <p style="margin: 0; font-size: 14px;"><strong>📊 Unlock your Annual Career Report</strong></p>
+                    <p style="margin: 5px 0 0 0; font-size: 13px; color: #666;">See your salary percentile, market trends, and personalized career recommendations.</p>
+                    <p style="margin: 8px 0 0 0;">
+                        <a href="http://localhost:3000/pricing" style="color: #d97706; font-size: 13px; font-weight: 600;">Upgrade to Pro →</a>
+                    </p>
+                </div>
+            </div>
+            
+            <div style="padding: 15px; text-align: center; color: #9ca3af; font-size: 12px;">
+                <p>You're receiving this because you enabled salary alerts on JobScale.</p>
+                <p><a href="http://localhost:3000/profile" style="color: #9ca3af;">Manage preferences</a> | <a href="#" style="color: #9ca3af;">Unsubscribe</a></p>
+            </div>
+        </body>
+        </html>
+        """
+        return self.send_email(to, subject, html)
+
+    def send_weekly_career_report(self, to: str, name: str, report: dict) -> bool:
+        """Send weekly career report email (upsell for annual report)"""
+        subject = "📊 Your Weekly Career Report"
+        
+        stats = report.get("career_stats", {})
+        salary_info = ""
+        if report.get("current_salary", 0) > 0:
+            salary_info = f"""
+            <div style="background: #eff6ff; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                <p style="margin: 0; font-size: 14px;"><strong>Salary Position:</strong> {report.get('percentile', 50)}th percentile</p>
+                <p style="margin: 5px 0 0 0; font-size: 13px; color: #666;">Market average for your role: £{report.get('market_average', 0):,}</p>
+                <p style="margin: 5px 0 0 0; font-size: 13px; color: #166534; font-weight: 600;">{report.get('better_paying_jobs', 0)} better-paying jobs available</p>
+            </div>
+            """
+        
+        html = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto;">
+            <h2>Your Weekly Career Report 📊</h2>
+            
+            <p>Hi {name}, here's your career snapshot:</p>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 20px 0;">
+                <div style="text-align: center; padding: 15px; background: #f0f9ff; border-radius: 8px;">
+                    <div style="font-size: 24px; font-weight: bold; color: #2563eb;">{stats.get('total_applications', 0)}</div>
+                    <div style="font-size: 12px; color: #6b7280;">Applications</div>
+                </div>
+                <div style="text-align: center; padding: 15px; background: #f0fdf4; border-radius: 8px;">
+                    <div style="font-size: 24px; font-weight: bold; color: #16a34a;">{stats.get('interviews', 0)}</div>
+                    <div style="font-size: 12px; color: #6b7280;">Interviews</div>
+                </div>
+            </div>
+            
+            {salary_info}
+            
+            <p style="margin-top: 25px; text-align: center;">
+                <a href="http://localhost:3000/analytics"
+                   style="background-color: #2563eb; color: white; padding: 12px 24px;
+                          text-decoration: none; border-radius: 8px; display: inline-block;">
+                    View Full Report
+                </a>
+            </p>
+            
+            <hr style="margin: 25px 0; border: none; border-top: 1px solid #eee;" />
+            
+            <div style="background: #faf5ff; padding: 15px; border-radius: 8px; text-align: center;">
+                <p style="margin: 0; font-weight: 600;">🔓 Unlock Annual Career Report</p>
+                <p style="margin: 5px 0; font-size: 13px; color: #666;">Detailed salary analysis, career trajectory, and personalized growth plan.</p>
+                <a href="http://localhost:3000/pricing" style="color: #7c3aed; font-weight: 600; font-size: 14px;">Upgrade to Pro →</a>
+            </div>
+            
+            <p style="color: #9ca3af; font-size: 12px; margin-top: 20px; text-align: center;">
+                <a href="http://localhost:3000/profile" style="color: #9ca3af;">Manage preferences</a>
             </p>
         </body>
         </html>

@@ -19,7 +19,7 @@ from app.services.on_demand_search import OnDemandSearchService
 from app.api.auth import get_current_user
 from app.core.security import verify_password
 
-router = APIRouter(prefix="/onboarding", tags=["Onboarding"])
+router = APIRouter(tags=["Onboarding"])
 
 
 @router.post("/preferences")

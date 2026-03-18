@@ -5,5 +5,5 @@ Base = declarative_base()
 
 
 class TimestampMixin:
-    created_at = Column(DateTime, default=func.utcnow(), nullable=False)
-    updated_at = Column(DateTime, default=func.utcnow(), onupdate=func.utcnow(), nullable=False)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)

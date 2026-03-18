@@ -31,6 +31,19 @@ async def get_user_cvs(
     }
 
 
+@router.get("/templates")
+async def get_templates(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get available CV templates"""
+    templates = get_all_templates()
+    return {
+        "templates": templates,
+        "total": len(templates)
+    }
+
+
 @router.get("/{cv_id}")
 async def get_cv(
     cv_id: int,
@@ -119,13 +132,14 @@ async def delete_cv(
 
 @router.post("/generate-summary")
 async def generate_summary(
-    experience: List[Dict],
-    skills: List[str],
-    target_role: str,
+    body: Dict[str, Any],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """AI-generate professional summary"""
+    experience = body.get("experience", [])
+    skills = body.get("skills", [])
+    target_role = body.get("target_role", "Software Engineer")
     summary = await cv_builder_service.generate_summary(experience, skills, target_role)
     return {"summary": summary}
 
@@ -196,19 +210,6 @@ async def check_completeness(
     
     result = cv_builder_service.validate_cv_completeness(cv_data)
     return result
-
-
-@router.get("/templates")
-async def get_templates(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Get available CV templates"""
-    templates = db.query(CVTemplate).all()
-    return {
-        "templates": templates,
-        "total": len(templates)
-    }
 
 
 @router.post("/upload")

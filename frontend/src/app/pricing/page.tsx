@@ -1,235 +1,295 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import Link from "next/link";
-import Navbar from "../../components/Navbar";
+import { useState } from 'react';
+import Link from 'next/link';
 
 const PLANS = [
   {
-    name: "Free",
+    name: 'Free',
     price: 0,
-    period: "forever",
-    description: "Get started with AI job search",
+    yearlyPrice: 0,
+    period: 'forever',
+    description: 'For getting started with your job search',
     features: [
-      "5 applications per month",
-      "Basic AI CV tailoring",
-      "Job matching algorithm",
-      "Application tracking",
-      "Email support",
+      '5 applications per month',
+      'Basic CV tailoring',
+      'Job matching',
+      'Application tracking',
+      'Email support',
     ],
-    cta: "Get Started",
+    cta: 'Get started',
     highlighted: false,
   },
   {
-    name: "Pro",
+    name: 'Pro',
     price: 29,
-    period: "per month",
-    description: "For serious job seekers",
+    yearlyPrice: 23,
+    period: 'per month',
+    description: 'For active job seekers',
     features: [
-      "Unlimited applications",
-      "Priority AI processing",
-      "Advanced matching (80%+ only)",
-      "Interview prep questions",
-      "Cover letter generation",
-      "Job alerts (daily)",
-      "Application analytics",
-      "Priority email support",
+      'Unlimited applications',
+      'Priority processing',
+      'Advanced matching (80%+ only)',
+      'Interview prep questions',
+      'Cover letter generation',
+      'Daily job alerts',
+      'Application analytics',
+      'Priority support',
     ],
-    cta: "Start Free Trial",
+    cta: 'Start free trial',
     highlighted: true,
   },
   {
-    name: "Premium",
+    name: 'Premium',
     price: 79,
-    period: "per month",
-    description: "Maximum career acceleration",
+    yearlyPrice: 63,
+    period: 'per month',
+    description: 'Full-service job search support',
     features: [
-      "Everything in Pro",
-      "AI Interview Coach",
-      "Resume review by experts",
-      "Salary negotiation scripts",
-      "Career pathing recommendations",
-      "Recruiter network access",
-      "1-on-1 career coaching (monthly)",
-      "Priority customer support",
+      'Everything in Pro',
+      'Interview coaching',
+      'Resume review by experts',
+      'Salary negotiation guidance',
+      'Career path recommendations',
+      'Recruiter network access',
+      'Monthly 1-on-1 coaching',
+      'Dedicated support',
     ],
-    cta: "Contact Sales",
+    cta: 'Contact us',
     highlighted: false,
   },
 ];
 
 const FAQ = [
   {
-    question: "How is this different from LinkedIn?",
-    answer: "LinkedIn is a job board. JobScale is an AI-powered application engine. We don't just show you jobs - we automatically tailor your CV, write cover letters, and help you apply to 10x more positions with higher quality applications.",
+    question: 'How does JobScale differ from a job board?',
+    answer:
+      'Job boards list openings. JobScale automates the application process -- tailoring your CV, generating cover letters, and tracking every application so you can focus on interviewing.',
   },
   {
-    question: "What happens if I don't get interviews?",
-    answer: "We offer a 30-day money-back guarantee. If you're not getting interviews, we'll work with you to improve your profile, or refund your subscription.",
+    question: 'What if I don\'t get interviews?',
+    answer:
+      'We offer a 30-day money-back guarantee. If you are not seeing results, we will work with you to improve your profile or refund your subscription.',
   },
   {
-    question: "Can I cancel anytime?",
-    answer: "Yes! Cancel anytime from your account settings. No questions asked.",
+    question: 'Can I cancel anytime?',
+    answer:
+      'Yes. Cancel from your account settings at any time. No questions asked.',
   },
   {
-    question: "Do you work with all industries?",
-    answer: "Yes! We support all industries and job levels, from entry-level to executive. Our AI adapts to your specific field.",
-  },
-  {
-    question: "How does the referral program work?",
-    answer: "Invite friends and earn $10 for each signup, $50 for each Pro subscription. Your friends get 1 month free Pro. Everyone wins!",
+    question: 'Which industries do you support?',
+    answer:
+      'All industries and seniority levels, from entry-level to executive. The platform adapts to your specific field and experience.',
   },
 ];
 
+function CheckIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path
+        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function ChevronIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+    </svg>
+  );
+}
+
 export default function PricingPage() {
-  const [billingPeriod, setBillingPeriod] = useState<"monthly" | "yearly">("monthly");
+  const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-white">
-      <Navbar isLoggedIn={false} />
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-b border-slate-200">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 sm:py-4">
+          <div className="flex justify-between items-center">
+            <Link href="/" className="flex items-center space-x-2">
+              <div className="w-8 h-8 rounded-lg bg-navy-900 flex items-center justify-center">
+                <svg className="w-4 h-4 text-teal-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+              </div>
+              <span className="text-lg font-bold text-navy-900 tracking-tight">JobScale</span>
+            </Link>
 
-      {/* Hero */}
-      <section className="py-20 bg-gradient-to-b from-blue-50 to-white">
-        <div className="max-w-7xl mx-auto px-4 text-center">
-          <h1 className="text-5xl font-bold text-gray-900 mb-6">
-            Invest in Your Career
-          </h1>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto mb-8">
-            One subscription could land you a job that pays $20k+ more. 
-            What's that worth?
-          </p>
-          
-          {/* Billing toggle */}
-          <div className="flex items-center justify-center gap-4 mb-8">
-            <span className={`text-sm ${billingPeriod === "monthly" ? "font-semibold" : "text-gray-500"}`}>
-              Monthly
-            </span>
-            <button
-              onClick={() => setBillingPeriod(billingPeriod === "monthly" ? "yearly" : "monthly")}
-              className="w-14 h-8 bg-blue-600 rounded-full relative transition-colors"
-            >
-              <div className={`w-6 h-6 bg-white rounded-full absolute top-1 transition-transform ${
-                billingPeriod === "yearly" ? "translate-x-7" : "translate-x-1"
-              }`} />
-            </button>
-            <span className={`text-sm ${billingPeriod === "yearly" ? "font-semibold" : "text-gray-500"}`}>
-              Yearly <span className="text-green-600 text-xs">(Save 20%)</span>
-            </span>
-          </div>
-        </div>
-      </section>
-
-      {/* Pricing Cards */}
-      <section className="py-16">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="grid md:grid-cols-3 gap-8">
-            {PLANS.map((plan) => (
-              <div
-                key={plan.name}
-                className={`relative rounded-2xl p-8 ${
-                  plan.highlighted
-                    ? "bg-blue-600 text-white shadow-xl scale-105"
-                    : "bg-white text-gray-900 border border-gray-200"
-                }`}
+            <div className="hidden md:flex items-center space-x-8">
+              <Link href="/#features" className="text-sm text-slate-600 hover:text-navy-900 transition-colors">Features</Link>
+              <Link href="/pricing" className="text-sm font-medium text-navy-900">Pricing</Link>
+              <Link href="/login" className="text-sm font-medium text-navy-900 hover:text-navy-700 transition-colors">Sign in</Link>
+              <Link
+                href="/login"
+                className="px-4 py-2 text-sm font-medium rounded-lg bg-navy-900 text-white hover:bg-navy-800 transition-colors"
               >
-                {plan.highlighted && (
-                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-green-500 text-white px-4 py-1 rounded-full text-sm font-semibold">
-                    Most Popular
-                  </div>
-                )}
-                
-                <h3 className="text-2xl font-bold mb-2">{plan.name}</h3>
-                <p className={`text-sm mb-6 ${plan.highlighted ? "text-blue-100" : "text-gray-500"}`}>
-                  {plan.description}
-                </p>
-                
-                <div className="mb-6">
-                  <span className="text-4xl font-bold">
-                    ${billingPeriod === "yearly" ? Math.floor(plan.price * 0.8) : plan.price}
-                  </span>
-                  <span className={`text-sm ${plan.highlighted ? "text-blue-100" : "text-gray-500"}`}>
-                    /{plan.period}
-                  </span>
-                </div>
-                
-                <ul className="space-y-3 mb-8">
-                  {plan.features.map((feature, i) => (
-                    <li key={i} className="flex items-start gap-3">
-                      <svg className={`w-5 h-5 flex-shrink-0 ${plan.highlighted ? "text-blue-200" : "text-green-500"}`} fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                      <span className="text-sm">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-                
-                <Link
-                  href="/login"
-                  className={`block w-full py-3 px-6 rounded-lg text-center font-semibold transition-colors ${
-                    plan.highlighted
-                      ? "bg-white text-blue-600 hover:bg-blue-50"
-                      : "bg-blue-600 text-white hover:bg-blue-700"
-                  }`}
-                >
-                  {plan.cta}
+                Get started
+              </Link>
+            </div>
+
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden p-2 rounded-lg hover:bg-slate-100 transition-colors"
+              aria-label="Toggle menu"
+            >
+              {mobileMenuOpen ? (
+                <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" />
+                </svg>
+              )}
+            </button>
+          </div>
+
+          {mobileMenuOpen && (
+            <div className="md:hidden absolute top-full left-0 right-0 bg-white border-b border-slate-200 shadow-lg py-4 px-4 space-y-3">
+              <Link href="/#features" className="block py-2 text-sm text-slate-600 hover:text-navy-900 transition-colors" onClick={() => setMobileMenuOpen(false)}>Features</Link>
+              <Link href="/pricing" className="block py-2 text-sm font-medium text-navy-900" onClick={() => setMobileMenuOpen(false)}>Pricing</Link>
+              <div className="pt-3 border-t border-slate-200 space-y-2">
+                <Link href="/login" className="block w-full text-center py-2.5 text-sm font-medium text-navy-900" onClick={() => setMobileMenuOpen(false)}>
+                  Sign in
+                </Link>
+                <Link href="/login" className="block w-full text-center py-2.5 text-sm font-medium rounded-lg bg-navy-900 text-white" onClick={() => setMobileMenuOpen(false)}>
+                  Get started
                 </Link>
               </div>
-            ))}
-          </div>
+            </div>
+          )}
         </div>
-      </section>
+      </nav>
 
-      {/* Referral Section */}
-      <section className="py-16 bg-gray-50">
-        <div className="max-w-4xl mx-auto px-4 text-center">
-          <h2 className="text-3xl font-bold mb-4">Earn While You Search</h2>
-          <p className="text-gray-600 mb-8">
-            Refer friends and earn up to $600/year. They get 1 month free, you get paid.
+      <section className="pt-28 sm:pt-36 pb-12">
+        <div className="max-w-6xl mx-auto px-4 text-center">
+          <h1 className="text-4xl sm:text-5xl font-bold text-navy-900 tracking-tight mb-4">
+            Simple, transparent pricing
+          </h1>
+          <p className="text-lg text-slate-500 max-w-xl mx-auto mb-10">
+            Choose the plan that fits your job search. Upgrade or downgrade at any time.
           </p>
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="bg-white p-6 rounded-lg shadow">
-              <div className="text-3xl font-bold text-blue-600 mb-2">$10</div>
-              <div className="text-sm text-gray-600">Per friend who signs up</div>
-            </div>
-            <div className="bg-white p-6 rounded-lg shadow">
-              <div className="text-3xl font-bold text-blue-600 mb-2">$50</div>
-              <div className="text-sm text-gray-600">Per friend who subscribes</div>
-            </div>
-            <div className="bg-white p-6 rounded-lg shadow">
-              <div className="text-3xl font-bold text-blue-600 mb-2">Unlimited</div>
-              <div className="text-sm text-gray-600">No cap on referrals</div>
-            </div>
+
+          <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1">
+            <button
+              onClick={() => setBillingPeriod('monthly')}
+              className={`px-5 py-2 rounded-md text-sm font-medium transition-colors ${
+                billingPeriod === 'monthly'
+                  ? 'bg-navy-900 text-white shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Monthly
+            </button>
+            <button
+              onClick={() => setBillingPeriod('yearly')}
+              className={`px-5 py-2 rounded-md text-sm font-medium transition-colors ${
+                billingPeriod === 'yearly'
+                  ? 'bg-navy-900 text-white shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Yearly
+              <span className="ml-1.5 text-xs text-teal-500 font-semibold">Save 20%</span>
+            </button>
           </div>
-          <Link
-            href="/login"
-            className="inline-block mt-8 px-8 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700"
-          >
-            Get Your Referral Link
-          </Link>
         </div>
       </section>
 
-      {/* FAQ */}
-      <section className="py-16">
-        <div className="max-w-3xl mx-auto px-4">
-          <h2 className="text-3xl font-bold mb-8 text-center">Frequently Asked Questions</h2>
-          <div className="space-y-4">
+      <section className="pb-20">
+        <div className="max-w-6xl mx-auto px-4">
+          <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+            {PLANS.map((plan) => {
+              const displayPrice = billingPeriod === 'yearly' ? plan.yearlyPrice : plan.price;
+              return (
+                <div
+                  key={plan.name}
+                  className={`relative rounded-xl p-8 flex flex-col ${
+                    plan.highlighted
+                      ? 'bg-navy-900 text-white ring-2 ring-teal-500'
+                      : 'bg-white text-slate-900 border border-slate-200'
+                  }`}
+                >
+                  {plan.highlighted && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-teal-500 text-white px-3 py-0.5 rounded-full text-xs font-semibold tracking-wide">
+                      Most Popular
+                    </div>
+                  )}
+
+                  <h3 className="text-lg font-semibold mb-1">{plan.name}</h3>
+                  <p className={`text-sm mb-6 ${plan.highlighted ? 'text-slate-300' : 'text-slate-500'}`}>
+                    {plan.description}
+                  </p>
+
+                  <div className="mb-8">
+                    <span className="text-5xl font-bold tracking-tight">${displayPrice}</span>
+                    {plan.price > 0 && (
+                      <span className={`text-sm ml-1 ${plan.highlighted ? 'text-slate-400' : 'text-slate-500'}`}>
+                        /{plan.period}
+                      </span>
+                    )}
+                    {plan.price === 0 && (
+                      <span className={`text-sm ml-1 ${plan.highlighted ? 'text-slate-400' : 'text-slate-500'}`}>
+                        /forever
+                      </span>
+                    )}
+                  </div>
+
+                  <ul className="space-y-3 mb-8 flex-1">
+                    {plan.features.map((feature, i) => (
+                      <li key={i} className="flex items-start gap-3">
+                        <CheckIcon className={`w-5 h-5 flex-shrink-0 mt-0.5 ${plan.highlighted ? 'text-teal-400' : 'text-teal-500'}`} />
+                        <span className={`text-sm ${plan.highlighted ? 'text-slate-200' : 'text-slate-600'}`}>
+                          {feature}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <Link
+                    href="/login"
+                    className={`block w-full py-3 rounded-lg text-center text-sm font-semibold transition-colors ${
+                      plan.highlighted
+                        ? 'bg-teal-500 text-white hover:bg-teal-600'
+                        : 'bg-slate-100 text-slate-900 hover:bg-slate-200'
+                    }`}
+                  >
+                    {plan.cta}
+                  </Link>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section className="py-20 border-t border-slate-100">
+        <div className="max-w-2xl mx-auto px-4">
+          <h2 className="text-2xl font-bold text-navy-900 mb-8 text-center">
+            Frequently Asked Questions
+          </h2>
+          <div className="divide-y divide-slate-200">
             {FAQ.map((faq, i) => (
-              <div key={i} className="border border-gray-200 rounded-lg">
+              <div key={i}>
                 <button
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                  className="w-full px-6 py-4 text-left flex justify-between items-center"
+                  className="w-full py-5 text-left flex justify-between items-center gap-4"
                 >
-                  <span className="font-semibold">{faq.question}</span>
-                  <svg className={`w-5 h-5 transition-transform ${openFaq === i ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
+                  <span className="font-medium text-slate-900">{faq.question}</span>
+                  <ChevronIcon
+                    className={`w-5 h-5 flex-shrink-0 text-slate-400 transition-transform ${
+                      openFaq === i ? 'rotate-180' : ''
+                    }`}
+                  />
                 </button>
                 {openFaq === i && (
-                  <div className="px-6 pb-4 text-gray-600">
-                    {faq.answer}
-                  </div>
+                  <p className="pb-5 text-sm text-slate-500 leading-relaxed">{faq.answer}</p>
                 )}
               </div>
             ))}
@@ -237,26 +297,42 @@ export default function PricingPage() {
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="py-20 bg-blue-600">
-        <div className="max-w-4xl mx-auto px-4 text-center">
+      <section className="py-20 bg-navy-900">
+        <div className="max-w-3xl mx-auto px-4 text-center">
           <h2 className="text-3xl font-bold text-white mb-4">
-            Ready to Transform Your Job Search?
+            Ready to streamline your job search?
           </h2>
-          <p className="text-blue-100 mb-8">
-            Join thousands of job seekers landing better jobs with AI.
+          <p className="text-slate-400 mb-8">
+            Get started for free. No credit card required.
           </p>
           <Link
             href="/login"
-            className="inline-block px-8 py-4 bg-white text-blue-600 rounded-lg font-semibold hover:bg-blue-50"
+            className="inline-block px-8 py-3 bg-teal-500 text-white rounded-lg font-semibold hover:bg-teal-600 transition-colors"
           >
-            Start Your Free Trial
+            Get started
           </Link>
-          <p className="text-blue-200 text-sm mt-4">
-            No credit card required for free tier
-          </p>
         </div>
       </section>
+
+      <footer className="border-t border-slate-200 bg-white">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div className="flex items-center space-x-2">
+              <div className="w-7 h-7 rounded-lg bg-navy-900 flex items-center justify-center">
+                <svg className="w-3.5 h-3.5 text-teal-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+              </div>
+              <span className="text-sm font-semibold text-navy-900 tracking-tight">JobScale</span>
+            </div>
+            <div className="flex items-center space-x-6">
+              <a href="#" className="text-caption text-slate-500 hover:text-navy-900 transition-colors">Privacy</a>
+              <a href="#" className="text-caption text-slate-500 hover:text-navy-900 transition-colors">Terms</a>
+              <a href="#" className="text-caption text-slate-500 hover:text-navy-900 transition-colors">Contact</a>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

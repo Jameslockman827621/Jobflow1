@@ -68,32 +68,37 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string)
     }
   }, [toast]);
 
-  const icons = {
-    success: '✅',
-    error: '❌',
-    info: 'ℹ️',
-    loading: '⏳',
+  const colors = {
+    success: 'bg-white border-teal-200 text-slate-800',
+    error: 'bg-white border-red-200 text-slate-800',
+    info: 'bg-white border-slate-200 text-slate-800',
+    loading: 'bg-white border-slate-200 text-slate-800',
   };
 
-  const colors = {
-    success: 'bg-green-50 border-green-200 text-green-800',
-    error: 'bg-red-50 border-red-200 text-red-800',
-    info: 'bg-blue-50 border-blue-200 text-blue-800',
-    loading: 'bg-slate-50 border-slate-200 text-slate-800',
+  const iconColors = {
+    success: 'text-teal-500',
+    error: 'text-red-500',
+    info: 'text-slate-500',
+    loading: 'text-slate-400',
+  };
+
+  const iconSvg = {
+    success: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>,
+    error: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>,
+    info: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" /></svg>,
+    loading: <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>,
   };
 
   return (
-    <div
-      className={`${colors[toast.type]} border rounded-lg p-4 shadow-lg flex items-start space-x-3 animate-slide-in`}
-    >
-      <span className="text-xl">{icons[toast.type]}</span>
+    <div className={`${colors[toast.type]} border rounded-lg px-4 py-3 shadow-lg flex items-center gap-3`} style={{animation: 'slideIn 0.2s ease-out'}}>
+      <span className={iconColors[toast.type]}>{iconSvg[toast.type]}</span>
       <div className="flex-1 text-sm font-medium">{toast.message}</div>
       {toast.type !== 'loading' && (
         <button
           onClick={() => onDismiss(toast.id)}
-          className="text-slate-400 hover:text-slate-600 transition-colors"
+          className="text-slate-300 hover:text-slate-500 transition-colors"
         >
-          ✕
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
         </button>
       )}
     </div>

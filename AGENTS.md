@@ -210,3 +210,63 @@ The goal: Be helpful without being annoying. Check in a few times a day, do usef
 ## Make It Yours
 
 This is a starting point. Add your own conventions, style, and rules as you figure out what works.
+
+## Cursor Cloud specific instructions
+
+### Project overview
+This is a job-search platform ("JobScale") with a **Python/FastAPI backend** (`backend/`) and a **Next.js frontend** (`frontend/`).
+
+### Backend
+- Python 3.12, dependencies in `backend/requirements.txt`.
+- Run dev server: `cd backend && uvicorn app.main:app --reload`
+- Run tests: `cd backend && pytest`
+- The backend uses SQLAlchemy + Alembic (PostgreSQL). For local dev without a real DB, the app will still import and the `/docs` endpoint is useful for route verification.
+
+### Frontend
+- Node/npm, Next.js 14 app in `frontend/`.
+- Run dev server: `cd frontend && npm run dev`
+- Lint: `cd frontend && npm run lint`
+- Build: `cd frontend && npm run build`
+
+### Gotchas
+- `backend/requirements.txt` lists `httpx` twice (lines 18 and 42). pip handles this silently, but be aware.
+- The backend references several model fields (`is_employed`, `current_salary`, `email_alerts_enabled`, `alert_frequency`, `subscription_plan`) on `User` and attributes like `stage` on `Application`. These are expected ORM columns; ensure Alembic migrations are up to date if you add new model fields.
+
+## Cursor Cloud specific instructions
+
+### Architecture
+
+JobScale is a multi-service monorepo with three components:
+
+| Service | Path | Stack | Port |
+|---------|------|-------|------|
+| Backend API | `backend/` | Python 3.12, FastAPI, SQLAlchemy | 8000 |
+| Frontend | `frontend/` | Next.js 14, React 18, TypeScript, Tailwind | 3000 |
+| Browser Extension | `extension/` | Chrome Manifest V3 | N/A |
+
+Infrastructure dependencies: **PostgreSQL 16** (port 5432) and **Redis 7** (port 6379), run via Docker.
+
+### Running services
+
+See `README.md` and `QUICKSTART.md` for standard commands. Key notes:
+
+- **Docker daemon** must be started first: `sudo dockerd &` (uses `fuse-overlayfs` storage driver and `iptables-legacy`)
+- **PostgreSQL**: `sudo docker start jobscale-db` (or create with `sudo docker run -d --name jobscale-db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=jobscale -p 5432:5432 postgres:16-alpine`)
+- **Redis**: `sudo docker start jobscale-redis` (or create with `sudo docker run -d --name jobscale-redis -p 6379:6379 redis:7-alpine`)
+- **Backend**: `cd backend && source venv/bin/activate && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000`
+- **Frontend**: `cd frontend && npm run dev`
+- **Database init** (first time only): `cd backend && source venv/bin/activate && python -c "from app.database import init_db; init_db()"`
+
+### Known gotchas
+
+- `apify-client` is a runtime dependency not listed in `requirements.txt` but needed by the scraper imports. Install it manually if the venv is recreated.
+- Frontend `npm install` requires `--legacy-peer-deps` due to a peer dependency conflict between `next@14.2.x` and `@cloudflare/next-on-pages`.
+- `next.config.js` has `output: 'export'` and `distDir: 'out'` set for production (Cloudflare Pages). The dev server (`npm run dev`) is unstable with these settings: it serves the first request to each route correctly, but subsequent requests often return 404 because the export cache conflicts with dev mode caching. **Always delete `out/` and `.next/` before starting the dev server**: `rm -rf out .next && npm run dev`. After a `next build`, the `out/` directory will contain stale export files that crash the dev server. The API proxy (`rewrites()`) only works with the dev server, not static export.
+- Pre-existing lint/TS errors exist in `dashboard/page.tsx`, `career/page.tsx`, and `pricing/page.tsx`. These are not blockers for development.
+- No automated test files exist yet. `pytest` is configured in `requirements.txt` but no `tests/` directory exists.
+
+### Lint and type checking
+
+- **Frontend lint**: `cd frontend && npx next lint`
+- **Frontend types**: `cd frontend && npx tsc --noEmit`
+- **Backend**: No linter configured; use `pytest` when test files exist.
