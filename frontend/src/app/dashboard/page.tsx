@@ -170,6 +170,11 @@ function DashboardPage() {
             setJobs(searchData.jobs || []);
           }
         }
+        const autoApplyRes = await authFetch('/api/v1/auto-apply/jobs');
+        if (autoApplyRes.ok) {
+          const autoApplyData = await autoApplyRes.json();
+          setSelectedJobs(new Set((autoApplyData.jobs || []).map((j: { id: number }) => j.id)));
+        }
       }
       const statsRes = await authFetch('/api/v1/applications/stats/summary');
       if (statsRes.ok) {
@@ -183,19 +188,49 @@ function DashboardPage() {
     }
   }
 
-  function toggleJobSelection(jobId: number) {
+  async function toggleJobSelection(jobId: number) {
+    const nextSelected = !selectedJobs.has(jobId);
     setSelectedJobs(prev => {
       const next = new Set(prev);
       if (next.has(jobId)) next.delete(jobId); else next.add(jobId);
       return next;
     });
+    try {
+      const res = nextSelected
+        ? await authFetch(`/api/v1/auto-apply/jobs/${jobId}`, { method: 'POST' })
+        : await authFetch(`/api/v1/auto-apply/jobs/${jobId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        setSelectedJobs(prev => {
+          const revert = new Set(prev);
+          if (nextSelected) revert.delete(jobId); else revert.add(jobId);
+          return revert;
+        });
+      }
+    } catch {
+      setSelectedJobs(prev => {
+        const revert = new Set(prev);
+        if (nextSelected) revert.delete(jobId); else revert.add(jobId);
+        return revert;
+      });
+    }
   }
 
-  function selectAll() {
-    if (selectedJobs.size === jobs.length) {
-      setSelectedJobs(new Set());
-    } else {
+  async function selectAll() {
+    const selectAll = selectedJobs.size !== jobs.length;
+    if (selectAll) {
       setSelectedJobs(new Set(jobs.map(j => j.id)));
+      for (const job of jobs) {
+        try {
+          await authFetch(`/api/v1/auto-apply/jobs/${job.id}`, { method: 'POST' });
+        } catch { /* ignore */ }
+      }
+    } else {
+      setSelectedJobs(new Set());
+      for (const job of jobs) {
+        try {
+          await authFetch(`/api/v1/auto-apply/jobs/${job.id}`, { method: 'DELETE' });
+        } catch { /* ignore */ }
+      }
     }
   }
 

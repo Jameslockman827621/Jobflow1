@@ -1,6 +1,6 @@
 // JobScale Background Service Worker
 
-const API_URL = 'http://localhost:8000/api/v1';
+const API_BASE = 'http://localhost:3000/api/v1';
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
@@ -19,6 +19,11 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'openDashboard') {
     chrome.tabs.create({ url: 'http://localhost:3000/dashboard' });
+  } else if (request.action === 'syncToken') {
+    chrome.storage.local.set({ jobscale_token: request.token }, () => {
+      sendResponse({ ok: true });
+    });
+    return true;
   }
 
   if (request.action === 'setToken') {
@@ -53,7 +58,7 @@ async function handleAutoApply(sendResponse) {
       return;
     }
 
-    const res = await fetch(`${API_URL}/applications/ready-to-apply`, {
+    const res = await fetch(`${API_BASE}/applications/ready-to-apply`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
 

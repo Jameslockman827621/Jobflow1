@@ -121,6 +121,29 @@ async def run_job_search(
     }
 
 
+@router.get("/jobs")
+async def get_cached_jobs(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get user's cached job search results (for extension popup).
+    Returns jobs from the most recent search. Does not run a new search.
+    """
+    cache = (
+        db.query(SearchCache)
+        .filter_by(user_id=current_user.id)
+        .order_by(SearchCache.created_at.desc())
+        .first()
+    )
+    if not cache or not cache.job_ids:
+        return {"jobs": [], "total": 0}
+
+    search_service = OnDemandSearchService(db)
+    jobs = search_service._fetch_jobs_by_ids(cache.job_ids)
+    return {"jobs": jobs, "total": len(jobs)}
+
+
 @router.get("/status")
 async def get_onboarding_status(
     db: Session = Depends(get_db),
