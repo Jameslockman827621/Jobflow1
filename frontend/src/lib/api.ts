@@ -67,6 +67,7 @@ class ApiClient {
         // Token expired or invalid - clear and redirect to login
         localStorage.removeItem('jobscale_token');
         localStorage.removeItem('jobscale_user');
+        localStorage.removeItem('token'); // legacy key
         if (typeof window !== 'undefined') {
           window.location.href = '/login';
         }

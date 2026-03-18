@@ -9,6 +9,7 @@ interface User {
   first_name?: string;
   last_name?: string;
   is_active: boolean;
+  is_verified?: boolean;
 }
 
 interface AuthContextType {
@@ -25,6 +26,13 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const TOKEN_KEY = 'jobscale_token';
 const USER_KEY = 'jobscale_user';
+const LEGACY_TOKEN_KEY = 'token';
+
+function getApiBase(): string {
+  return process.env.NEXT_PUBLIC_API_URL ||
+    (process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1` : null) ||
+    '/api/v1';
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -33,12 +41,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const loadUser = async () => {
-      const token = localStorage.getItem(TOKEN_KEY);
-      const storedUser = localStorage.getItem(USER_KEY);
+      const legacyToken = localStorage.getItem(LEGACY_TOKEN_KEY);
+      if (legacyToken && !localStorage.getItem(TOKEN_KEY)) {
+        localStorage.setItem(TOKEN_KEY, legacyToken);
+        localStorage.removeItem(LEGACY_TOKEN_KEY);
+      }
 
-      if (token && storedUser) {
+      const token = localStorage.getItem(TOKEN_KEY);
+
+      if (token) {
         try {
-          setUser(JSON.parse(storedUser));
+          const storedUser = localStorage.getItem(USER_KEY);
+          if (storedUser) {
+            setUser(JSON.parse(storedUser));
+          }
           await verifyToken(token);
         } catch (error) {
           console.error('Failed to load user:', error);
@@ -54,8 +70,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function verifyToken(token: string) {
+    const apiBase = getApiBase();
     try {
-      const response = await fetch('/api/v1/auth/me', {
+      const response = await fetch(`${apiBase}/auth/me`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
 
@@ -79,12 +96,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
     } catch (e) {
-      // Extension not installed, ignore
+      // Extension not installed
     }
   }
 
   async function login(email: string, password: string) {
-    const response = await fetch('/api/v1/auth/login', {
+    const apiBase = getApiBase();
+
+    const response = await fetch(`${apiBase}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ username: email, password }),
@@ -99,7 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(TOKEN_KEY, data.access_token);
     syncTokenToExtension(data.access_token);
 
-    const meRes = await fetch('/api/v1/auth/me', {
+    const meRes = await fetch(`${apiBase}/auth/me`, {
       headers: { 'Authorization': `Bearer ${data.access_token}` },
     });
 
@@ -113,7 +132,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function register(email: string, password: string, firstName: string, lastName: string) {
-    const response = await fetch('/api/v1/auth/register', {
+    const apiBase = getApiBase();
+
+    const response = await fetch(`${apiBase}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password, first_name: firstName, last_name: lastName }),
@@ -124,7 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(error.detail || 'Registration failed');
     }
 
-    const loginRes = await fetch('/api/v1/auth/login', {
+    const loginRes = await fetch(`${apiBase}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ username: email, password }),
@@ -136,7 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(TOKEN_KEY, loginData.access_token);
     syncTokenToExtension(loginData.access_token);
 
-    const meRes = await fetch('/api/v1/auth/me', {
+    const meRes = await fetch(`${apiBase}/auth/me`, {
       headers: { 'Authorization': `Bearer ${loginData.access_token}` },
     });
 
@@ -152,6 +173,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   function logout() {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+    localStorage.removeItem(LEGACY_TOKEN_KEY);
     syncTokenToExtension(null);
     setUser(null);
     router.push('/login');
