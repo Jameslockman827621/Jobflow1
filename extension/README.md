@@ -1,6 +1,13 @@
 # JobScale Chrome Extension
 
-Browser extension for one-click job applications with AI.
+Browser extension for auto-applying to jobs you've selected in your dashboard.
+
+## How It Works
+
+1. **Select jobs in dashboard**: On your JobScale dashboard, check "Auto-apply" on jobs you want to apply to
+2. **Visit job pages**: Browse LinkedIn, Indeed, Glassdoor, or company career pages
+3. **Auto-apply**: When you visit a job page that matches a selected job, the extension automatically starts the application (opens the job URL, creates application record)
+4. **Manual apply**: The "🚀 Apply with JobScale" button opens your dashboard for jobs not in your auto-apply list
 
 ## Installation (Development)
 
@@ -10,12 +17,11 @@ Browser extension for one-click job applications with AI.
 4. Select this `extension/` folder
 5. Extension icon should appear in toolbar
 
-## Usage
+## Setup
 
-1. **Login**: Click extension icon → Sign in to your JobScale account
-2. **Browse Jobs**: Visit LinkedIn, Indeed, Glassdoor, or company career pages
-3. **Apply**: Click the floating "🚀 Apply with JobScale" button or use extension popup
-4. **Track**: Applications are saved to your dashboard
+1. **Login**: Sign in at http://localhost:3000/login (or your JobScale URL)
+2. **Sync token**: Visit your dashboard at http://localhost:3000/dashboard - the extension syncs your auth token automatically
+3. **Select jobs**: Check "Auto-apply" on jobs you want the extension to apply to when you visit them
 
 ## Supported Sites
 
@@ -27,10 +33,10 @@ Browser extension for one-click job applications with AI.
 
 ## Features
 
-- ✨ One-click application from any job board
-- 🤖 AI tailors CV and cover letter automatically
+- ✨ Auto-apply when you visit job pages matching your dashboard selections
+- 📋 Select which jobs to auto-apply in the dashboard
+- 🤖 AI tailors CV and cover letter
 - 📊 Track all applications in one dashboard
-- 🔔 Get notified of interview requests
 
 ## Building for Production
 

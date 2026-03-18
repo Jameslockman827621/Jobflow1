@@ -16,7 +16,8 @@
     "https://*.greenhouse.io/*",
     "https://*.lever.co/*",
     "https://*.workable.com/*",
-    "http://localhost:3000/*"
+    "http://localhost:3000/*",
+    "http://localhost:8000/*"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -42,6 +43,10 @@
       ],
       "js": ["content.js"],
       "css": ["styles.css"]
+    },
+    {
+      "matches": ["http://localhost:3000/*"],
+      "js": ["dashboard-bridge.js"]
     }
   ],
   "icons": {

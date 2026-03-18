@@ -40,7 +40,7 @@ interface ApplicationPackage {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, loading: authLoading, logout } = useAuth();
+  const { user, loading: authLoading, logout, getToken } = useAuth();
   const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState<number | null>(null);
@@ -48,6 +48,7 @@ export default function DashboardPage() {
   const [currentApplication, setCurrentApplication] = useState<ApplicationPackage | null>(null);
   const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStatus | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [autoApplyJobIds, setAutoApplyJobIds] = useState<Set<number>>(new Set());
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -65,26 +66,35 @@ export default function DashboardPage() {
   async function loadDashboard() {
     try {
       setLoading(true);
-      
+      const token = getToken();
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+
       // Load onboarding status
-      const statusRes = await fetch('/api/v1/onboarding/status');
+      const statusRes = await fetch('/api/v1/onboarding/status', { headers });
       if (statusRes.ok) {
         const status = await statusRes.json();
         setOnboardingStatus(status);
-        
+
         // If onboarding not complete, redirect
         if (!status.onboarding_complete) {
           router.push('/onboarding');
           return;
         }
-        
+
         // If has cached jobs, load them
         if (status.has_cached_jobs && !status.cache?.is_expired) {
-          const searchRes = await fetch('/api/v1/onboarding/search');
+          const searchRes = await fetch('/api/v1/onboarding/search', { headers });
           if (searchRes.ok) {
             const searchData = await searchRes.json();
             setJobs(searchData.jobs || []);
           }
+        }
+
+        // Load auto-apply selections (for Chrome extension)
+        const autoApplyRes = await fetch('/api/v1/auto-apply/jobs', { headers });
+        if (autoApplyRes.ok) {
+          const autoApplyData = await autoApplyRes.json();
+          setAutoApplyJobIds(new Set((autoApplyData.jobs || []).map((j: { id: number }) => j.id)));
         }
       }
     } catch (err: any) {
@@ -99,9 +109,13 @@ export default function DashboardPage() {
     
     try {
       // Start application
+      const token = getToken();
       const res = await fetch('/api/v1/applications/start', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
         body: JSON.stringify({ job_id: job.id })
       });
 
@@ -145,10 +159,38 @@ export default function DashboardPage() {
     }
   }
 
+  async function toggleAutoApply(job: Job, enabled: boolean) {
+    const token = getToken();
+    const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+    try {
+      if (enabled) {
+        const res = await fetch(`/api/v1/auto-apply/jobs/${job.id}`, { method: 'POST', headers });
+        if (res.ok) {
+          setAutoApplyJobIds(prev => new Set([...prev, job.id]));
+          toast.success(`"${job.title}" added to auto-apply`);
+        } else throw new Error('Failed to add');
+      } else {
+        const res = await fetch(`/api/v1/auto-apply/jobs/${job.id}`, { method: 'DELETE', headers });
+        if (res.ok) {
+          setAutoApplyJobIds(prev => {
+            const next = new Set(prev);
+            next.delete(job.id);
+            return next;
+          });
+          toast.success(`"${job.title}" removed from auto-apply`);
+        } else throw new Error('Failed to remove');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update auto-apply');
+    }
+  }
+
   async function markAsSubmitted(applicationId: number) {
     try {
+      const token = getToken();
       const res = await fetch(`/api/v1/applications/${applicationId}/submit`, {
-        method: 'POST'
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
 
       if (res.ok) {
@@ -276,7 +318,17 @@ export default function DashboardPage() {
               {jobs.map((job) => (
                 <div key={job.id} className="p-4 sm:p-6 hover:bg-slate-50 transition-colors">
                   <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start space-y-3 sm:space-y-0">
-                    <div className="flex-1">
+                    <div className="flex-1 flex items-start gap-3">
+                      <label className="flex items-center gap-2 cursor-pointer shrink-0 mt-1" title="Auto-apply when you visit this job page (Chrome extension)">
+                        <input
+                          type="checkbox"
+                          checked={autoApplyJobIds.has(job.id)}
+                          onChange={(e) => toggleAutoApply(job, e.target.checked)}
+                          className="w-4 h-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                        />
+                        <span className="text-xs text-slate-500">Auto-apply</span>
+                      </label>
+                      <div>
                       <h3 className="text-base sm:text-lg font-semibold text-slate-900 mb-1">{job.title}</h3>
                       <p className="text-slate-600 text-sm sm:text-base mb-3">{job.company}</p>
                       <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-slate-500">
@@ -303,6 +355,7 @@ export default function DashboardPage() {
                             <span>£{job.max_salary.toLocaleString()}</span>
                           </span>
                         )}
+                      </div>
                       </div>
                     </div>
                     <button

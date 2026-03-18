@@ -1,6 +1,7 @@
 // JobScale Extension Popup
+// Uses chrome.storage for token (synced from dashboard via dashboard-bridge.js)
 
-const API_URL = 'http://localhost:8000/api/v1';
+const API_BASE = 'http://localhost:3000/api/v1';
 
 document.addEventListener('DOMContentLoaded', async () => {
   const loadingEl = document.getElementById('loading');
@@ -12,109 +13,103 @@ document.addEventListener('DOMContentLoaded', async () => {
   const loginBtn = document.getElementById('login-btn');
   const dashboardBtn = document.getElementById('dashboard-btn');
   const userEmailEl = document.getElementById('user-email');
-  
-  // Stats
+
   const statApplied = document.getElementById('stat-applied');
   const statInterviews = document.getElementById('stat-interviews');
   const statOffers = document.getElementById('stat-offers');
-  
+
   loadingEl.style.display = 'flex';
   loggedOutEl.classList.add('hidden');
   loggedInEl.classList.add('hidden');
-  
-  // Check if user is logged in
-  const token = localStorage.getItem('jobscale_token');
-  
+
+  // Get token from chrome.storage (synced from dashboard)
+  const { jobscale_token } = await chrome.storage.local.get('jobscale_token');
+  const token = jobscale_token;
+
   if (!token) {
     loadingEl.style.display = 'none';
     loggedOutEl.classList.remove('hidden');
   } else {
     try {
-      // Fetch user profile
-      const profileRes = await fetch(`${API_URL}/profile/me`, {
+      const profileRes = await fetch(`${API_BASE}/profile/me`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      
+
       if (!profileRes.ok) {
         throw new Error('Not authenticated');
       }
-      
+
       const profile = await profileRes.json();
       userEmailEl.textContent = profile.first_name || profile.email || 'User';
-      
-      // Fetch applications count
-      const appsRes = await fetch(`${API_URL}/applications/`, {
+
+      const appsRes = await fetch(`${API_BASE}/applications/`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      
+
       if (appsRes.ok) {
-        const applications = await appsRes.json();
+        const data = await appsRes.json();
+        const applications = data.applications || data;
         statApplied.textContent = applications.length;
-        statInterviews.textContent = applications.filter(a => a.stage === 'interviewing').length;
-        statOffers.textContent = applications.filter(a => a.status === 'offered').length;
+        statInterviews.textContent = applications.filter(a => a.stage === 'interviewing' || a.stage === 'phone_screen' || a.stage === 'technical' || a.stage === 'onsite').length;
+        statOffers.textContent = applications.filter(a => a.status === 'offered' || a.stage === 'offer').length;
       }
-      
+
       loadingEl.style.display = 'none';
       loggedInEl.classList.remove('hidden');
-      
+
       // Check if we're on a job page
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      const jobData = await chrome.tabs.sendMessage(tab.id, { action: 'getJobData' });
-      
+      let jobData = null;
+      try {
+        jobData = await chrome.tabs.sendMessage(tab.id, { action: 'getJobData' });
+      } catch (e) {
+        // Tab might not have content script (e.g. not a job board)
+      }
+
       if (jobData && jobData.title) {
         jobDetectedEl.classList.remove('hidden');
         jobInfoEl.textContent = `${jobData.title} at ${jobData.company}`;
         applyBtn.classList.remove('hidden');
-        
-        // Store job data for application
         chrome.storage.local.set({ currentJob: jobData });
       }
-      
     } catch (error) {
       console.error('Error:', error);
-      localStorage.removeItem('jobscale_token');
+      chrome.storage.local.remove('jobscale_token');
       loadingEl.style.display = 'none';
       loggedOutEl.classList.remove('hidden');
     }
   }
-  
-  // Event listeners
+
   loginBtn.addEventListener('click', () => {
     chrome.tabs.create({ url: 'http://localhost:3000/login' });
   });
-  
+
   dashboardBtn.addEventListener('click', () => {
     chrome.tabs.create({ url: 'http://localhost:3000/dashboard' });
   });
-  
+
   applyBtn.addEventListener('click', async () => {
-    const token = localStorage.getItem('jobscale_token');
-    if (!token) return;
-    
-    // Get current job data
+    const { jobscale_token } = await chrome.storage.local.get('jobscale_token');
+    if (!jobscale_token) return;
+
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const jobData = await chrome.tabs.sendMessage(tab.id, { action: 'getJobData' });
-    
+    let jobData = null;
+    try {
+      jobData = await chrome.tabs.sendMessage(tab.id, { action: 'getJobData' });
+    } catch (e) {}
+
     if (!jobData) {
-      alert('No job detected on this page');
+      alert('No job detected on this page. Select jobs in your dashboard for auto-apply.');
+      chrome.tabs.create({ url: 'http://localhost:3000/dashboard' });
       return;
     }
-    
+
     applyBtn.disabled = true;
-    applyBtn.textContent = '⏳ Applying...';
-    
-    try {
-      // First, we need to save this job to our database
-      // For now, open the dashboard to complete application
-      chrome.tabs.create({ 
-        url: `http://localhost:3000/dashboard?apply=${encodeURIComponent(JSON.stringify(jobData))}`
-      });
-    } catch (error) {
-      console.error('Error:', error);
-      alert('Failed to start application');
-    } finally {
-      applyBtn.disabled = false;
-      applyBtn.textContent = '✨ Apply with AI';
-    }
+    applyBtn.textContent = '⏳ Opening dashboard...';
+    chrome.tabs.create({
+      url: `http://localhost:3000/dashboard?apply=${encodeURIComponent(JSON.stringify(jobData))}`
+    });
+    applyBtn.disabled = false;
+    applyBtn.textContent = '✨ Apply with AI';
   });
 });

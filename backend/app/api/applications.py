@@ -1,12 +1,17 @@
 """
 Application Tracking API Routes
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
+from pydantic import BaseModel
 
 from app.database import get_db
+
+
+class StartApplicationRequest(BaseModel):
+    job_id: int
 from app.models.application import Application
 from app.models.job import Job
 from app.models.cv import CV
@@ -38,11 +43,12 @@ async def get_applications(
 
 @router.post("/start")
 async def start_application(
-    job_id: int,
+    body: StartApplicationRequest = Body(...),
     cv_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    job_id = body.job_id
     """
     Start a new application - generates application package
     
