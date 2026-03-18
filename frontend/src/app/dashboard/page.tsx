@@ -152,7 +152,7 @@ export default function DashboardPage() {
       });
 
       if (res.ok) {
-        toast.success('Application submitted! We'll track it for you.');
+        toast.success("Application submitted! We'll track it for you.");
         setShowApplicationModal(false);
         loadDashboard(); // Refresh stats
       } else {

@@ -1,15 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useAuth } from "@/lib/auth";
 
 export default function Login() {
-  const router = useRouter();
+  const { login, register } = useAuth();
   const [isRegister, setIsRegister] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  
+
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -22,57 +22,21 @@ export default function Login() {
     setLoading(true);
     setError("");
 
-    const apiUrl = process.env.API_URL || "http://localhost:8000/api/v1";
-
     try {
       if (isRegister) {
-        const res = await fetch(`${apiUrl}/auth/register`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formData),
+        await register({
+          email: formData.email,
+          password: formData.password,
+          first_name: formData.first_name,
+          last_name: formData.last_name,
         });
-
-        if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.detail || "Registration failed");
-        }
-
-        // Auto-login after registration
-        const loginRes = await fetch(`${apiUrl}/auth/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({
-            username: formData.email,
-            password: formData.password,
-          }),
-        });
-
-        if (!loginRes.ok) throw new Error("Login after registration failed");
-
-        const data = await loginRes.json();
-        localStorage.setItem("token", data.access_token);
-        router.push("/dashboard");
+        // register() redirects to /onboarding
       } else {
-        const res = await fetch(`${apiUrl}/auth/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({
-            username: formData.email,
-            password: formData.password,
-          }),
-        });
-
-        if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.detail || "Login failed");
-        }
-
-        const data = await res.json();
-        localStorage.setItem("token", data.access_token);
-        router.push("/dashboard");
+        await login(formData.email, formData.password);
+        // login() redirects to /dashboard
       }
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setLoading(false);
     }
@@ -166,6 +130,7 @@ export default function Login() {
 
           <div className="mt-6 text-center">
             <button
+              type="button"
               onClick={() => setIsRegister(!isRegister)}
               className="text-sm text-blue-600 hover:text-blue-500"
             >
