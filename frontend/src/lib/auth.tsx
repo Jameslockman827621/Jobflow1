@@ -6,26 +6,20 @@ import { useRouter } from 'next/navigation';
 interface User {
   id: number;
   email: string;
-  is_active: boolean;
-  is_verified?: boolean;
   first_name?: string;
   last_name?: string;
-}
-
-interface RegisterData {
-  email: string;
-  password: string;
-  first_name: string;
-  last_name: string;
+  is_active: boolean;
+  is_verified?: boolean;
 }
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (data: RegisterData) => Promise<void>;
+  register: (email: string, password: string, firstName: string, lastName: string) => Promise<void>;
   logout: () => void;
   getToken: () => string | null;
+  authFetch: (url: string, options?: RequestInit) => Promise<Response>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -34,15 +28,19 @@ const TOKEN_KEY = 'jobscale_token';
 const USER_KEY = 'jobscale_user';
 const LEGACY_TOKEN_KEY = 'token';
 
+function getApiBase(): string {
+  return process.env.NEXT_PUBLIC_API_URL ||
+    (process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1` : null) ||
+    '/api/v1';
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  // Load user from localStorage on mount
   useEffect(() => {
     const loadUser = async () => {
-      // Migrate from legacy "token" key if present
       const legacyToken = localStorage.getItem(LEGACY_TOKEN_KEY);
       if (legacyToken && !localStorage.getItem(TOKEN_KEY)) {
         localStorage.setItem(TOKEN_KEY, legacyToken);
@@ -72,19 +70,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function verifyToken(token: string) {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL ||
-      (process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1` : null) ||
-      '/api/v1';
+    const apiBase = getApiBase();
     try {
       const response = await fetch(`${apiBase}/auth/me`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Authorization': `Bearer ${token}` },
       });
 
-      if (!response.ok) {
-        throw new Error('Token invalid');
-      }
+      if (!response.ok) throw new Error('Token invalid');
 
       const userData = await response.json();
       setUser(userData);
@@ -94,10 +86,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  function syncTokenToExtension(token: string | null) {
+    try {
+      if (typeof window !== 'undefined' && (window as any).chrome?.runtime?.sendMessage) {
+        if (token) {
+          (window as any).chrome.runtime.sendMessage({ action: 'setToken', token });
+        } else {
+          (window as any).chrome.runtime.sendMessage({ action: 'clearToken' });
+        }
+      }
+    } catch (e) {
+      // Extension not installed
+    }
+  }
+
   async function login(email: string, password: string) {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL ||
-      (process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1` : null) ||
-      '/api/v1';
+    const apiBase = getApiBase();
 
     const response = await fetch(`${apiBase}/auth/login`, {
       method: 'POST',
@@ -112,29 +116,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const data = await response.json();
     localStorage.setItem(TOKEN_KEY, data.access_token);
+    syncTokenToExtension(data.access_token);
 
-    // Fetch user from /me (backend login only returns token)
     const meRes = await fetch(`${apiBase}/auth/me`, {
-      headers: { Authorization: `Bearer ${data.access_token}` },
+      headers: { 'Authorization': `Bearer ${data.access_token}` },
     });
+
     if (meRes.ok) {
       const userData = await meRes.json();
-      localStorage.setItem(USER_KEY, JSON.stringify(userData));
       setUser(userData);
+      localStorage.setItem(USER_KEY, JSON.stringify(userData));
     }
 
     router.push('/dashboard');
   }
 
-  async function register(data: RegisterData) {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL ||
-      (process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1` : null) ||
-      '/api/v1';
+  async function register(email: string, password: string, firstName: string, lastName: string) {
+    const apiBase = getApiBase();
 
     const response = await fetch(`${apiBase}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+      body: JSON.stringify({ email, password, first_name: firstName, last_name: lastName }),
     });
 
     if (!response.ok) {
@@ -142,25 +145,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(error.detail || 'Registration failed');
     }
 
-    // Backend register doesn't return token - auto-login
     const loginRes = await fetch(`${apiBase}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ username: data.email, password: data.password }),
+      body: new URLSearchParams({ username: email, password }),
     });
 
-    if (!loginRes.ok) throw new Error('Login after registration failed');
+    if (!loginRes.ok) throw new Error('Auto-login failed');
 
     const loginData = await loginRes.json();
     localStorage.setItem(TOKEN_KEY, loginData.access_token);
+    syncTokenToExtension(loginData.access_token);
 
     const meRes = await fetch(`${apiBase}/auth/me`, {
-      headers: { Authorization: `Bearer ${loginData.access_token}` },
+      headers: { 'Authorization': `Bearer ${loginData.access_token}` },
     });
+
     if (meRes.ok) {
       const userData = await meRes.json();
-      localStorage.setItem(USER_KEY, JSON.stringify(userData));
       setUser(userData);
+      localStorage.setItem(USER_KEY, JSON.stringify(userData));
     }
 
     router.push('/onboarding');
@@ -170,6 +174,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
     localStorage.removeItem(LEGACY_TOKEN_KEY);
+    syncTokenToExtension(null);
     setUser(null);
     router.push('/login');
   }
@@ -178,16 +183,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return localStorage.getItem(TOKEN_KEY);
   }
 
+  async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+    const token = localStorage.getItem(TOKEN_KEY);
+    const headers = new Headers(options.headers || {});
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+    if (!headers.has('Content-Type') && options.body && typeof options.body === 'string') {
+      headers.set('Content-Type', 'application/json');
+    }
+    return fetch(url, { ...options, headers });
+  }
+
   return (
     <AuthContext.Provider
-      value={{
-        user,
-        loading,
-        login,
-        register,
-        logout,
-        getToken,
-      }}
+      value={{ user, loading, login, register, logout, getToken, authFetch }}
     >
       {children}
     </AuthContext.Provider>

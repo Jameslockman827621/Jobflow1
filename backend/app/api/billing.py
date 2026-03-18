@@ -22,12 +22,12 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.security import get_current_user
 from app.models.user import User
-from app.database import SessionLocal
+from app.database import SessionLocal, get_db
 
 router = APIRouter()
 
 # Stripe setup (use environment variable in production)
-stripe.api_key = settings.OPENAI_API_KEY  # TODO: Add STRIPE_SECRET_KEY to config
+stripe.api_key = settings.STRIPE_SECRET_KEY or "sk_test_placeholder"
 
 # Plan IDs (replace with actual Stripe product IDs)
 PLAN_IDS = {
@@ -104,13 +104,9 @@ async def create_portal_session(
 @router.get("/subscription", response_model=SubscriptionResponse)
 async def get_subscription(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(lambda: SessionLocal()),
+    db: Session = Depends(get_db),
 ):
     """Get current user's subscription status"""
-    # In production, fetch from Stripe using customer_id
-    # For now, return free tier
-    
-    # Count applications this month
     from app.models.application import Application
     from datetime import datetime
     
@@ -120,26 +116,27 @@ async def get_subscription(
         Application.created_at >= month_start,
     ).count()
     
+    plan = current_user.subscription_plan or "free"
+    limit = {"free": 5, "pro": 999, "premium": 999}.get(plan, 5)
+    
     return SubscriptionResponse(
-        status="active",  # Would check Stripe in production
-        plan="free",
-        current_period_end=None,
+        status=current_user.subscription_status or "active",
+        plan=plan,
+        current_period_end=current_user.subscription_end.isoformat() if current_user.subscription_end else None,
         applications_used=apps_count,
-        applications_limit=5,  # Free tier limit
+        applications_limit=limit,
     )
 
 
 @router.post("/webhook")
-async def stripe_webhook(
-    request: Request,
-    stripe_signature: str,
-):
+async def stripe_webhook(request: Request):
     """Handle Stripe webhooks"""
     payload = await request.body()
+    stripe_signature = request.headers.get("Stripe-Signature", "")
     
     try:
         event = stripe.Webhook.construct_event(
-            payload, stripe_signature, settings.OPENAI_API_KEY  # TODO: Use webhook secret
+            payload, stripe_signature, settings.STRIPE_WEBHOOK_SECRET or "whsec_placeholder"
         )
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid payload")
@@ -149,9 +146,19 @@ async def stripe_webhook(
     # Handle events
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
-        # Activate subscription for user
         user_id = session.get("metadata", {}).get("user_id")
-        # TODO: Update user's subscription in database
+        plan = session.get("metadata", {}).get("plan", "pro")
+        if user_id:
+            db = SessionLocal()
+            try:
+                user = db.query(User).filter(User.id == int(user_id)).first()
+                if user:
+                    user.subscription_plan = plan.split("_")[0]  # "pro_monthly" -> "pro"
+                    user.subscription_status = "active"
+                    user.stripe_customer_id = session.get("customer")
+                    db.commit()
+            finally:
+                db.close()
     
     elif event["type"] == "customer.subscription.deleted":
         # Downgrade to free tier
@@ -163,7 +170,7 @@ async def stripe_webhook(
 @router.get("/usage")
 async def get_usage(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(lambda: SessionLocal()),
+    db: Session = Depends(get_db),
 ):
     """Get application usage stats"""
     from app.models.application import Application
@@ -194,5 +201,5 @@ async def get_usage(
         "total_applications": total_apps,
         "interviews": interviews,
         "interview_rate": f"{interview_rate}%",
-        "plan": "free",  # Would check subscription in production
+        "plan": current_user.subscription_plan or "free",
     }

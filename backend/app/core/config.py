@@ -29,6 +29,21 @@ class Settings(BaseSettings):
     REQUEST_DELAY_MS: int = 1000
     APIFY_API_KEY: Optional[str] = None
     
+    # Email
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    FROM_EMAIL: str = "noreply@jobscale.local"
+    SENDGRID_API_KEY: Optional[str] = None
+    
+    # Stripe
+    STRIPE_SECRET_KEY: Optional[str] = None
+    STRIPE_WEBHOOK_SECRET: Optional[str] = None
+    
+    # App URLs
+    APP_URL: str = "http://localhost:3000"
+    
     # CORS
     CORS_ORIGINS: List[str] = ["http://localhost:3000"]
     

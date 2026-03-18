@@ -16,6 +16,15 @@ class User(Base, TimestampMixin):
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
     
+    stripe_customer_id = Column(String, nullable=True)
+    subscription_plan = Column(String, default="free")
+    subscription_status = Column(String, default="active")
+    subscription_end = Column(DateTime, nullable=True)
+    email_alerts_enabled = Column(Boolean, default=True)
+    alert_frequency = Column(String, default="daily")
+    current_salary = Column(Integer, nullable=True)
+    is_employed = Column(Boolean, default=False)
+    
     # Relationships
     profile = relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
     preferences = relationship("UserPreferences", back_populates="user", uselist=False, cascade="all, delete-orphan")
