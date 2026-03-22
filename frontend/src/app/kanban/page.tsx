@@ -9,11 +9,13 @@ interface Application {
   id: number;
   job_id: number;
   status: string;
-  job: {
+  stage: string;
+  job?: {
     title: string;
     company: string;
     location: string;
-  };
+    external_url?: string;
+  } | null;
 }
 
 function ClipboardIcon({ className }: { className?: string }) {
@@ -81,14 +83,14 @@ function LocationIcon({ className }: { className?: string }) {
   );
 }
 
-const STAGES: { id: string; name: string; icon: React.FC<{ className?: string }> }[] = [
-  { id: 'wishlist', name: 'Wishlist', icon: ClipboardIcon },
-  { id: 'applied', name: 'Applied', icon: EnvelopeIcon },
-  { id: 'phone_screen', name: 'Phone', icon: PhoneIcon },
-  { id: 'technical', name: 'Technical', icon: CodeIcon },
-  { id: 'onsite', name: 'Onsite', icon: BuildingIcon },
-  { id: 'offer', name: 'Offer', icon: TrophyIcon },
-  { id: 'rejected', name: 'Rejected', icon: XCircleIcon },
+const STAGES: { id: string; name: string; icon: React.FC<{ className?: string }>; matchStages: string[] }[] = [
+  { id: 'wishlist', name: 'Wishlist', icon: ClipboardIcon, matchStages: ['not_started', 'wishlist'] },
+  { id: 'applied', name: 'Applied', icon: EnvelopeIcon, matchStages: ['applied'] },
+  { id: 'phone_screen', name: 'Phone', icon: PhoneIcon, matchStages: ['phone_screen'] },
+  { id: 'technical', name: 'Technical', icon: CodeIcon, matchStages: ['technical'] },
+  { id: 'onsite', name: 'Onsite', icon: BuildingIcon, matchStages: ['onsite'] },
+  { id: 'offer', name: 'Offer', icon: TrophyIcon, matchStages: ['offer'] },
+  { id: 'rejected', name: 'Rejected', icon: XCircleIcon, matchStages: ['rejected'] },
 ];
 
 const STAGE_COLORS: Record<string, string> = {
@@ -125,7 +127,7 @@ export default function KanbanPage() {
       const response = await authFetch('/api/v1/applications');
       if (response.ok) {
         const data = await response.json();
-        setApplications(data);
+        setApplications(data.applications || (Array.isArray(data) ? data : []));
       }
     } catch (err) {
       console.error('Failed to load applications:', err);
@@ -173,7 +175,7 @@ export default function KanbanPage() {
         <div className="flex gap-2 min-w-max">
           {STAGES.map((stage) => {
             const StageIcon = stage.icon;
-            const stageApps = applications.filter(app => app.status === stage.id);
+            const stageApps = applications.filter(app => stage.matchStages.includes(app.stage || app.status));
             return (
               <div
                 key={stage.id}
@@ -193,7 +195,7 @@ export default function KanbanPage() {
         <div className="flex gap-4 overflow-x-auto pb-4">
           {STAGES.map((stage) => {
             const StageIcon = stage.icon;
-            const stageApps = applications.filter(app => app.status === stage.id);
+            const stageApps = applications.filter(app => stage.matchStages.includes(app.stage || app.status));
 
             return (
               <div key={stage.id} className="flex-shrink-0 w-72 bg-slate-100 rounded-xl p-3">
@@ -213,11 +215,11 @@ export default function KanbanPage() {
                       key={app.id}
                       className="bg-white rounded-lg p-3.5 shadow-sm hover:shadow-md transition-shadow cursor-pointer border border-slate-100"
                     >
-                      <h3 className="font-semibold text-slate-900 text-sm leading-snug">{app.job.title}</h3>
-                      <p className="text-sm text-slate-500 mt-1">{app.job.company}</p>
+                      <h3 className="font-semibold text-slate-900 text-sm leading-snug">{app.job?.title || 'Untitled'}</h3>
+                      <p className="text-sm text-slate-500 mt-1">{app.job?.company || 'Unknown'}</p>
                       <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
                         <LocationIcon className="w-3 h-3" />
-                        <span>{app.job.location}</span>
+                        <span>{app.job?.location || ''}</span>
                       </p>
                     </div>
                   ))}
@@ -250,7 +252,7 @@ export default function KanbanPage() {
       <div className="md:hidden space-y-4">
         {STAGES.map((stage) => {
           const StageIcon = stage.icon;
-          const stageApps = applications.filter(app => app.status === stage.id);
+          const stageApps = applications.filter(app => stage.matchStages.includes(app.stage || app.status));
 
           if (stageApps.length === 0) return null;
 
@@ -272,11 +274,11 @@ export default function KanbanPage() {
                     key={app.id}
                     className="p-4 hover:bg-slate-50 transition-colors cursor-pointer"
                   >
-                    <h3 className="font-semibold text-slate-900 text-base">{app.job.title}</h3>
-                    <p className="text-sm text-slate-500 mt-1">{app.job.company}</p>
+                    <h3 className="font-semibold text-slate-900 text-base">{app.job?.title || 'Untitled'}</h3>
+                    <p className="text-sm text-slate-500 mt-1">{app.job?.company || 'Unknown'}</p>
                     <div className="mt-2 flex items-center text-xs text-slate-400 gap-1">
                       <LocationIcon className="w-3 h-3" />
-                      <span>{app.job.location}</span>
+                      <span>{app.job?.location || ''}</span>
                     </div>
                   </div>
                 ))}

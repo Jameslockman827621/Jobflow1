@@ -35,10 +35,34 @@ async def get_applications(
         query = query.filter(Application.status == status)
     
     applications = query.order_by(Application.created_at.desc()).all()
-    
+
+    result = []
+    for app in applications:
+        job = db.query(Job).filter(Job.id == app.job_id).first()
+        result.append({
+            "id": app.id,
+            "job_id": app.job_id,
+            "cv_id": app.cv_id,
+            "status": app.status,
+            "stage": app.stage,
+            "applied_via": app.applied_via,
+            "submitted_at": app.submitted_at.isoformat() if app.submitted_at else None,
+            "created_at": app.created_at.isoformat() if app.created_at else None,
+            "internal_notes": app.internal_notes,
+            "interview_count": app.interview_count,
+            "outcome": app.outcome,
+            "confidence_score": app.confidence_score,
+            "job": {
+                "title": job.title if job else "Unknown",
+                "company": job.company if job else "Unknown",
+                "location": job.location if job else "",
+                "external_url": job.external_url if job else "",
+            } if job else None,
+        })
+
     return {
-        "applications": applications,
-        "total": len(applications)
+        "applications": result,
+        "total": len(result)
     }
 
 
