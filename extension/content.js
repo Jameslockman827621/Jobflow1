@@ -26,7 +26,8 @@
       cursor: pointer;
       box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
     `;
-    button.onclick = () => window.open('http://localhost:3000/dashboard', '_blank');
+    const dashboardUrl = 'http://localhost:3000/dashboard';
+    button.onclick = () => window.open(dashboardUrl, '_blank');
     document.body.appendChild(button);
   }
 

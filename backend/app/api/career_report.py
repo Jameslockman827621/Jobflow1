@@ -46,19 +46,19 @@ async def get_salary_insights(
     current_user: User = Depends(get_current_user),
 ):
     """Get salary market insights"""
-    from app.services.salary_alerts import SalaryUpgradeService
+    from app.services.salary_alerts import SalaryAlertService
     from app.models.profile import UserProfile
     
     profile = db.query(UserProfile).filter(UserProfile.user_id == current_user.id).first()
-    service = SalaryUpgradeService(db)
-    insights = service.get_market_salary_insights(current_user, profile)
+    service = SalaryAlertService(db)
+    report = service.generate_salary_report(current_user)
     
     upgrades = []
-    if current_user.current_salary and profile:
-        upgrades = service.find_salary_upgrades(current_user, profile)
+    if current_user.current_salary:
+        upgrades = service.find_salary_upgrades(current_user)
     
     return {
-        "insights": insights,
+        "insights": report,
         "upgrades": upgrades[:5],
         "is_employed": current_user.is_employed,
         "current_salary": current_user.current_salary,

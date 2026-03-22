@@ -313,7 +313,7 @@ export default function PricingPage() {
                   </p>
 
                   <div className="mb-8">
-                    <span className="text-5xl font-bold tracking-tight">${displayPrice}</span>
+                    <span className="text-5xl font-bold tracking-tight">£{displayPrice}</span>
                     {plan.price > 0 && (
                       <span className={`text-sm ml-1 ${plan.highlighted ? 'text-slate-400' : 'text-slate-500'}`}>
                         /{plan.period}

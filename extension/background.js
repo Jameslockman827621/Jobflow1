@@ -1,6 +1,7 @@
 // JobScale Background Service Worker
 
-const API_BASE = 'http://localhost:3000/api/v1';
+const DASHBOARD_URL = 'http://localhost:3000';
+const API_BASE = `${DASHBOARD_URL}/api/v1`;
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
@@ -12,13 +13,13 @@ chrome.runtime.onInstalled.addListener(() => {
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === 'apply-with-jobscale') {
-    chrome.tabs.create({ url: 'http://localhost:3000/dashboard' });
+    chrome.tabs.create({ url: `${DASHBOARD_URL}/dashboard` });
   }
 });
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'openDashboard') {
-    chrome.tabs.create({ url: 'http://localhost:3000/dashboard' });
+    chrome.tabs.create({ url: `${DASHBOARD_URL}/dashboard` });
   } else if (request.action === 'syncToken') {
     chrome.storage.local.set({ jobscale_token: request.token }, () => {
       sendResponse({ ok: true });

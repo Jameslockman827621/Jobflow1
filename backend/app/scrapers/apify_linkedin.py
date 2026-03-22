@@ -158,7 +158,7 @@ class ApifyLinkedInScraper(BaseScraper):
         params.append("position=1")
         params.append("pageNum=0")
         
-        return base + "?".join([params[0], "&".join(params[1:])])
+        return base + "?" + "&".join(params)
     
     def _parse_job(self, job_data: dict) -> Optional[JobData]:
         """

@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth";
 
 export default function ReviewsPage() {
   const router = useRouter();
+  const { authFetch, logout, user, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [token, setToken] = useState<string | null>(null);
   const [companies, setCompanies] = useState<any[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
   const [reviews, setReviews] = useState<any>(null);
@@ -20,20 +21,17 @@ export default function ReviewsPage() {
   });
 
   useEffect(() => {
-    const storedToken = localStorage.getItem("token");
-    if (!storedToken) {
+    if (authLoading) return;
+    if (!user) {
       router.push("/login");
       return;
     }
-    setToken(storedToken);
-    fetchCompanies(storedToken);
-  }, [router]);
+    fetchCompanies();
+  }, [authLoading, user, router]);
 
-  const fetchCompanies = async (authToken: string) => {
+  const fetchCompanies = async () => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"}/reviews/companies`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
+      const res = await authFetch("/reviews/companies");
       if (res.ok) {
         const data = await res.json();
         setCompanies(data.companies || []);
@@ -47,9 +45,7 @@ export default function ReviewsPage() {
 
   const fetchCompanyReviews = async (companyName: string) => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"}/reviews/company/${encodeURIComponent(companyName)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await authFetch(`/reviews/company/${encodeURIComponent(companyName)}`);
       if (res.ok) {
         const data = await res.json();
         setReviews(data);
@@ -61,15 +57,11 @@ export default function ReviewsPage() {
 
   const handleSubmitReview = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token) return;
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"}/reviews/company`, {
+      const res = await authFetch("/reviews/company", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       });
 
@@ -77,7 +69,7 @@ export default function ReviewsPage() {
         alert("Review submitted!");
         setShowForm(false);
         setFormData({ company_name: "", overall_rating: 5, title: "", pros: "", cons: "" });
-        fetchCompanies(token);
+        fetchCompanies();
       }
     } catch (error) {
       console.error("Error submitting review:", error);
@@ -85,8 +77,7 @@ export default function ReviewsPage() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    router.push("/");
+    logout();
   };
 
   if (loading) {
@@ -97,14 +88,23 @@ export default function ReviewsPage() {
     );
   }
 
-  // Mock data for demo
-  const companyList = [
+  const defaultCompanies = [
     { name: "Stripe", rating: 4.5, reviews: 127, color: "bg-navy-900", location: "Fintech • San Francisco" },
     { name: "Airbnb", rating: 4.2, reviews: 89, color: "bg-red-500", location: "Travel • San Francisco" },
     { name: "GitLab", rating: 4.0, reviews: 56, color: "bg-orange-500", location: "DevTools • Remote" },
     { name: "Figma", rating: 4.3, reviews: 42, color: "bg-blue-500", location: "Design • San Francisco" },
     { name: "Monzo", rating: 3.8, reviews: 31, color: "bg-slate-800", location: "Fintech • London" },
   ];
+  const colorPalette = ["bg-navy-900", "bg-red-500", "bg-orange-500", "bg-blue-500", "bg-slate-800", "bg-teal-500", "bg-purple-500"];
+  const companyList = companies.length > 0
+    ? companies.map((c: any, i: number) => ({
+        name: c.name,
+        rating: c.avg_rating || 0,
+        reviews: c.review_count || 0,
+        color: colorPalette[i % colorPalette.length],
+        location: "",
+      }))
+    : defaultCompanies;
 
   const reviewData = {
     name: "Stripe",
@@ -157,7 +157,7 @@ export default function ReviewsPage() {
       backgroundImage: 'linear-gradient(to right, rgba(148, 163, 184, 0.08) 1px, transparent 1px), linear-gradient(to bottom, rgba(148, 163, 184, 0.08) 1px, transparent 1px)',
       backgroundSize: '32px 32px'
     }}>
-      <Navbar onLogout={handleLogout} />
+      <Navbar user={user} onLogout={handleLogout} />
 
       <main className="pt-28 pb-16">
         <div className="max-w-7xl mx-auto px-6">
@@ -454,9 +454,10 @@ export default function ReviewsPage() {
   );
 }
 
-function Navbar({ onLogout }: { onLogout: () => void }) {
-  const router = useRouter();
-  
+function Navbar({ user, onLogout }: { user: any; onLogout: () => void }) {
+  const initials = user ? `${(user.first_name || "U")[0]}${(user.last_name || "")[0] || ""}`.toUpperCase() : "U";
+  const displayName = user ? `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.email : "User";
+
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-b border-slate-200">
       <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
@@ -474,9 +475,10 @@ function Navbar({ onLogout }: { onLogout: () => void }) {
           <a href="/analytics" className="text-sm text-slate-600 hover:text-navy-900 transition-colors">Analytics</a>
           <div className="w-px h-6 bg-slate-200"></div>
           <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-full bg-teal-500 flex items-center justify-center text-white font-semibold text-sm">JD</div>
-            <span className="text-sm font-medium text-navy-900">John Doe</span>
+            <div className="w-9 h-9 rounded-full bg-teal-500 flex items-center justify-center text-white font-semibold text-sm">{initials}</div>
+            <span className="text-sm font-medium text-navy-900">{displayName}</span>
           </div>
+          <button onClick={onLogout} className="text-sm text-slate-500 hover:text-red-600 transition-colors">Logout</button>
         </div>
       </div>
     </nav>

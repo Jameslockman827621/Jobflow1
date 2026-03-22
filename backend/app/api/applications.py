@@ -15,7 +15,7 @@ from app.models.user import User
 from app.api.auth import get_current_user
 from app.tasks.notifications import send_application_confirmation_task
 
-router = APIRouter(prefix="/api/v1/applications", tags=["Applications"])
+router = APIRouter(tags=["Applications"])
 
 
 class StartApplicationRequest(BaseModel):
@@ -171,7 +171,7 @@ async def get_ready_to_apply(
         if job:
             results.append({"application_id": app.id, "job_id": job.id,
                 "job_title": job.title, "company": job.company,
-                "job_url": job.external_url, "source": job.source,
+                "job_url": job.external_url, "source": job.source.name if job.source else "unknown",
                 "cv_download_url": f"/api/v1/cvs/{app.cv_id}/export"})
     return {"applications": results, "total": len(results)}
 

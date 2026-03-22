@@ -8,7 +8,7 @@ Replaces continuous background scraping with just-in-time searches.
 import asyncio
 import time
 from typing import List, Dict, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 

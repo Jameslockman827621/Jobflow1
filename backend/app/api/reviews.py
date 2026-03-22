@@ -22,17 +22,9 @@ from sqlalchemy import func
 
 from app.core.security import get_current_user
 from app.models.user import User
-from app.database import SessionLocal
+from app.database import get_db
 
 router = APIRouter()
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 class CompanyReviewCreate(BaseModel):
@@ -181,12 +173,12 @@ async def get_company_reviews(
     
     # Calculate averages
     avg_ratings = db.query(
-        avg(CompanyReview.overall_rating),
-        avg(CompanyReview.work_life_balance),
-        avg(CompanyReview.culture_rating),
-        avg(CompanyReview.compensation_rating),
-        avg(CompanyReview.career_opportunities),
-        avg(CompanyReview.management_rating),
+        func.avg(CompanyReview.overall_rating),
+        func.avg(CompanyReview.work_life_balance),
+        func.avg(CompanyReview.culture_rating),
+        func.avg(CompanyReview.compensation_rating),
+        func.avg(CompanyReview.career_opportunities),
+        func.avg(CompanyReview.management_rating),
     ).filter(
         CompanyReview.company_name.ilike(f"%{company_name}%")
     ).first()
@@ -283,7 +275,7 @@ async def get_companies_with_reviews(
     companies = db.query(
         CompanyReview.company_name,
         func.count(CompanyReview.id).label("review_count"),
-        avg(CompanyReview.overall_rating).label("avg_rating"),
+        func.avg(CompanyReview.overall_rating).label("avg_rating"),
     ).group_by(CompanyReview.company_name).order_by(
         func.count(CompanyReview.id).desc()
     ).limit(limit).all()
@@ -315,9 +307,9 @@ async def get_interview_reviews(
     
     # Calculate averages
     avg_stats = db.query(
-        avg(InterviewReview.experience_rating),
-        avg(InterviewReview.difficulty_rating),
-        avg(InterviewReview.process_duration_days),
+        func.avg(InterviewReview.experience_rating),
+        func.avg(InterviewReview.difficulty_rating),
+        func.avg(InterviewReview.process_duration_days),
     ).filter(
         InterviewReview.company_name.ilike(f"%{company_name}%")
     ).first()

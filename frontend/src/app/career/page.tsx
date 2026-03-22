@@ -2,29 +2,27 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth";
 
 export default function CareerPathingPage() {
   const router = useRouter();
+  const { authFetch, logout, user, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [token, setToken] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<"analysis" | "goals" | "recommendations">("analysis");
 
   useEffect(() => {
-    const storedToken = localStorage.getItem("token");
-    if (!storedToken) {
+    if (authLoading) return;
+    if (!user) {
       router.push("/login");
       return;
     }
-    setToken(storedToken);
-    fetchAnalysis(storedToken);
-  }, [router]);
+    fetchAnalysis();
+  }, [authLoading, user, router]);
 
-  const fetchAnalysis = async (authToken: string) => {
+  const fetchAnalysis = async () => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"}/career/analysis`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
+      const res = await authFetch("/career/analysis");
       if (res.ok) {
         const data = await res.json();
         setAnalysis(data);
@@ -37,8 +35,7 @@ export default function CareerPathingPage() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    router.push("/");
+    logout();
   };
 
   if (loading) {
@@ -55,7 +52,7 @@ export default function CareerPathingPage() {
         backgroundImage: 'linear-gradient(to right, rgba(148, 163, 184, 0.08) 1px, transparent 1px), linear-gradient(to bottom, rgba(148, 163, 184, 0.08) 1px, transparent 1px)',
         backgroundSize: '32px 32px'
       }}>
-        <Navbar token={token} onLogout={handleLogout} />
+        <Navbar user={user} onLogout={handleLogout} />
         <div className="max-w-4xl mx-auto py-16 px-6 text-center">
           <h1 className="text-4xl font-bold text-navy-900 mb-4">Complete Your Profile First</h1>
           <p className="text-lg text-slate-600 mb-8">
@@ -91,7 +88,7 @@ export default function CareerPathingPage() {
       backgroundImage: 'linear-gradient(to right, rgba(148, 163, 184, 0.08) 1px, transparent 1px), linear-gradient(to bottom, rgba(148, 163, 184, 0.08) 1px, transparent 1px)',
       backgroundSize: '32px 32px'
     }}>
-      <Navbar token={token} onLogout={handleLogout} />
+      <Navbar user={user} onLogout={handleLogout} />
 
       <main className="pt-28 pb-16">
         <div className="max-w-7xl mx-auto px-6">
@@ -282,10 +279,10 @@ export default function CareerPathingPage() {
   );
 }
 
-// Simple Navbar component for this page
-function Navbar({ token, onLogout }: { token: string | null; onLogout: () => void }) {
-  const router = useRouter();
-  
+function Navbar({ user, onLogout }: { user: any; onLogout: () => void }) {
+  const initials = user ? `${(user.first_name || "U")[0]}${(user.last_name || "")[0] || ""}`.toUpperCase() : "U";
+  const displayName = user ? `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.email : "User";
+
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-b border-slate-200">
       <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
@@ -303,9 +300,10 @@ function Navbar({ token, onLogout }: { token: string | null; onLogout: () => voi
           <a href="/reviews" className="text-sm text-slate-600 hover:text-navy-900 transition-colors">Reviews</a>
           <div className="w-px h-6 bg-slate-200"></div>
           <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-full bg-teal-500 flex items-center justify-center text-white font-semibold text-sm">JD</div>
-            <span className="text-sm font-medium text-navy-900">John Doe</span>
+            <div className="w-9 h-9 rounded-full bg-teal-500 flex items-center justify-center text-white font-semibold text-sm">{initials}</div>
+            <span className="text-sm font-medium text-navy-900">{displayName}</span>
           </div>
+          <button onClick={onLogout} className="text-sm text-slate-500 hover:text-red-600 transition-colors">Logout</button>
         </div>
       </div>
     </nav>

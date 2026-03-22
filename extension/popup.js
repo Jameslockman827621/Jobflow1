@@ -1,7 +1,8 @@
 // JobScale Extension Popup
 // User selects jobs in extension → clicks Apply → extension opens each URL and starts application
 
-const API_BASE = 'http://localhost:3000/api/v1';
+const DASHBOARD_URL = 'http://localhost:3000';
+const API_BASE = `${DASHBOARD_URL}/api/v1`;
 
 document.addEventListener('DOMContentLoaded', async () => {
   const loadingEl = document.getElementById('loading');
@@ -172,11 +173,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   loginBtn.addEventListener('click', () => {
-    chrome.tabs.create({ url: 'http://localhost:3000/login' });
+    chrome.tabs.create({ url: `${DASHBOARD_URL}/login` });
   });
 
   dashboardBtn.addEventListener('click', () => {
-    chrome.tabs.create({ url: 'http://localhost:3000/dashboard' });
+    chrome.tabs.create({ url: `${DASHBOARD_URL}/dashboard` });
   });
 });
 
