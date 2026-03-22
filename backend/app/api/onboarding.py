@@ -46,19 +46,16 @@ async def submit_preferences(
         "employment_types": ["FULL_TIME"]
     }
     """
-    # Check if preferences already exist
     existing = db.query(UserPreferences).filter_by(
-        user_id=current_user.id,
-        is_active=True
+        user_id=current_user.id
     ).first()
     
     if existing:
-        # Update existing preferences
         for key, value in preferences_data.items():
             if hasattr(existing, key):
                 setattr(existing, key, value)
+        existing.is_active = True
     else:
-        # Create new preferences
         existing = UserPreferences.from_dict(preferences_data, current_user.id)
         db.add(existing)
     

@@ -130,6 +130,9 @@ class OnDemandSearchService:
         # Deduplicate
         jobs = self._deduplicate_jobs(jobs)
 
+        # Collect source stats before _save_jobs pops _source keys
+        sources_used = self._get_sources_used(jobs)
+
         # Save jobs to database
         job_ids = self._save_jobs(jobs)
 
@@ -153,7 +156,7 @@ class OnDemandSearchService:
             "total": len(job_objects),
             "cache": cache.to_dict(),
             "search_duration_ms": search_duration_ms,
-            "sources_used": self._get_sources_used(jobs)
+            "sources_used": sources_used
         }
     
     def _get_cached_search(self, user_id: int, preferences: UserPreferences) -> Optional[SearchCache]:
@@ -475,29 +478,54 @@ class OnDemandSearchService:
             src = sources.get(source_name) or default_source
             source_id = src.id
             
-            job = Job(
-                source_id=source_id,
-                external_id=job_data.get("external_id", ""),
-                external_url=job_data.get("external_url", ""),
-                title=job_data.get("title", ""),
-                company=job_data.get("company", ""),
-                location=job_data.get("location", ""),
-                remote=job_data.get("remote", False),
-                hybrid=job_data.get("hybrid", False),
-                description=job_data.get("description", ""),
-                department=job_data.get("department", ""),
-                seniority=job_data.get("seniority", ""),
-                min_salary=job_data.get("min_salary"),
-                max_salary=job_data.get("max_salary"),
-                scraped_at=datetime.utcnow(),
-                posted_date=job_data.get("posted_date"),
-                is_active=True
-            )
-            
-            self.db.merge(job)
-            self.db.commit()
-            
-            if job.id:
+            posted_raw = job_data.get("posted_date")
+            posted_date = None
+            if posted_raw:
+                if isinstance(posted_raw, str):
+                    try:
+                        posted_date = datetime.fromisoformat(posted_raw.replace("Z", "+00:00"))
+                    except (ValueError, TypeError):
+                        posted_date = None
+                elif isinstance(posted_raw, datetime):
+                    posted_date = posted_raw
+
+            ext_id = job_data.get("external_id", "")
+            existing_job = self.db.query(Job).filter_by(
+                source_id=source_id, external_id=ext_id
+            ).first() if ext_id else None
+
+            if existing_job:
+                existing_job.title = job_data.get("title", existing_job.title)
+                existing_job.company = job_data.get("company", existing_job.company)
+                existing_job.location = job_data.get("location", existing_job.location)
+                existing_job.remote = job_data.get("remote", existing_job.remote)
+                existing_job.external_url = job_data.get("external_url", existing_job.external_url)
+                existing_job.scraped_at = datetime.utcnow()
+                existing_job.is_active = True
+                self.db.commit()
+                job_ids.append(existing_job.id)
+            else:
+                job = Job(
+                    source_id=source_id,
+                    external_id=ext_id,
+                    external_url=job_data.get("external_url", ""),
+                    title=job_data.get("title", ""),
+                    company=job_data.get("company", ""),
+                    location=job_data.get("location", ""),
+                    remote=job_data.get("remote", False),
+                    hybrid=job_data.get("hybrid", False),
+                    description=job_data.get("description", ""),
+                    department=job_data.get("department", ""),
+                    seniority=job_data.get("seniority", ""),
+                    min_salary=job_data.get("min_salary"),
+                    max_salary=job_data.get("max_salary"),
+                    scraped_at=datetime.utcnow(),
+                    posted_date=posted_date,
+                    is_active=True
+                )
+                self.db.add(job)
+                self.db.commit()
+                self.db.refresh(job)
                 job_ids.append(job.id)
         
         return job_ids
