@@ -237,9 +237,9 @@ export default function Home() {
               <span className="text-sm font-semibold text-navy-900 tracking-tight">JobScale</span>
             </div>
             <div className="flex items-center space-x-6">
-              <a href="#" className="text-caption text-slate-500 hover:text-navy-900 transition-colors">Privacy</a>
-              <a href="#" className="text-caption text-slate-500 hover:text-navy-900 transition-colors">Terms</a>
-              <a href="#" className="text-caption text-slate-500 hover:text-navy-900 transition-colors">Contact</a>
+              <Link href="/privacy" className="text-caption text-slate-500 hover:text-navy-900 transition-colors">Privacy</Link>
+              <Link href="/terms" className="text-caption text-slate-500 hover:text-navy-900 transition-colors">Terms</Link>
+              <Link href="/contact" className="text-caption text-slate-500 hover:text-navy-900 transition-colors">Contact</Link>
             </div>
           </div>
         </div>

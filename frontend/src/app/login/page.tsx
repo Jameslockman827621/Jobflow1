@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
-export default function Login() {
+function LoginForm() {
   const { login, register } = useAuth();
+  const searchParams = useSearchParams();
   const [isRegister, setIsRegister] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -17,6 +19,12 @@ export default function Login() {
     last_name: "",
   });
 
+  useEffect(() => {
+    if (searchParams.get("mode") === "signup") {
+      setIsRegister(true);
+    }
+  }, [searchParams]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -26,7 +34,8 @@ export default function Login() {
       if (isRegister) {
         await register(formData.email, formData.password, formData.first_name, formData.last_name);
       } else {
-        await login(formData.email, formData.password);
+        const next = searchParams.get("next");
+        await login(formData.email, formData.password, { redirectTo: next });
       }
     } catch (err: any) {
       setError(err.message);
@@ -178,5 +187,19 @@ export default function Login() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function Login() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 text-sm">
+          Loading…
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

@@ -1,7 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth";
+import AppShell from "@/components/AppShell";
+import { useToast } from "@/components/ui/Toast";
 
 interface Skill {
   id: number;
@@ -31,13 +34,23 @@ interface Profile {
   skills: Skill[];
 }
 
+interface SubscriptionSummary {
+  plan?: string;
+  status?: string;
+  applications_used?: number;
+  applications_limit?: number;
+}
+
 export default function ProfilePage() {
   const router = useRouter();
+  const { user, loading: authLoading, authFetch, logout } = useAuth();
+  const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [token, setToken] = useState<string | null>(null);
+  const [portalLoading, setPortalLoading] = useState(false);
   const [newSkill, setNewSkill] = useState("");
-  
+  const [subscription, setSubscription] = useState<SubscriptionSummary | null>(null);
+
   const [profile, setProfile] = useState<Profile>({
     id: 0,
     first_name: "",
@@ -59,20 +72,14 @@ export default function ProfilePage() {
   });
 
   useEffect(() => {
-    const storedToken = localStorage.getItem("token");
-    if (!storedToken) {
+    if (!authLoading && !user) {
       router.push("/login");
-      return;
     }
-    setToken(storedToken);
-    fetchProfile(storedToken);
-  }, [router]);
+  }, [user, authLoading, router]);
 
-  const fetchProfile = async (authToken: string) => {
+  const fetchProfile = async () => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"}/profile/me`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
+      const res = await authFetch("/api/v1/profile/me");
       if (res.ok) {
         const data = await res.json();
         setProfile(data);
@@ -84,17 +91,32 @@ export default function ProfilePage() {
     }
   };
 
-  const handleSave = async () => {
-    if (!token) return;
-    setSaving(true);
-    
+  const fetchSubscription = async () => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"}/profile/me`, {
+      const res = await authFetch("/api/v1/billing/subscription");
+      if (res.ok) {
+        setSubscription(await res.json());
+      } else {
+        setSubscription({ plan: "free", status: "active", applications_used: 0, applications_limit: 5 });
+      }
+    } catch {
+      setSubscription({ plan: "free", status: "active" });
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchProfile();
+      fetchSubscription();
+    }
+  }, [user]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const res = await authFetch("/api/v1/profile/me", {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           first_name: profile.first_name,
           last_name: profile.last_name,
@@ -110,36 +132,32 @@ export default function ProfilePage() {
           desired_roles: profile.desired_roles,
         }),
       });
-      
+
       if (res.ok) {
-        alert("Profile saved!");
+        toast.success("Profile saved");
       } else {
-        alert("Failed to save profile");
+        toast.error("Failed to save profile");
       }
     } catch (error) {
       console.error("Error saving profile:", error);
-      alert("Error saving profile");
+      toast.error("Error saving profile");
     } finally {
       setSaving(false);
     }
   };
 
   const handleAddSkill = async () => {
-    if (!token || !newSkill.trim()) return;
-    
+    if (!newSkill.trim()) return;
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"}/profile/me/skills`, {
+      const res = await authFetch("/api/v1/profile/me/skills", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newSkill.trim() }),
       });
-      
+
       if (res.ok) {
         setNewSkill("");
-        fetchProfile(token);
+        fetchProfile();
       }
     } catch (error) {
       console.error("Error adding skill:", error);
@@ -147,184 +165,241 @@ export default function ProfilePage() {
   };
 
   const handleRemoveSkill = async (skillId: number) => {
-    if (!token) return;
-    
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"}/profile/me/skills/${skillId}`, {
+      const res = await authFetch(`/api/v1/profile/me/skills/${skillId}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
       });
-      
+
       if (res.ok) {
-        fetchProfile(token);
+        fetchProfile();
       }
     } catch (error) {
       console.error("Error removing skill:", error);
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    router.push("/");
+  const openBillingPortal = async () => {
+    setPortalLoading(true);
+    try {
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
+      const q = new URLSearchParams({
+        return_url: `${origin}/profile`,
+      });
+      const res = await authFetch(`/api/v1/billing/portal?${q.toString()}`, {
+        method: "POST",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.detail || "Could not open billing portal");
+      }
+      if (data.url) {
+        window.location.href = data.url;
+        return;
+      }
+      throw new Error("No portal URL returned");
+    } catch (e: any) {
+      toast.error(e.message || "Portal unavailable");
+    } finally {
+      setPortalLoading(false);
+    }
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl">Loading profile...</div>
-      </div>
+      <AppShell>
+        <div className="flex items-center justify-center min-h-[40vh] text-slate-500 text-sm">Loading profile…</div>
+      </AppShell>
     );
   }
 
+  if (!user) {
+    return null;
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-900">JobScale</h1>
-          <div className="flex items-center space-x-4">
-            <a href="/dashboard" className="text-sm text-gray-600 hover:text-gray-900">Dashboard</a>
-            <button onClick={handleLogout} className="text-sm text-gray-600 hover:text-gray-900">Logout</button>
-          </div>
+    <AppShell>
+      <div className="max-w-3xl mx-auto pb-12">
+        <div className="mb-8">
+          <h1 className="text-xl font-semibold text-navy-900 tracking-tight">Settings</h1>
+          <p className="text-sm text-slate-500 mt-1">{user.email}</p>
         </div>
-      </header>
 
-      {/* Content */}
-      <main className="max-w-5xl mx-auto px-4 py-8">
-        <h2 className="text-3xl font-bold mb-6">Your Profile</h2>
+        <div className="bg-white border border-slate-200 rounded-lg p-5 mb-6">
+          <h2 className="text-sm font-semibold text-slate-900 mb-2">Plan</h2>
+          <p className="text-sm text-slate-600 capitalize mb-1">
+            {subscription?.plan || "free"} · {subscription?.status || "active"}
+          </p>
+          <p className="text-xs text-slate-500 mb-4">
+            Applications this month: {subscription?.applications_used ?? 0}
+            {subscription?.applications_limit != null ? ` / ${subscription.applications_limit}` : ""}
+          </p>
+          <button
+            type="button"
+            onClick={openBillingPortal}
+            disabled={portalLoading}
+            className="text-sm font-medium text-teal-600 hover:text-teal-700 disabled:opacity-50"
+          >
+            {portalLoading ? "Opening…" : "Manage billing & subscription"}
+          </button>
+          <p className="text-xs text-slate-400 mt-2">
+            Opens Stripe Customer Portal after you complete a paid checkout.
+          </p>
+        </div>
 
-        <div className="grid gap-6">
-          {/* Personal Info */}
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h3 className="text-xl font-semibold mb-4">Personal Information</h3>
+        <div className="space-y-6">
+          <div className="bg-white border border-slate-200 rounded-lg p-5">
+            <h2 className="text-sm font-semibold text-slate-900 mb-4">Personal information</h2>
             <div className="grid md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">First name</label>
                 <input
                   type="text"
                   value={profile.first_name || ""}
                   onChange={(e) => setProfile({ ...profile, first_name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Last name</label>
                 <input
                   type="text"
                   value={profile.last_name || ""}
                   onChange={(e) => setProfile({ ...profile, last_name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Location</label>
                 <input
                   type="text"
                   value={profile.location || ""}
                   onChange={(e) => setProfile({ ...profile, location: e.target.value })}
                   placeholder="e.g., London, UK"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Years of Experience</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Years of experience</label>
                 <input
                   type="number"
-                  value={profile.years_of_experience || ""}
-                  onChange={(e) => setProfile({ ...profile, years_of_experience: parseFloat(e.target.value) })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  value={profile.years_of_experience ?? ""}
+                  onChange={(e) =>
+                    setProfile({
+                      ...profile,
+                      years_of_experience: e.target.value ? parseFloat(e.target.value) : undefined,
+                    })
+                  }
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Current Title</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Current title</label>
                 <input
                   type="text"
                   value={profile.current_title || ""}
                   onChange={(e) => setProfile({ ...profile, current_title: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Current Company</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Current company</label>
                 <input
                   type="text"
                   value={profile.current_company || ""}
                   onChange={(e) => setProfile({ ...profile, current_company: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
                 />
               </div>
             </div>
           </div>
 
-          {/* Job Preferences */}
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h3 className="text-xl font-semibold mb-4">Job Preferences</h3>
+          <div className="bg-white border border-slate-200 rounded-lg p-5">
+            <h2 className="text-sm font-semibold text-slate-900 mb-4">Job preferences</h2>
             <div className="grid md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Min Salary (£/$)</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Min salary</label>
                 <input
                   type="number"
-                  value={profile.min_salary || ""}
-                  onChange={(e) => setProfile({ ...profile, min_salary: parseInt(e.target.value) })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  value={profile.min_salary ?? ""}
+                  onChange={(e) =>
+                    setProfile({
+                      ...profile,
+                      min_salary: e.target.value ? parseInt(e.target.value, 10) : undefined,
+                    })
+                  }
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Max Salary (£/$)</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Max salary</label>
                 <input
                   type="number"
-                  value={profile.max_salary || ""}
-                  onChange={(e) => setProfile({ ...profile, max_salary: parseInt(e.target.value) })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  value={profile.max_salary ?? ""}
+                  onChange={(e) =>
+                    setProfile({
+                      ...profile,
+                      max_salary: e.target.value ? parseInt(e.target.value, 10) : undefined,
+                    })
+                  }
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
                 />
               </div>
-              <div className="flex items-center mt-2">
+              <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   id="remote-only"
                   checked={profile.remote_only}
                   onChange={(e) => setProfile({ ...profile, remote_only: e.target.checked })}
-                  className="mr-2"
+                  className="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
                 />
-                <label htmlFor="remote-only" className="text-sm text-gray-700">Remote only</label>
+                <label htmlFor="remote-only" className="text-sm text-slate-700">
+                  Remote only
+                </label>
               </div>
-              <div className="flex items-center mt-2">
+              <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   id="relocate"
                   checked={profile.relocate}
                   onChange={(e) => setProfile({ ...profile, relocate: e.target.checked })}
-                  className="mr-2"
+                  className="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
                 />
-                <label htmlFor="relocate" className="text-sm text-gray-700">Willing to relocate</label>
+                <label htmlFor="relocate" className="text-sm text-slate-700">
+                  Willing to relocate
+                </label>
               </div>
             </div>
             <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Preferred Countries (comma-separated)</label>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Preferred countries (comma-separated)</label>
               <input
                 type="text"
                 value={profile.preferred_countries.join(", ")}
-                onChange={(e) => setProfile({ ...profile, preferred_countries: e.target.value.split(",").map(c => c.trim()) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                onChange={(e) =>
+                  setProfile({
+                    ...profile,
+                    preferred_countries: e.target.value.split(",").map((c) => c.trim()).filter(Boolean),
+                  })
+                }
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
               />
             </div>
           </div>
 
-          {/* Skills */}
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h3 className="text-xl font-semibold mb-4">Skills</h3>
+          <div className="bg-white border border-slate-200 rounded-lg p-5">
+            <h2 className="text-sm font-semibold text-slate-900 mb-4">Skills</h2>
             <div className="flex gap-2 mb-4">
               <input
                 type="text"
                 value={newSkill}
                 onChange={(e) => setNewSkill(e.target.value)}
-                placeholder="Add a skill (e.g., Python, React)"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md"
-                onKeyPress={(e) => e.key === "Enter" && handleAddSkill()}
+                placeholder="Add a skill"
+                className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAddSkill())}
               />
               <button
+                type="button"
                 onClick={handleAddSkill}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                className="px-4 py-2 text-sm font-medium rounded-lg bg-navy-900 text-white hover:bg-navy-800"
               >
                 Add
               </button>
@@ -333,35 +408,37 @@ export default function ProfilePage() {
               {profile.skills.map((skill) => (
                 <span
                   key={skill.id}
-                  className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
+                  className="inline-flex items-center gap-1 px-3 py-1 bg-slate-100 text-slate-800 rounded-full text-sm"
                 >
                   {skill.name}
-                  <button
-                    onClick={() => handleRemoveSkill(skill.id)}
-                    className="ml-2 text-blue-600 hover:text-blue-800"
-                  >
+                  <button type="button" onClick={() => handleRemoveSkill(skill.id)} className="text-slate-500 hover:text-slate-800 ml-1">
                     ×
                   </button>
                 </span>
               ))}
-              {profile.skills.length === 0 && (
-                <p className="text-gray-500 text-sm">No skills added yet</p>
-              )}
+              {profile.skills.length === 0 && <p className="text-sm text-slate-500">No skills yet</p>}
             </div>
           </div>
 
-          {/* Save Button */}
-          <div className="flex justify-end">
+          <div className="flex flex-wrap items-center gap-3">
             <button
+              type="button"
               onClick={handleSave}
               disabled={saving}
-              className="px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50"
+              className="px-5 py-2.5 text-sm font-medium rounded-lg bg-teal-500 text-white hover:bg-teal-600 disabled:opacity-50"
             >
-              {saving ? "Saving..." : "Save Profile"}
+              {saving ? "Saving…" : "Save changes"}
+            </button>
+            <button
+              type="button"
+              onClick={() => logout()}
+              className="px-5 py-2.5 text-sm font-medium rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
+            >
+              Sign out
             </button>
           </div>
         </div>
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }

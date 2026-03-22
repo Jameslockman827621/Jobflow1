@@ -159,7 +159,7 @@ export default function CareerPathingPage() {
                   </div>
                 </div>
                 
-                <p className="text-sm text-slate-600">You're halfway to Senior level. Focus on leadership and system design skills.</p>
+                <p className="text-sm text-slate-600">You&apos;re halfway to Senior level. Focus on leadership and system design skills.</p>
               </div>
 
               {/* Career Ladder */}

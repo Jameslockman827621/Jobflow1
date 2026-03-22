@@ -1,12 +1,10 @@
 /**
  * API Utility Layer
- * 
+ *
  * Centralized API client with error handling, retries, and token management.
  */
 
-// Use environment variable for backend URL, fallback to relative path for local dev
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
-const API_BASE = `${BACKEND_URL}/api/v1`;
+import { getApiBase } from './apiBase';
 
 interface ApiError {
   message: string;
@@ -16,8 +14,8 @@ interface ApiError {
 
 class ApiClient {
   private baseURL: string;
-  
-  constructor(baseURL: string = API_BASE) {
+
+  constructor(baseURL: string = getApiBase()) {
     this.baseURL = baseURL;
   }
 

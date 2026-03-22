@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // API Rewrites - Proxy /api/v1/* to backend
+  // Dev-only: proxies /api/v1/* to NEXT_PUBLIC_BACKEND_URL. Static export (Cloudflare Pages)
+  // does not use rewrites — set NEXT_PUBLIC_BACKEND_URL or NEXT_PUBLIC_API_URL at build time.
   async rewrites() {
     return [
       {

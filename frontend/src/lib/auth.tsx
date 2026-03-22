@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
+import { getApiBase } from '@/lib/apiBase';
 
 interface User {
   id: number;
@@ -15,7 +16,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, opts?: { redirectTo?: string | null }) => Promise<void>;
   register: (email: string, password: string, firstName: string, lastName: string) => Promise<void>;
   logout: () => void;
   getToken: () => string | null;
@@ -27,12 +28,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const TOKEN_KEY = 'jobscale_token';
 const USER_KEY = 'jobscale_user';
 const LEGACY_TOKEN_KEY = 'token';
-
-function getApiBase(): string {
-  return process.env.NEXT_PUBLIC_API_URL ||
-    (process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1` : null) ||
-    '/api/v1';
-}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -100,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function login(email: string, password: string) {
+  async function login(email: string, password: string, opts?: { redirectTo?: string | null }) {
     const apiBase = getApiBase();
 
     const response = await fetch(`${apiBase}/auth/login`, {
@@ -128,7 +123,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem(USER_KEY, JSON.stringify(userData));
     }
 
-    router.push('/dashboard');
+    const next = opts?.redirectTo?.trim();
+    const dest = next && next.startsWith('/') && !next.startsWith('//') ? next : '/dashboard';
+    router.push(dest);
   }
 
   async function register(email: string, password: string, firstName: string, lastName: string) {
@@ -183,7 +180,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return localStorage.getItem(TOKEN_KEY);
   }
 
-  async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  async function authFetch(pathOrUrl: string, options: RequestInit = {}): Promise<Response> {
     const token = localStorage.getItem(TOKEN_KEY);
     const headers = new Headers(options.headers || {});
     if (token) {
@@ -192,7 +189,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!headers.has('Content-Type') && options.body && typeof options.body === 'string') {
       headers.set('Content-Type', 'application/json');
     }
-    return fetch(url, { ...options, headers });
+    let target = pathOrUrl;
+    if (!pathOrUrl.startsWith('http://') && !pathOrUrl.startsWith('https://')) {
+      const base = getApiBase().replace(/\/$/, '');
+      if (pathOrUrl.startsWith('/api/v1')) {
+        target = `${base}${pathOrUrl.slice('/api/v1'.length)}`;
+      } else {
+        target = `${base}${pathOrUrl.startsWith('/') ? pathOrUrl : `/${pathOrUrl}`}`;
+      }
+    }
+    return fetch(target, { ...options, headers });
   }
 
   return (

@@ -2,9 +2,28 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/auth';
+import { useToast } from '@/components/ui/Toast';
 
-const PLANS = [
+type PlanKey = 'free' | 'pro' | 'premium';
+
+const PLANS: {
+  key: PlanKey;
+  name: string;
+  price: number;
+  yearlyPrice: number;
+  period: string;
+  description: string;
+  features: string[];
+  cta: string;
+  highlighted: boolean;
+  checkoutPlanMonthly?: string;
+  checkoutPlanYearly?: string;
+  contactOnly?: boolean;
+}[] = [
   {
+    key: 'free',
     name: 'Free',
     price: 0,
     yearlyPrice: 0,
@@ -21,6 +40,7 @@ const PLANS = [
     highlighted: false,
   },
   {
+    key: 'pro',
     name: 'Pro',
     price: 29,
     yearlyPrice: 23,
@@ -36,10 +56,13 @@ const PLANS = [
       'Application analytics',
       'Priority support',
     ],
-    cta: 'Start free trial',
+    cta: 'Subscribe to Pro',
     highlighted: true,
+    checkoutPlanMonthly: 'pro_monthly',
+    checkoutPlanYearly: 'pro_yearly',
   },
   {
+    key: 'premium',
     name: 'Premium',
     price: 79,
     yearlyPrice: 63,
@@ -55,8 +78,11 @@ const PLANS = [
       'Monthly 1-on-1 coaching',
       'Dedicated support',
     ],
-    cta: 'Contact us',
+    cta: 'Contact sales',
     highlighted: false,
+    checkoutPlanMonthly: 'premium_monthly',
+    checkoutPlanYearly: 'premium_yearly',
+    contactOnly: true,
   },
 ];
 
@@ -64,17 +90,17 @@ const FAQ = [
   {
     question: 'How does JobScale differ from a job board?',
     answer:
-      'Job boards list openings. JobScale automates the application process -- tailoring your CV, generating cover letters, and tracking every application so you can focus on interviewing.',
+      'Job boards list openings. JobScale automates the application process — tailoring your CV, generating cover letters, and tracking every application so you can focus on interviewing.',
   },
   {
-    question: 'What if I don\'t get interviews?',
+    question: "What if I don't get interviews?",
     answer:
       'We offer a 30-day money-back guarantee. If you are not seeing results, we will work with you to improve your profile or refund your subscription.',
   },
   {
     question: 'Can I cancel anytime?',
     answer:
-      'Yes. Cancel from your account settings at any time. No questions asked.',
+      'Yes. Cancel from billing settings (Stripe Customer Portal) at any time. No questions asked.',
   },
   {
     question: 'Which industries do you support?',
@@ -103,9 +129,60 @@ function ChevronIcon({ className }: { className?: string }) {
 }
 
 export default function PricingPage() {
+  const router = useRouter();
+  const { user, loading: authLoading, authFetch } = useAuth();
+  const toast = useToast();
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState<PlanKey | null>(null);
+
+  const startCheckout = async (plan: (typeof PLANS)[number]) => {
+    if (plan.key === 'free') {
+      router.push('/login?mode=signup');
+      return;
+    }
+    if (plan.contactOnly) {
+      router.push('/contact');
+      return;
+    }
+    const priceKey = billingPeriod === 'yearly' ? plan.checkoutPlanYearly : plan.checkoutPlanMonthly;
+    if (!priceKey) {
+      toast.error('This plan is not available for checkout.');
+      return;
+    }
+    if (!user) {
+      router.push(`/login?next=${encodeURIComponent('/pricing')}`);
+      return;
+    }
+
+    setCheckoutLoading(plan.key);
+    try {
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const res = await authFetch('/api/v1/billing/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plan: priceKey,
+          success_url: `${origin}/billing/success`,
+          cancel_url: `${origin}/billing/cancel`,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.detail || 'Checkout could not be started. Is Stripe configured on the server?');
+      }
+      if (data.checkout_url) {
+        window.location.href = data.checkout_url;
+        return;
+      }
+      throw new Error('No checkout URL returned');
+    } catch (e: any) {
+      toast.error(e.message || 'Checkout failed');
+    } finally {
+      setCheckoutLoading(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-white">
@@ -126,7 +203,7 @@ export default function PricingPage() {
               <Link href="/pricing" className="text-sm font-medium text-navy-900">Pricing</Link>
               <Link href="/login" className="text-sm font-medium text-navy-900 hover:text-navy-700 transition-colors">Sign in</Link>
               <Link
-                href="/login"
+                href="/login?mode=signup"
                 className="px-4 py-2 text-sm font-medium rounded-lg bg-navy-900 text-white hover:bg-navy-800 transition-colors"
               >
                 Get started
@@ -158,7 +235,7 @@ export default function PricingPage() {
                 <Link href="/login" className="block w-full text-center py-2.5 text-sm font-medium text-navy-900" onClick={() => setMobileMenuOpen(false)}>
                   Sign in
                 </Link>
-                <Link href="/login" className="block w-full text-center py-2.5 text-sm font-medium rounded-lg bg-navy-900 text-white" onClick={() => setMobileMenuOpen(false)}>
+                <Link href="/login?mode=signup" className="block w-full text-center py-2.5 text-sm font-medium rounded-lg bg-navy-900 text-white" onClick={() => setMobileMenuOpen(false)}>
                   Get started
                 </Link>
               </div>
@@ -172,12 +249,18 @@ export default function PricingPage() {
           <h1 className="text-4xl sm:text-5xl font-bold text-navy-900 tracking-tight mb-4">
             Simple, transparent pricing
           </h1>
-          <p className="text-lg text-slate-500 max-w-xl mx-auto mb-10">
+          <p className="text-lg text-slate-500 max-w-xl mx-auto mb-4">
             Choose the plan that fits your job search. Upgrade or downgrade at any time.
           </p>
+          {!authLoading && !user && (
+            <p className="text-sm text-slate-400 max-w-lg mx-auto mb-6">
+              Sign in to subscribe to Pro or Premium. Paid checkout requires Stripe keys and price IDs on the server (see deployment docs).
+            </p>
+          )}
 
           <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1">
             <button
+              type="button"
               onClick={() => setBillingPeriod('monthly')}
               className={`px-5 py-2 rounded-md text-sm font-medium transition-colors ${
                 billingPeriod === 'monthly'
@@ -188,6 +271,7 @@ export default function PricingPage() {
               Monthly
             </button>
             <button
+              type="button"
               onClick={() => setBillingPeriod('yearly')}
               className={`px-5 py-2 rounded-md text-sm font-medium transition-colors ${
                 billingPeriod === 'yearly'
@@ -207,6 +291,7 @@ export default function PricingPage() {
           <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
             {PLANS.map((plan) => {
               const displayPrice = billingPeriod === 'yearly' ? plan.yearlyPrice : plan.price;
+              const busy = checkoutLoading === plan.key;
               return (
                 <div
                   key={plan.name}
@@ -252,16 +337,18 @@ export default function PricingPage() {
                     ))}
                   </ul>
 
-                  <Link
-                    href="/login"
-                    className={`block w-full py-3 rounded-lg text-center text-sm font-semibold transition-colors ${
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => startCheckout(plan)}
+                    className={`block w-full py-3 rounded-lg text-center text-sm font-semibold transition-colors disabled:opacity-60 ${
                       plan.highlighted
                         ? 'bg-teal-500 text-white hover:bg-teal-600'
                         : 'bg-slate-100 text-slate-900 hover:bg-slate-200'
                     }`}
                   >
-                    {plan.cta}
-                  </Link>
+                    {busy ? 'Redirecting…' : plan.cta}
+                  </button>
                 </div>
               );
             })}
@@ -278,6 +365,7 @@ export default function PricingPage() {
             {FAQ.map((faq, i) => (
               <div key={i}>
                 <button
+                  type="button"
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
                   className="w-full py-5 text-left flex justify-between items-center gap-4"
                 >
@@ -306,7 +394,7 @@ export default function PricingPage() {
             Get started for free. No credit card required.
           </p>
           <Link
-            href="/login"
+            href="/login?mode=signup"
             className="inline-block px-8 py-3 bg-teal-500 text-white rounded-lg font-semibold hover:bg-teal-600 transition-colors"
           >
             Get started
@@ -326,9 +414,9 @@ export default function PricingPage() {
               <span className="text-sm font-semibold text-navy-900 tracking-tight">JobScale</span>
             </div>
             <div className="flex items-center space-x-6">
-              <a href="#" className="text-caption text-slate-500 hover:text-navy-900 transition-colors">Privacy</a>
-              <a href="#" className="text-caption text-slate-500 hover:text-navy-900 transition-colors">Terms</a>
-              <a href="#" className="text-caption text-slate-500 hover:text-navy-900 transition-colors">Contact</a>
+              <Link href="/privacy" className="text-caption text-slate-500 hover:text-navy-900 transition-colors">Privacy</Link>
+              <Link href="/terms" className="text-caption text-slate-500 hover:text-navy-900 transition-colors">Terms</Link>
+              <Link href="/contact" className="text-caption text-slate-500 hover:text-navy-900 transition-colors">Contact</Link>
             </div>
           </div>
         </div>
