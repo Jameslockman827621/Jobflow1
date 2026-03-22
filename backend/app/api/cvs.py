@@ -274,32 +274,44 @@ async def export_cv(
     })
 
 
+def _resolve_conditionals(html: str, data: dict) -> str:
+    """Resolve Mustache-style conditional blocks {{#field}}...{{/field}}."""
+    import re
+    pattern = re.compile(r'\{\{#(\w+)\}\}(.*?)\{\{/\1\}\}', re.DOTALL)
+    def _replace(m):
+        key = m.group(1)
+        inner = m.group(2)
+        val = data.get(key)
+        if val:
+            return inner.replace(f'{{{{{key}}}}}', str(val))
+        return ''
+    prev = None
+    while prev != html:
+        prev = html
+        html = pattern.sub(_replace, html)
+    return html
+
+
 def render_cv_html(cv: CV, template: str) -> str:
     """Render CV data into HTML template"""
     import re
     
     html = template
-    
-    # Simple template rendering (replace {{field}} with values)
-    replacements = {
-        '{{full_name}}': cv.full_name,
-        '{{email}}': cv.email,
-        '{{phone}}': cv.phone or '',
-        '{{location}}': cv.location or '',
-        '{{linkedin_url}}': cv.linkedin_url or '',
-        '{{portfolio_url}}': cv.portfolio_url or '',
-        '{{summary}}': cv.summary or '',
+
+    scalar_data = {
+        'full_name': cv.full_name or '',
+        'email': cv.email or '',
+        'phone': cv.phone or '',
+        'location': cv.location or '',
+        'linkedin_url': cv.linkedin_url or '',
+        'portfolio_url': cv.portfolio_url or '',
+        'summary': cv.summary or '',
     }
-    
-    for key, value in replacements.items():
-        html = html.replace(key, str(value))
-    
-    # Handle experience section
+
     if cv.experience:
         exp_html = ""
         for exp in cv.experience:
-            exp_template = """
-            <div class="position">
+            item_html = """<div class="position">
                 <div class="position-header">
                     <div>
                         <span class="position-title">{{role}}</span>
@@ -307,25 +319,20 @@ def render_cv_html(cv: CV, template: str) -> str:
                     </div>
                     <div class="date">{{start_date}} - {{end_date}}</div>
                 </div>
-                {{#description}}
-                <div class="description">{{description}}</div>
-                {{/description}}
-            </div>
-            """
-            exp_rendered = exp_template
-            for key, val in exp.items():
-                exp_rendered = exp_rendered.replace(f'{{{{{key}}}}}', str(val) or '')
-            exp_html += exp_rendered
-        
-        # Replace experience section
+                {{#description}}<div class="description">{{description}}</div>{{/description}}
+            </div>"""
+            item_html = _resolve_conditionals(item_html, exp)
+            for k, v in exp.items():
+                item_html = item_html.replace(f'{{{{{k}}}}}', str(v) if v else '')
+            exp_html += item_html
         html = re.sub(r'\{\{#experience\}\}.*?\{\{/experience\}\}', exp_html, html, flags=re.DOTALL)
-    
-    # Handle education section
+    else:
+        html = re.sub(r'\{\{#experience\}\}.*?\{\{/experience\}\}', '', html, flags=re.DOTALL)
+
     if cv.education:
         edu_html = ""
         for edu in cv.education:
-            edu_template = """
-            <div class="education-item">
+            item_html = """<div class="education-item">
                 <div class="education-header">
                     <div>
                         <span class="degree">{{degree}}</span>
@@ -334,18 +341,45 @@ def render_cv_html(cv: CV, template: str) -> str:
                     </div>
                     <div class="year">{{graduation_year}}</div>
                 </div>
-            </div>
-            """
-            edu_rendered = edu_template
-            for key, val in edu.items():
-                edu_rendered = edu_rendered.replace(f'{{{{{key}}}}}', str(val) or '')
-            edu_html += edu_rendered
-        
+            </div>"""
+            item_html = _resolve_conditionals(item_html, edu)
+            for k, v in edu.items():
+                item_html = item_html.replace(f'{{{{{k}}}}}', str(v) if v else '')
+            edu_html += item_html
         html = re.sub(r'\{\{#education\}\}.*?\{\{/education\}\}', edu_html, html, flags=re.DOTALL)
-    
-    # Handle skills section
+    else:
+        html = re.sub(r'\{\{#education\}\}.*?\{\{/education\}\}', '', html, flags=re.DOTALL)
+
     if cv.skills:
-        skills_html = "".join([f'<span class="skill-tag">{skill}</span>' for skill in cv.skills])
-        html = re.sub(r'\{\{#skills\}\}.*?\{\{/skills\}\}', f'<div class="skills-grid">{skills_html}</div>', html, flags=re.DOTALL)
-    
+        skills_html = '<div class="skills-grid">' + "".join(
+            [f'<span class="skill-tag">{skill}</span>' for skill in cv.skills]
+        ) + '</div>'
+        html = re.sub(r'\{\{#skills\}\}.*?\{\{/skills\}\}', skills_html, html, flags=re.DOTALL)
+    else:
+        html = re.sub(r'\{\{#skills\}\}.*?\{\{/skills\}\}', '', html, flags=re.DOTALL)
+
+    if cv.certifications:
+        cert_html = ""
+        for cert in cv.certifications:
+            item_html = """<div class="education-item">
+                <div class="education-header">
+                    <span class="degree">{{name}}</span>
+                    {{#issuer}}<span class="institution"> | {{issuer}}</span>{{/issuer}}
+                    {{#year}}<span class="year">{{year}}</span>{{/year}}
+                </div>
+            </div>"""
+            item_html = _resolve_conditionals(item_html, cert)
+            for k, v in cert.items():
+                item_html = item_html.replace(f'{{{{{k}}}}}', str(v) if v else '')
+            cert_html += item_html
+        html = re.sub(r'\{\{#certifications\}\}.*?\{\{/certifications\}\}', cert_html, html, flags=re.DOTALL)
+    else:
+        html = re.sub(r'\{\{#certifications\}\}.*?\{\{/certifications\}\}', '', html, flags=re.DOTALL)
+
+    html = _resolve_conditionals(html, scalar_data)
+    for k, v in scalar_data.items():
+        html = html.replace(f'{{{{{k}}}}}', v)
+
+    html = re.sub(r'\{\{[#/]?\w+\}\}', '', html)
+
     return html
