@@ -1,18 +1,28 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.api import health, auth, jobs, users, applications, profile, interview, billing, referrals, interview_coach, career, analytics, reviews, onboarding, cvs, auto_apply, career_report, salary_alerts
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    settings.assert_safe_for_production()
+    yield
+
+
 app = FastAPI(
     title=settings.APP_NAME,
     debug=settings.DEBUG,
+    lifespan=lifespan,
 )
 
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=settings.cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -37,7 +47,6 @@ app.include_router(auto_apply.router, prefix=f"{settings.API_V1_PREFIX}/auto-app
 app.include_router(career_report.router, prefix=f"{settings.API_V1_PREFIX}/reports", tags=["Career Reports"])
 app.include_router(salary_alerts.router, prefix=f"{settings.API_V1_PREFIX}/alerts", tags=["Salary Alerts"])
 app.include_router(cvs.router, tags=["CVs"])
-app.include_router(applications.router, tags=["Applications"])
 
 
 @app.get("/")

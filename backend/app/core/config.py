@@ -1,10 +1,12 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
-from typing import List, Optional
+from typing import List, Optional, Union
 
 
 class Settings(BaseSettings):
     # App
     APP_NAME: str = "JobScale"
+    ENVIRONMENT: str = "development"  # development | staging | production
     DEBUG: bool = True
     API_V1_PREFIX: str = "/api/v1"
     
@@ -37,19 +39,64 @@ class Settings(BaseSettings):
     FROM_EMAIL: str = "noreply@jobscale.local"
     SENDGRID_API_KEY: Optional[str] = None
     
-    # Stripe
+    # Stripe (set price IDs from Stripe Dashboard → Products → Price API IDs)
     STRIPE_SECRET_KEY: Optional[str] = None
     STRIPE_WEBHOOK_SECRET: Optional[str] = None
+    STRIPE_PRICE_PRO_MONTHLY: Optional[str] = None
+    STRIPE_PRICE_PRO_YEARLY: Optional[str] = None
+    STRIPE_PRICE_PREMIUM_MONTHLY: Optional[str] = None
+    STRIPE_PRICE_PREMIUM_YEARLY: Optional[str] = None
     
     # App URLs
     APP_URL: str = "http://localhost:3000"
     
-    # CORS
-    CORS_ORIGINS: List[str] = ["http://localhost:3000"]
+    # CORS — comma-separated origins in env, e.g. "https://app.example.com,http://localhost:3000"
+    CORS_ORIGINS: Union[str, List[str]] = "http://localhost:3000"
+
+    # When no scrapers return jobs, seed curated demo rows once (disable in real production)
+    AUTO_SEED_DEMO_JOBS: bool = True
     
     class Config:
         env_file = ".env"
         case_sensitive = True
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v):
+        if v is None:
+            return ["http://localhost:3000"]
+        if isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            parts = [s.strip() for s in v.split(",") if s.strip()]
+            return parts if parts else ["http://localhost:3000"]
+        return v
+
+    def cors_origins(self) -> List[str]:
+        if isinstance(self.CORS_ORIGINS, list):
+            return self.CORS_ORIGINS
+        return [self.CORS_ORIGINS]
+
+    def stripe_checkout_price_ids(self) -> dict:
+        m = {}
+        if self.STRIPE_PRICE_PRO_MONTHLY:
+            m["pro_monthly"] = self.STRIPE_PRICE_PRO_MONTHLY
+        if self.STRIPE_PRICE_PRO_YEARLY:
+            m["pro_yearly"] = self.STRIPE_PRICE_PRO_YEARLY
+        if self.STRIPE_PRICE_PREMIUM_MONTHLY:
+            m["premium_monthly"] = self.STRIPE_PRICE_PREMIUM_MONTHLY
+        if self.STRIPE_PRICE_PREMIUM_YEARLY:
+            m["premium_yearly"] = self.STRIPE_PRICE_PREMIUM_YEARLY
+        return m
+
+    def assert_safe_for_production(self) -> None:
+        if self.ENVIRONMENT.lower() != "production":
+            return
+        weak = "change-me" in self.SECRET_KEY.lower() or len(self.SECRET_KEY) < 32
+        if weak:
+            raise RuntimeError(
+                "ENVIRONMENT=production requires a strong SECRET_KEY (32+ chars, not the default)."
+            )
 
 
 settings = Settings()

@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
@@ -11,6 +13,7 @@ from app.models.profile import UserProfile
 from app.tasks.notifications import send_welcome_email_task
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class UserCreate(BaseModel):
@@ -62,8 +65,11 @@ async def register(user_data: UserCreate):
         db.add(profile)
         db.commit()
         
-        # Send welcome email (async)
-        send_welcome_email_task.delay(user.id)
+        # Send welcome email via Celery when broker is available (signup must not fail if Redis is down)
+        try:
+            send_welcome_email_task.delay(user.id)
+        except Exception as exc:
+            logger.warning("Welcome email task not queued (is Redis/Celery running?): %s", exc)
         
         return UserResponse(
             id=user.id,

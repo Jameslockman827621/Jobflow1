@@ -1,21 +1,12 @@
 """
 Billing API - Stripe Integration
 
-Plans:
-- Free: 5 applications/month
-- Pro ($29/mo): Unlimited applications, priority AI, analytics
-- Premium ($79/mo): Everything + interview coach, resume review
-
-Endpoints:
-- POST /billing/checkout - Create checkout session
-- POST /billing/portal - Create portal session
-- POST /billing/webhook - Stripe webhook handler
-- GET /billing/subscription - Get current subscription
+Configure STRIPE_SECRET_KEY and STRIPE_PRICE_* env vars (Stripe Dashboard → Product → Price → API ID).
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
-from typing import Optional, Dict
+from typing import Optional
 import stripe
 from sqlalchemy.orm import Session
 
@@ -26,20 +17,9 @@ from app.database import SessionLocal, get_db
 
 router = APIRouter()
 
-# Stripe setup (use environment variable in production)
-stripe.api_key = settings.STRIPE_SECRET_KEY or "sk_test_placeholder"
-
-# Plan IDs (replace with actual Stripe product IDs)
-PLAN_IDS = {
-    "pro_monthly": "price_pro_monthly",
-    "pro_yearly": "price_pro_yearly",
-    "premium_monthly": "price_premium_monthly",
-    "premium_yearly": "price_premium_yearly",
-}
-
 
 class CheckoutRequest(BaseModel):
-    plan: str  # "pro_monthly", "pro_yearly", etc.
+    plan: str  # "pro_monthly", "pro_yearly", "premium_monthly", "premium_yearly"
     success_url: str = "http://localhost:3000/billing/success"
     cancel_url: str = "http://localhost:3000/billing/cancel"
 
@@ -50,11 +30,16 @@ class CheckoutResponse(BaseModel):
 
 
 class SubscriptionResponse(BaseModel):
-    status: str  # "active", "cancelled", "none"
+    status: str
     plan: Optional[str]
     current_period_end: Optional[str]
     applications_used: int
     applications_limit: int
+
+
+def _stripe_ready() -> bool:
+    key = (settings.STRIPE_SECRET_KEY or "").strip()
+    return bool(key) and key not in ("sk_test_placeholder",)
 
 
 @router.post("/checkout", response_model=CheckoutResponse)
@@ -62,17 +47,27 @@ async def create_checkout_session(
     request: CheckoutRequest,
     current_user: User = Depends(get_current_user),
 ):
-    """Create Stripe checkout session"""
-    if request.plan not in PLAN_IDS:
-        raise HTTPException(status_code=400, detail="Invalid plan")
-    
+    """Create Stripe Checkout session for a subscription plan."""
+    if not _stripe_ready():
+        raise HTTPException(
+            status_code=503,
+            detail="Payments are not configured. Set STRIPE_SECRET_KEY on the server.",
+        )
+
+    price_map = settings.stripe_checkout_price_ids()
+    price_id = price_map.get(request.plan)
+    if not price_id:
+        raise HTTPException(
+            status_code=503,
+            detail=f"No Stripe price ID configured for `{request.plan}`. Set the matching STRIPE_PRICE_* environment variable.",
+        )
+
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+
     try:
         session = stripe.checkout.Session.create(
             payment_method_types=["card"],
-            line_items=[{
-                "price": PLAN_IDS[request.plan],
-                "quantity": 1,
-            }],
+            line_items=[{"price": price_id, "quantity": 1}],
             mode="subscription",
             success_url=f"{request.success_url}?session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=request.cancel_url,
@@ -82,23 +77,44 @@ async def create_checkout_session(
             },
             customer_email=current_user.email,
         )
-        
+
         return CheckoutResponse(
             checkout_url=session.url,
             session_id=session.id,
         )
     except stripe.error.StripeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=502, detail=str(e))
 
 
 @router.post("/portal")
 async def create_portal_session(
+    return_url: Optional[str] = None,
     current_user: User = Depends(get_current_user),
 ):
-    """Create Stripe customer portal session for subscription management"""
-    # In production, get customer_id from database
-    # For now, this is a placeholder
-    raise HTTPException(status_code=501, detail="Portal not configured - add customer_id to user model")
+    """Stripe Customer Portal — update card, cancel subscription, etc."""
+    if not _stripe_ready():
+        raise HTTPException(
+            status_code=503,
+            detail="Payments are not configured. Set STRIPE_SECRET_KEY on the server.",
+        )
+    if not current_user.stripe_customer_id:
+        raise HTTPException(
+            status_code=400,
+            detail="No Stripe customer on file yet. Complete a paid checkout first.",
+        )
+
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+    base = settings.APP_URL.rstrip("/")
+    return_url = ((return_url or f"{base}/profile")).strip()
+
+    try:
+        session = stripe.billing_portal.Session.create(
+            customer=current_user.stripe_customer_id,
+            return_url=return_url,
+        )
+        return {"url": session.url}
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
 
 
 @router.get("/subscription", response_model=SubscriptionResponse)
@@ -109,16 +125,16 @@ async def get_subscription(
     """Get current user's subscription status"""
     from app.models.application import Application
     from datetime import datetime
-    
+
     month_start = datetime.utcnow().replace(day=1)
     apps_count = db.query(Application).filter(
         Application.user_id == current_user.id,
         Application.created_at >= month_start,
     ).count()
-    
+
     plan = current_user.subscription_plan or "free"
     limit = {"free": 5, "pro": 999, "premium": 999}.get(plan, 5)
-    
+
     return SubscriptionResponse(
         status=current_user.subscription_status or "active",
         plan=plan,
@@ -130,20 +146,28 @@ async def get_subscription(
 
 @router.post("/webhook")
 async def stripe_webhook(request: Request):
-    """Handle Stripe webhooks"""
+    """Stripe webhook — configure STRIPE_WEBHOOK_SECRET in production."""
     payload = await request.body()
     stripe_signature = request.headers.get("Stripe-Signature", "")
-    
+    wh_secret = (settings.STRIPE_WEBHOOK_SECRET or "").strip()
+
+    if not wh_secret or wh_secret == "whsec_placeholder":
+        raise HTTPException(
+            status_code=503,
+            detail="Webhook endpoint not configured (STRIPE_WEBHOOK_SECRET).",
+        )
+
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+
     try:
         event = stripe.Webhook.construct_event(
-            payload, stripe_signature, settings.STRIPE_WEBHOOK_SECRET or "whsec_placeholder"
+            payload, stripe_signature, wh_secret
         )
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid payload")
     except stripe.error.SignatureVerificationError:
         raise HTTPException(status_code=400, detail="Invalid signature")
-    
-    # Handle events
+
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
         user_id = session.get("metadata", {}).get("user_id")
@@ -153,17 +177,29 @@ async def stripe_webhook(request: Request):
             try:
                 user = db.query(User).filter(User.id == int(user_id)).first()
                 if user:
-                    user.subscription_plan = plan.split("_")[0]  # "pro_monthly" -> "pro"
+                    user.subscription_plan = plan.split("_")[0]
                     user.subscription_status = "active"
-                    user.stripe_customer_id = session.get("customer")
+                    cid = session.get("customer")
+                    if cid:
+                        user.stripe_customer_id = cid
                     db.commit()
             finally:
                 db.close()
-    
+
     elif event["type"] == "customer.subscription.deleted":
-        # Downgrade to free tier
-        pass
-    
+        sub = event["data"]["object"]
+        cust_id = sub.get("customer")
+        if cust_id:
+            db = SessionLocal()
+            try:
+                user = db.query(User).filter(User.stripe_customer_id == cust_id).first()
+                if user:
+                    user.subscription_plan = "free"
+                    user.subscription_status = "cancelled"
+                    db.commit()
+            finally:
+                db.close()
+
     return {"status": "success"}
 
 
@@ -174,28 +210,25 @@ async def get_usage(
 ):
     """Get application usage stats"""
     from app.models.application import Application
-    from datetime import datetime, timedelta
-    
-    # This month
+    from datetime import datetime
+
     month_start = datetime.utcnow().replace(day=1)
     monthly_apps = db.query(Application).filter(
         Application.user_id == current_user.id,
         Application.created_at >= month_start,
     ).count()
-    
-    # All time
+
     total_apps = db.query(Application).filter(
         Application.user_id == current_user.id,
     ).count()
-    
-    # Interview rate
+
     interviews = db.query(Application).filter(
         Application.user_id == current_user.id,
         Application.stage.in_(["phone_screen", "technical", "onsite"]),
     ).count()
-    
+
     interview_rate = round((interviews / total_apps * 100), 1) if total_apps > 0 else 0
-    
+
     return {
         "monthly_applications": monthly_apps,
         "total_applications": total_apps,

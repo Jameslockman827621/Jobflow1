@@ -8,10 +8,6 @@ from datetime import datetime
 from pydantic import BaseModel
 
 from app.database import get_db
-
-
-class StartApplicationRequest(BaseModel):
-    job_id: int
 from app.models.application import Application
 from app.models.job import Job
 from app.models.cv import CV
@@ -20,6 +16,10 @@ from app.api.auth import get_current_user
 from app.tasks.notifications import send_application_confirmation_task
 
 router = APIRouter(prefix="/api/v1/applications", tags=["Applications"])
+
+
+class StartApplicationRequest(BaseModel):
+    job_id: int
 
 
 @router.get("")
@@ -49,16 +49,8 @@ async def start_application(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    """Start a new application — returns package with CV export URL and tips."""
     job_id = body.job_id
-    """
-    Start a new application - generates application package
-    
-    Returns:
-    - Application ID
-    - CV download URL
-    - Job URL
-    - Application tips
-    """
     # Get job
     job = db.query(Job).filter(Job.id == job_id).first()
     if not job:
@@ -296,31 +288,43 @@ async def delete_application(
 def generate_application_tips(job: Job) -> list:
     """Generate application tips based on job source"""
     tips = []
-    
+
+    src_name = ""
+    try:
+        if job.source is not None and getattr(job.source, "name", None):
+            src_name = (job.source.name or "").lower()
+    except Exception:
+        src_name = ""
+
     # Source-specific tips
-    if "linkedin" in (job.source or "").lower():
+    if "linkedin" in src_name:
         tips.extend([
             "LinkedIn Easy Apply: Your profile will be attached automatically",
             "Make sure your LinkedIn profile is up to date",
             "Consider adding a note to the recruiter (2-3 sentences)"
         ])
-    elif "indeed" in (job.source or "").lower():
+    elif "indeed" in src_name:
         tips.extend([
             "Indeed Quick Apply uses your Indeed resume",
             "Upload your tailored CV for better results",
             "Indeed may ask pre-screening questions - be ready"
         ])
-    elif "greenhouse" in (job.source or "").lower():
+    elif "greenhouse" in src_name:
         tips.extend([
             "Greenhouse forms typically ask for LinkedIn profile",
             "They may have custom questions - read carefully",
             "Upload both CV and cover letter if possible"
         ])
-    elif "lever" in (job.source or "").lower():
+    elif "lever" in src_name:
         tips.extend([
             "Lever applications are usually straightforward",
             "They value culture fit - research the company",
             "Include links to portfolio/GitHub if relevant"
+        ])
+    elif "curated" in src_name:
+        tips.extend([
+            "This is a sample listing for trying JobScale — replace with live roles once scrapers are configured",
+            "Use the external link to practice your application flow",
         ])
     else:
         tips.extend([
