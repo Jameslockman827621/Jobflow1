@@ -121,6 +121,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
           <div className="mt-auto pt-4 border-t border-slate-200">
             <a
+              href="/apply-settings"
+              onClick={(e) => { e.preventDefault(); router.push('/apply-settings'); setMobileOpen(false); }}
+              className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H3.75v-2.818c0-.597.237-1.17.659-1.591l6.994-6.994c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" />
+              </svg>
+              Auto-Fill Answers
+            </a>
+            <a
               href="/profile"
               onClick={(e) => { e.preventDefault(); router.push('/profile'); setMobileOpen(false); }}
               className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition-colors"
