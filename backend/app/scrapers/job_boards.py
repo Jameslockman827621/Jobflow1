@@ -21,23 +21,25 @@ from .base import BaseScraper, JobData
 
 class OttaScraper(BaseScraper):
     """
-    Otta job board scraper.
+    Otta job board scraper (legacy).
 
-    Otta exposes a public JSON search endpoint used by their web UI:
-      https://api.otta.com/api/jobs/search
-    POST body: {"query": "...", "offset": 0, "limit": 50}
+    Otta was acquired by Welcome to the Jungle and now requires login (Google SSO).
+    There is no public JSON API. This scraper is kept for compatibility but will
+    return empty results. The aggregator marks it as unavailable in coverage.
 
-    Otta aggregates from many ATS providers and tags roles nicely.
+    For curated tech jobs, the aggregator relies on Greenhouse/Ashby/Lever for
+    company-specific roles and RemoteOK/WeWorkRemotely/Remotive/Himalayas for
+    broad remote search.
     """
 
     name = "otta"
-    base_url = "https://api.otta.com"
+    base_url = "https://otta.com"
 
     async def scrape_company_jobs(self, company_subdomain: str) -> List[JobData]:
         return []
 
     async def scrape_all_jobs(self, limit: int = 100) -> List[JobData]:
-        return await self.search_jobs(keywords="", max_jobs=limit)
+        return []
 
     async def search_jobs(
         self,
@@ -45,68 +47,16 @@ class OttaScraper(BaseScraper):
         location: Optional[str] = None,
         max_jobs: int = 50,
     ) -> List[JobData]:
-        url = f"{self.base_url}/api/jobs/search"
-        payload: Dict[str, Any] = {
-            "query": keywords or "",
-            "offset": 0,
-            "limit": max_jobs,
-        }
-        if location:
-            payload["location"] = location
-
-        async with httpx.AsyncClient(
-            headers={**self.headers, "Accept": "application/json", "Content-Type": "application/json"},
-            timeout=20.0,
-            follow_redirects=True,
-        ) as client:
-            try:
-                response = await client.post(url, json=payload)
-                if response.status_code >= 400:
-                    return []
-                data = response.json()
-                jobs = data.get("jobs", []) or data.get("results", []) or []
-                results = []
-                for job in jobs[:max_jobs]:
-                    try:
-                        results.append(self._parse_job(job))
-                    except Exception:
-                        continue
-                return results
-            except (httpx.HTTPError, ValueError) as e:
-                print(f"  Otta: error: {e}")
-                return []
+        return []
 
     def _parse_job(self, job: Dict) -> JobData:
-        title = job.get("title") or job.get("name") or "Unknown Position"
-        company_obj = job.get("company") or {}
-        company = company_obj.get("name") if isinstance(company_obj, dict) else str(company_obj or "Unknown")
-        location = job.get("location") or job.get("locations") or ""
-        if isinstance(location, list):
-            location = ", ".join(str(l) for l in location)
         return JobData(
-            title=title,
-            company=company,
-            location=str(location),
-            external_id=str(job.get("id", "")),
-            external_url=job.get("url") or job.get("application_url") or "",
-            description=job.get("description") or job.get("summary") or "",
-            remote=job.get("remote") is True or "remote" in str(location).lower(),
-            hybrid="hybrid" in str(location).lower(),
-            department=job.get("department") or job.get("category"),
-            seniority=self.parse_seniority(title),
-            employment_type=job.get("employment_type") or job.get("job_type"),
-            posted_date=self._parse_date(job.get("posted_at") or job.get("published_date")),
-            raw_data=job,
+            title=job.get("title", "Unknown"),
+            company="Unknown",
+            location="",
+            external_id="",
+            external_url="",
         )
-
-    @staticmethod
-    def _parse_date(value: Optional[str]) -> Optional[datetime]:
-        if not value:
-            return None
-        try:
-            return datetime.fromisoformat(value.replace("Z", "+00:00"))
-        except (ValueError, TypeError):
-            return None
 
 
 class WellfoundScraper(BaseScraper):
@@ -232,13 +182,77 @@ class BuiltInScraper(BaseScraper):
             for item in items:
                 if not isinstance(item, dict):
                     continue
-                if item.get("@type") not in ("JobPosting", ["JobPosting"]):
-                    continue
-                try:
-                    results.append(self._parse_jsonld(item))
-                except Exception:
-                    continue
+                # Direct JobPosting
+                if item.get("@type") in ("JobPosting", ["JobPosting"]):
+                    try:
+                        results.append(self._parse_jsonld(item))
+                    except Exception:
+                        continue
+                # ItemList — BuiltIn uses ListItem with name/url/description directly
+                elif item.get("@type") == "ItemList":
+                    for el in (item.get("itemListElement") or []):
+                        if not isinstance(el, dict):
+                            continue
+                        # If ListItem has nested JobPosting item
+                        inner = el.get("item") or el
+                        if isinstance(inner, dict) and inner.get("@type") in ("JobPosting", ["JobPosting"]):
+                            try:
+                                results.append(self._parse_jsonld(inner))
+                            except Exception:
+                                continue
+                        # BuiltIn-style ListItem with just name/url/description
+                        elif el.get("@type") == "ListItem" and el.get("name") and el.get("url"):
+                            try:
+                                results.append(self._parse_listitem(el))
+                            except Exception:
+                                continue
+                # @graph array
+                elif "@graph" in item:
+                    for g in item.get("@graph") or []:
+                        if isinstance(g, dict):
+                            if g.get("@type") in ("JobPosting", ["JobPosting"]):
+                                try:
+                                    results.append(self._parse_jsonld(g))
+                                except Exception:
+                                    continue
+                            elif g.get("@type") == "ItemList":
+                                for el in (g.get("itemListElement") or []):
+                                    if not isinstance(el, dict):
+                                        continue
+                                    inner = el.get("item") or el
+                                    if isinstance(inner, dict) and inner.get("@type") in ("JobPosting", ["JobPosting"]):
+                                        try:
+                                            results.append(self._parse_jsonld(inner))
+                                        except Exception:
+                                            continue
+                                    elif el.get("@type") == "ListItem" and el.get("name") and el.get("url"):
+                                        try:
+                                            results.append(self._parse_listitem(el))
+                                        except Exception:
+                                            continue
         return results
+
+    def _parse_listitem(self, el: Dict) -> JobData:
+        """Parse BuiltIn-style ListItem with name/url/description."""
+        title = el.get("name") or "Unknown Position"
+        url = el.get("url") or ""
+        description = el.get("description") or ""
+        # BuiltIn URLs include the company in the path: /job/{title}/{id}
+        # We can't reliably get the company from the ListItem alone — fetch the page
+        # would be too slow, so we leave company as "Unknown" and the aggregator's
+        # dedup will still work on URL.
+        return JobData(
+            title=title,
+            company="Unknown",  # BuiltIn ListItem doesn't include company
+            location="",  # BuiltIn ListItem doesn't include location
+            external_id=url or f"builtin_{el.get('position', '')}",
+            external_url=url,
+            description=description,
+            remote=False,
+            hybrid=False,
+            seniority=self.parse_seniority(title),
+            raw_data=el,
+        )
 
     def _parse_jsonld(self, item: Dict) -> JobData:
         title = item.get("title") or "Unknown Position"

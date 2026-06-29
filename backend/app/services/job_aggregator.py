@@ -386,23 +386,28 @@ class JobAggregator:
             {"id": "workable", "name": "Workable", "type": "ats", "needs_api_key": False, "coverage": "100,000+ companies"},
             {"id": "linkedin", "name": "LinkedIn", "type": "board", "needs_api_key": True, "coverage": "Global professional network"},
             {"id": "indeed", "name": "Indeed", "type": "board", "needs_api_key": True, "coverage": "Largest job board globally"},
-            {"id": "otta", "name": "Otta", "type": "board", "needs_api_key": False, "coverage": "Curated tech & startup jobs"},
-            {"id": "wellfound", "name": "Wellfound (AngelList)", "type": "board", "needs_api_key": False, "coverage": "Startup jobs"},
+            {"id": "otta", "name": "Otta (now Welcome to the Jungle)", "type": "board", "needs_api_key": False, "requires_auth": True, "coverage": "Now requires login — disabled"},
+            {"id": "wellfound", "name": "Wellfound (AngelList)", "type": "board", "needs_api_key": False, "requires_auth": True, "coverage": "Requires login — disabled"},
             {"id": "builtin", "name": "BuiltIn", "type": "board", "needs_api_key": False, "coverage": "Tech hubs (NYC, SF, etc.)"},
             {"id": "remoteok", "name": "RemoteOK", "type": "remote_board", "needs_api_key": False, "coverage": "Remote jobs"},
             {"id": "weworkremotely", "name": "WeWorkRemotely", "type": "remote_board", "needs_api_key": False, "coverage": "Remote jobs (largest)"},
             {"id": "remotive", "name": "Remotive", "type": "remote_board", "needs_api_key": False, "coverage": "Remote jobs"},
-            {"id": "himalayas", "name": "Himalayas", "type": "remote_board", "needs_api_key": False, "coverage": "Remote jobs"},
+            {"id": "himalayas", "name": "Himalayas", "type": "remote_board", "needs_api_key": False, "coverage": "Remote jobs (search API)"},
             {"id": "google_jobs", "name": "Google Jobs", "type": "meta", "needs_api_key": False, "coverage": "Aggregates from many sources"},
-            {"id": "career_page", "name": "Direct Career Pages", "type": "generic", "needs_api_key": False, "coverage": "Any company career URL"},
+            {"id": "career_page", "name": "Direct Career Pages", "type": "generic", "needs_api_key": False, "coverage": "Any company career URL via JSON-LD"},
         ]
-        # Mark LinkedIn/Indeed as available only if Apify key is set
         for s in sources:
-            if s["needs_api_key"] and not settings.APIFY_API_KEY:
+            # Sources requiring auth are unavailable
+            if s.get("requires_auth"):
+                s["available"] = False
+                s["note"] = "Requires login — not scrapable without auth"
+                continue
+            # Sources needing Apify key
+            if s.get("needs_api_key") and not settings.APIFY_API_KEY:
                 s["available"] = False
                 s["note"] = "Requires APIFY_API_KEY"
-            else:
-                s["available"] = True
+                continue
+            s["available"] = True
         return sources
 
 
