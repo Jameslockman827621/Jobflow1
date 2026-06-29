@@ -164,7 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem(USER_KEY, JSON.stringify(userData));
     }
 
-    router.push('/onboarding');
+    router.push('/quick-start');
   }
 
   function logout() {

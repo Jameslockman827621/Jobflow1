@@ -140,11 +140,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     applyBtn.disabled = true;
-    applyBtn.textContent = `⏳ Opening ${jobs.length} job(s)...`;
+    applyBtn.textContent = `⏳ Tailoring CV & opening ${jobs.length} job(s)...`;
+
+    let tailoredCount = 0;
+    let totalAts = 0;
 
     for (let i = 0; i < jobs.length; i++) {
       const job = jobs[i];
       try {
+        // start_application now tailors the CV per job and returns the tailored CV URL + ATS score
         const startRes = await fetch(`${API_BASE}/applications/start`, {
           method: 'POST',
           headers: {
@@ -156,8 +160,41 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (startRes.ok) {
           const data = await startRes.json();
+          // Open the job application page
           if (data.job_url) {
             chrome.tabs.create({ url: data.job_url });
+          }
+          // Track the tailored CV stats
+          if (data.tailoring_method && data.tailoring_method !== 'none') {
+            tailoredCount++;
+            totalAts += data.ats_score || 0;
+          }
+          // Auto-download the tailored CV in the background so it's ready to upload
+          if (data.cv_download_url && data.cv_download_url.includes('/tailored-cv')) {
+            try {
+              const cvRes = await fetch(`${DASHBOARD_URL}${data.cv_download_url}`, {
+                headers: { Authorization: `Bearer ${jobscale_token}` }
+              });
+              if (cvRes.ok) {
+                const html = await cvRes.text();
+                const blob = new Blob([html], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                // We can't auto-trigger download silently from a popup, but we can
+                // stash the tailored CV URL so the user can grab it from the dashboard.
+                chrome.storage.local.set({
+                  [`tailored_cv_${data.application_id}`]: {
+                    url: `${DASHBOARD_URL}${data.cv_download_url}`,
+                    job_title: data.job_title,
+                    company: data.company,
+                    ats_score: data.ats_score,
+                  }
+                });
+                // Revoke after 30 seconds to free memory
+                setTimeout(() => URL.revokeObjectURL(url), 30000);
+              }
+            } catch (e) {
+              console.log('Tailored CV prefetch failed:', e);
+            }
           }
         }
         if (i < jobs.length - 1) {
@@ -169,7 +206,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     applyBtn.disabled = false;
-    applyBtn.textContent = '✨ Apply to Selected Jobs';
+    if (tailoredCount > 0) {
+      const avgAts = Math.round(totalAts / tailoredCount);
+      applyBtn.textContent = `✨ Apply to Selected Jobs`;
+      // Show success message with ATS score
+      const statsEl = document.getElementById('apply-stats');
+      if (statsEl) {
+        statsEl.innerHTML = `✅ ${tailoredCount} CV${tailoredCount !== 1 ? 's' : ''} tailored · avg ATS score ${avgAts}/100`;
+        statsEl.classList.remove('hidden');
+      }
+    } else {
+      applyBtn.textContent = '✨ Apply to Selected Jobs';
+    }
   });
 
   loginBtn.addEventListener('click', () => {

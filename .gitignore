@@ -38,3 +38,4 @@ Thumbs.db
 
 # User CV uploads (contain personal data)
 backend/uploads/
+frontend/tsconfig.tsbuildinfo

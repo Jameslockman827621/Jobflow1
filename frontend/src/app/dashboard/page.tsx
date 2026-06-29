@@ -34,6 +34,19 @@ interface ApplicationPackage {
   company: string;
   application_tips: string[];
   status: string;
+  ats_score?: number;
+  ats_breakdown?: {
+    overall: number;
+    keyword_score: number;
+    skills_score: number;
+    experience_score: number;
+    matched_skills?: string[];
+    missing_skills?: string[];
+    recommendations?: string[];
+  };
+  tailored_cv_url?: string | null;
+  tailoring_method?: string;
+  tailored_summary?: string;
 }
 
 function SkeletonCard() {
@@ -160,7 +173,7 @@ function DashboardPage() {
         const status = await statusRes.json();
         setOnboardingStatus(status);
         if (!status.onboarding_complete) {
-          router.push('/onboarding');
+          router.push('/quick-start');
           return;
         }
         if (status.has_cached_jobs) {
@@ -482,8 +495,13 @@ function DashboardPage() {
             <div className="px-6 py-5 border-b border-slate-200">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-base font-semibold text-navy-900">Applications Ready</h3>
-                  <p className="text-sm text-slate-500 mt-0.5">{batchResults.length} application{batchResults.length !== 1 ? 's' : ''} prepared</p>
+                  <h3 className="text-base font-semibold text-navy-900 flex items-center gap-2">
+                    <span>Applications Ready</span>
+                    <span className="text-xs font-normal text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full">
+                      {batchResults.length} CV{batchResults.length !== 1 ? 's' : ''} auto-tailored
+                    </span>
+                  </h3>
+                  <p className="text-sm text-slate-500 mt-0.5">{batchResults.length} application{batchResults.length !== 1 ? 's' : ''} prepared with hyper-personalized CVs</p>
                 </div>
                 <button onClick={() => setShowModal(false)} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-md hover:bg-slate-100 transition-colors">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -491,26 +509,48 @@ function DashboardPage() {
               </div>
             </div>
             <div className="px-6 py-4">
-              <p className="text-sm text-slate-600 mb-4">Your applications have been prepared. The Chrome extension will auto-apply to these jobs, or you can apply manually using the links below.</p>
+              <p className="text-sm text-slate-600 mb-4">For each job, we generated a tailored CV that mirrors the job description's keywords and highlights your most relevant experience. The Chrome extension will auto-apply, or use the links below.</p>
               <div className="space-y-2">
-                {batchResults.map((result, i) => (
-                  <div key={i} className={`p-3.5 rounded-lg border ${result.status === 'already_applied' ? 'border-amber-200 bg-amber-50/50' : 'border-slate-200 bg-slate-50/50'}`}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <h4 className="text-sm font-medium text-slate-900">{result.job_title}</h4>
-                        <p className="text-xs text-slate-500 mt-0.5">{result.company}</p>
+                {batchResults.map((result, i) => {
+                  const ats = result.ats_score ?? 0;
+                  const atsColor = ats >= 75 ? 'text-emerald-600 bg-emerald-50' : ats >= 50 ? 'text-amber-600 bg-amber-50' : 'text-slate-600 bg-slate-100';
+                  return (
+                    <div key={i} className={`p-3.5 rounded-lg border ${result.status === 'already_applied' ? 'border-amber-200 bg-amber-50/50' : 'border-slate-200 bg-slate-50/50'}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-sm font-medium text-slate-900 truncate">{result.job_title}</h4>
+                          <p className="text-xs text-slate-500 mt-0.5">{result.company}</p>
+                          {result.tailored_summary && (
+                            <p className="text-xs text-slate-600 mt-1.5 line-clamp-2 italic">&ldquo;{result.tailored_summary.slice(0, 140)}...&rdquo;</p>
+                          )}
+                          {result.ats_breakdown && (
+                            <div className="flex flex-wrap gap-1.5 mt-2">
+                              <span className={`text-xs font-semibold px-2 py-0.5 rounded ${atsColor}`}>ATS {ats}/100</span>
+                              <span className="text-xs text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">Skills {result.ats_breakdown.skills_score}%</span>
+                              <span className="text-xs text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">Keywords {result.ats_breakdown.keyword_score}%</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                          {result.status === 'already_applied' ? (
+                            <span className="text-xs font-medium text-amber-700 bg-amber-100 px-2 py-1 rounded">Already Applied</span>
+                          ) : (
+                            <a href={result.job_url} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-teal-600 hover:text-teal-700 flex items-center gap-1">
+                              Apply
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" /></svg>
+                            </a>
+                          )}
+                          {result.tailored_cv_url && (
+                            <a href={result.tailored_cv_url} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-navy-900 hover:text-navy-800 flex items-center gap-1">
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+                              Tailored CV
+                            </a>
+                          )}
+                        </div>
                       </div>
-                      {result.status === 'already_applied' ? (
-                        <span className="flex-shrink-0 text-xs font-medium text-amber-700 bg-amber-100 px-2 py-1 rounded">Already Applied</span>
-                      ) : (
-                        <a href={result.job_url} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 text-xs font-medium text-teal-600 hover:text-teal-700 flex items-center gap-1">
-                          Apply
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" /></svg>
-                        </a>
-                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
             <div className="px-6 py-4 border-t border-slate-200">
