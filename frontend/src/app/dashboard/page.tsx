@@ -12,11 +12,21 @@ interface Job {
   company: string;
   location: string;
   remote: boolean;
+  hybrid?: boolean;
   min_salary?: number;
   max_salary?: number;
   posted_date: string;
   external_url: string;
   source?: string;
+  seniority?: string;
+  employment_type?: string;
+  visa_sponsorship?: boolean | null;
+  industry?: string;
+  company_size?: string;
+  skills_required?: string[];
+  benefits_extracted?: string[];
+  match_score?: number;
+  match_breakdown?: Array<{ field: string; label: string; required: boolean; met: boolean; job_value: string }>;
 }
 
 interface OnboardingStatus {
@@ -346,6 +356,39 @@ function DashboardPage() {
                   {selectedJobs.size === jobs.length ? 'Deselect all' : 'Select all'}
                 </button>
               )}
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await authFetch('/api/v1/jobs/match', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({}),
+                    });
+                    if (res.ok) {
+                      const data = await res.json();
+                      if (data.jobs && data.jobs.length > 0) {
+                        setJobs(data.jobs);
+                        toast.success(data.message);
+                      } else {
+                        toast.info(data.message || 'No jobs match all your must-haves. Set them in My Must-Haves.');
+                      }
+                    }
+                  } catch {
+                    toast.error('Failed to filter by must-haves');
+                  }
+                }}
+                className="text-xs px-3 py-1.5 rounded-md bg-navy-900 text-white hover:bg-navy-800 font-medium flex items-center gap-1.5 transition-colors"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9 9 0 100-18 9 9 0 000 18zm0-5a4 4 0 100-8 4 4 0 000 8z" /></svg>
+                1:1 match filter
+              </button>
+              <a
+                href="/priorities"
+                onClick={(e) => { e.preventDefault(); router.push('/priorities'); }}
+                className="text-xs text-slate-500 hover:text-teal-600 font-medium"
+              >
+                Set must-haves →
+              </a>
             </div>
             <button onClick={loadDashboard} className="p-1.5 text-slate-400 hover:text-teal-600 hover:bg-slate-50 rounded-md transition-colors" aria-label="Refresh">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" /></svg>
@@ -401,18 +444,38 @@ function DashboardPage() {
                             <div className="flex flex-wrap items-center gap-2 mt-2">
                               <span className="inline-flex items-center gap-1 text-xs text-slate-500">
                                 <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
-                                {job.location}
+                                {job.location || (job.remote ? 'Remote' : '—')}
                               </span>
                               {job.remote && (
                                 <span className="inline-flex items-center px-1.5 py-0.5 bg-teal-50 text-teal-700 rounded text-[11px] font-medium">Remote</span>
                               )}
+                              {job.hybrid && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 bg-violet-50 text-violet-700 rounded text-[11px] font-medium">Hybrid</span>
+                              )}
                               {job.max_salary && (
-                                <span className="inline-flex items-center px-1.5 py-0.5 bg-slate-50 text-slate-600 rounded text-[11px] font-medium">{'\u00A3'}{job.max_salary.toLocaleString()}</span>
+                                <span className="inline-flex items-center px-1.5 py-0.5 bg-slate-50 text-slate-600 rounded text-[11px] font-medium">{'\u00A3'}{job.max_salary.toLocaleString()}{job.min_salary ? `-${job.max_salary?.toLocaleString()}` : '+'}</span>
+                              )}
+                              {job.seniority && job.seniority !== 'mid' && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded text-[11px] font-medium capitalize">{job.seniority}</span>
+                              )}
+                              {job.visa_sponsorship === true && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded text-[11px] font-medium">Visa ✓</span>
                               )}
                               {job.source && (
                                 <span className="inline-flex items-center px-1.5 py-0.5 bg-slate-50 text-slate-400 rounded text-[11px]">{job.source}</span>
                               )}
                             </div>
+                            {/* Skills chips — show up to 4 from the enriched skills_required */}
+                            {(job as any).skills_required && (job as any).skills_required.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1.5">
+                                {(job as any).skills_required.slice(0, 4).map((skill: string) => (
+                                  <span key={skill} className="inline-flex items-center px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded text-[10px] font-medium">{skill}</span>
+                                ))}
+                                {(job as any).skills_required.length > 4 && (
+                                  <span className="text-[10px] text-slate-400">+{(job as any).skills_required.length - 4} more</span>
+                                )}
+                              </div>
+                            )}
                           </div>
                           {job.external_url && (
                             <a
