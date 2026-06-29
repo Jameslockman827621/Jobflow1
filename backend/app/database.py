@@ -5,7 +5,13 @@ from typing import AsyncGenerator, Generator
 
 from app.core.config import settings
 from app.models.base import Base
-from app.models import User, Job, Application, UserProfile, Skill
+# Import every model so create_all() and Alembic see the full schema.
+# Adding a new model? Import it here too (or add to app/models/__init__.py).
+from app.models import (
+    User, Job, JobSource, Application, UserProfile, Skill,
+    ReferralCode, Referral, CompanyReview, InterviewReview,
+    UserAutoApplyJob, CV, CVTemplate, UserPreferences, SearchCache,
+)
 
 # Sync engine (for migrations, Alembic)
 sync_engine = create_engine(settings.DATABASE_URL)

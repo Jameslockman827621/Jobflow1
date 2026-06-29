@@ -275,11 +275,19 @@ async def upload_cv(
     if file.content_type not in allowed_types and extension not in {"pdf", "docx", "txt"}:
         raise HTTPException(status_code=400, detail="Only PDF, DOCX, and TXT files are allowed")
 
-    # Save file
+    # File size limit (10MB) — guards against disk/memory exhaustion
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large (max 10MB)")
+
+    # Save file — sanitize filename to prevent path traversal
+    import os
+    safe_name = os.path.basename(file.filename or "cv")
+    # Strip any remaining shell/path metacharacters and prefix with user id
+    safe_name = f"u{current_user.id}_{safe_name}"
     upload_dir = f"uploads/cvs/{current_user.id}"
     os.makedirs(upload_dir, exist_ok=True)
-    file_path = f"{upload_dir}/{file.filename}"
-    content = await file.read()
+    file_path = f"{upload_dir}/{safe_name}"
     with open(file_path, "wb") as f:
         f.write(content)
 

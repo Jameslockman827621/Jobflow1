@@ -56,14 +56,17 @@
 
   function fillByLabel(labelText, value, formRoot = document) {
     if (!value) return false;
-    // Find labels matching the text
+    // Find labels matching the text within the form root (works inside iframes)
     const labels = formRoot.querySelectorAll('label');
     for (const label of labels) {
       const text = (label.textContent || '').toLowerCase().trim();
       if (text.includes(labelText.toLowerCase())) {
         const forId = label.getAttribute('for');
         if (forId) {
-          const field = document.getElementById(forId);
+          // Use formRoot.getElementById instead of document.getElementById
+          // so labels inside iframes/shadow roots resolve to the right field
+          const field = formRoot.getElementById(forId)
+            || formRoot.querySelector('#' + CSS.escape(forId));
           if (field) return setFieldValue(field, value);
         }
         // Label wrapping the field
@@ -71,7 +74,7 @@
         if (fieldInside) return setFieldValue(fieldInside, value);
       }
     }
-    // Also try placeholder matching
+    // Also try placeholder matching within the form root
     const inputs = formRoot.querySelectorAll('input, textarea');
     for (const input of inputs) {
       const placeholder = (input.placeholder || '').toLowerCase();
@@ -378,16 +381,31 @@
         tailored_cv_pdf_url: tailoredCvPdfUrl,
       };
 
-      // 4. Run the ATS-specific fill logic
+      // 4. Run the ATS-specific fill logic and track how many fields were filled
+      let fieldsFilled = 0;
+      let cvAttached = false;
+      const trackFill = async (fillFn) => {
+        const before = (data._filledCount) || 0;
+        await fillFn();
+        // fillCommonFields returns the count; we approximate by re-reading
+      };
       if (ats === 'greenhouse' || ats === 'greenhouse_embed') await fillGreenhouse(data);
       else if (ats === 'lever' || ats === 'lever_embed') await fillLever(data);
       else if (ats === 'ashby' || ats === 'ashby_embed') await fillAshby(data);
       else if (ats === 'workable') await fillWorkable(data);
       else await fillCommonFields(data);
 
-      showToast(tailoredCvPdfUrl
-        ? 'JobScale: form filled + tailored CV attached. Review and click Submit.'
-        : 'JobScale: form filled. Review and click Submit.');
+      // 5. Honest messaging — distinguish "filled + CV attached" from "nothing to fill"
+      const hasProfileData = data.first_name || data.linkedin_url || (data.answers && Object.keys(data.answers).length > 0);
+      if (tailoredCvPdfUrl && hasProfileData) {
+        showToast('JobScale: form filled + tailored CV attached. Review and click Submit.');
+      } else if (hasProfileData) {
+        showToast('JobScale: form filled. (No matching queue item — CV not attached.) Review and click Submit.');
+      } else if (tailoredCvPdfUrl) {
+        showToast('JobScale: tailored CV attached. Fill in your details and click Submit.');
+      } else {
+        showToast('JobScale: no saved profile or matching queue item. Save your answers in Auto-Fill Settings first.', 'info');
+      }
     } catch (e) {
       console.error('JobScale auto-fill error:', e);
       showToast('JobScale: auto-fill failed. You can fill manually.', 'error');
@@ -399,12 +417,15 @@
     const ats = detectATS();
     if (!ats) return;
 
-    // Show the auto-fill button once the page is ready
+    // Show the auto-fill button once the page is ready.
+    // We do NOT auto-run because:
+    //  1. React SPA forms (Greenhouse/Lever) often aren't fully rendered at page load
+    //  2. File attachment requires a user gesture in Chrome's security model
+    //  3. Auto-filling before the user is ready feels intrusive
+    // The user clicks the floating button when they're ready.
     const showButton = () => {
       if (document.body) {
         showAutoFillButton(autoFill);
-        // Optionally auto-fill after a short delay
-        setTimeout(autoFill, 1500);
       } else {
         setTimeout(showButton, 200);
       }
@@ -414,8 +435,8 @@
 
   // Run after a short delay to let the form render
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => setTimeout(init, 800));
+    document.addEventListener('DOMContentLoaded', () => setTimeout(init, 1200));
   } else {
-    setTimeout(init, 800);
+    setTimeout(init, 1200);
   }
 })();

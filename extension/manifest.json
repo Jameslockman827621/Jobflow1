@@ -38,10 +38,7 @@
       "matches": [
         "https://*.linkedin.com/jobs/*",
         "https://*.indeed.com/*",
-        "https://*.glassdoor.com/*",
-        "https://jobs.ashbyhq.com/*",
-        "https://*.greenhouse.io/*",
-        "https://*.lever.co/*"
+        "https://*.glassdoor.com/*"
       ],
       "js": ["content.js"],
       "css": ["styles.css"]
@@ -54,7 +51,8 @@
         "https://*.ashbyhq.com/*",
         "https://*.ashby.com/*",
         "https://job-boards.greenhouse.io/*",
-        "https://jobs.lever.co/*"
+        "https://jobs.lever.co/*",
+        "https://jobs.ashbyhq.com/*"
       ],
       "js": ["form_fill.js"],
       "all_frames": true,

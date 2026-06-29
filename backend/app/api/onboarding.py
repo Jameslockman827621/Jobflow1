@@ -363,8 +363,14 @@ async def quick_start(
     extension = filename.rsplit(".", 1)[-1] if "." in filename else _ext_from_content_type(file.content_type)
     upload_dir = f"uploads/cvs/{current_user.id}"
     os.makedirs(upload_dir, exist_ok=True)
-    file_path = f"{upload_dir}/{file.filename or 'cv'}"
+    # Sanitize filename to prevent path traversal + prefix with user id
+    safe_name = os.path.basename(file.filename or "cv")
+    safe_name = f"u{current_user.id}_{safe_name}"
+    file_path = f"{upload_dir}/{safe_name}"
     content = await file.read()
+    # File size limit (10MB)
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large (max 10MB)")
     with open(file_path, "wb") as f:
         f.write(content)
 
