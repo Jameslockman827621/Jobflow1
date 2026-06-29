@@ -198,7 +198,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         target = `${base}${pathOrUrl.startsWith('/') ? pathOrUrl : `/${pathOrUrl}`}`;
       }
     }
-    return fetch(target, { ...options, headers });
+    const response = await fetch(target, { ...options, headers });
+    // Handle expired/invalid tokens globally so users get redirected to login
+    // instead of seeing silent failures on protected pages.
+    if (response.status === 401 && typeof window !== 'undefined') {
+      const currentPath = window.location.pathname;
+      const isProtected = !['/login', '/register', '/', '/terms', '/privacy', '/contact'].includes(currentPath)
+        && !currentPath.startsWith('/billing/');
+      if (isProtected) {
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(USER_KEY);
+        localStorage.removeItem(LEGACY_TOKEN_KEY);
+        syncTokenToExtension(null);
+        setUser(null);
+        // Redirect to login with a return path so the user can resume after re-auth
+        const returnUrl = encodeURIComponent(currentPath);
+        router.push(`/login?next=${returnUrl}&reason=expired`);
+      }
+    }
+    return response;
   }
 
   return (

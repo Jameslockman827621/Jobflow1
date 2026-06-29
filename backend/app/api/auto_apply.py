@@ -99,12 +99,22 @@ async def approve_jobs(
         ).first()
 
         if existing:
-            # If it was skipped or applied, reset to approved so it re-enters the queue
+            # If it was skipped or applied, reset to approved AND re-tailor so the
+            # user gets a fresh CV (their CV may have been updated since the first
+            # approval, or the previous tailoring may have failed).
             if existing.status in ("skipped", "applied"):
                 existing.status = "approved"
                 existing.approved_at = datetime.utcnow()
                 existing.skipped_at = None
                 existing.applied_at = None
+                # Re-tailor the CV
+                try:
+                    tailored = tailor_cv_for_job(cv, job.description or "", job.title or "", job.company or "")
+                    score = score_cv_against_job(tailored, job.description or "")
+                    existing.tailored_cv_data = tailored
+                    existing.ats_score = score["overall"]
+                except Exception as e:
+                    print(f"  approve: re-tailor error for job {job_id}: {e}")
                 db.commit()
             results.append({
                 "job_id": job_id, "status": "already_in_queue",
@@ -218,11 +228,18 @@ async def start_queue_item(
     ).first()
     if not item:
         raise HTTPException(status_code=404, detail="Queue item not found")
-
-    item.status = "in_progress"
-    item.started_at = datetime.utcnow()
-    db.commit()
-    db.refresh(item)
+    # Only allow starting from 'approved' status to prevent restarting
+    # already-applied or skipped items
+    if item.status not in ("approved", "in_progress"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot start a queue item with status '{item.status}'. Only approved items can be started."
+        )
+    if item.status != "in_progress":
+        item.status = "in_progress"
+        item.started_at = datetime.utcnow()
+        db.commit()
+        db.refresh(item)
 
     job = db.query(Job).filter(Job.id == item.job_id).first()
     return {"queue_item": _serialize_queue_item(item, job)}
@@ -245,6 +262,23 @@ async def complete_queue_item(
     ).first()
     if not item:
         raise HTTPException(status_code=404, detail="Queue item not found")
+    # Idempotency: don't let a double-submit create a duplicate Application
+    if item.status == "applied":
+        # Return the next item anyway so the frontend can move on
+        next_item = db.query(UserAutoApplyJob).filter(
+            UserAutoApplyJob.user_id == current_user.id,
+            UserAutoApplyJob.status == "approved",
+        ).order_by(UserAutoApplyJob.approved_at.asc()).first()
+        job = db.query(Job).filter(Job.id == item.job_id).first()
+        next_queue_item = None
+        if next_item:
+            next_job = db.query(Job).filter(Job.id == next_item.job_id).first()
+            next_queue_item = _serialize_queue_item(next_item, next_job)
+        return {
+            "completed": _serialize_queue_item(item, job),
+            "next": next_queue_item,
+            "message": "Already marked as applied",
+        }
 
     body = body or {}
     skip = body.get("skip", False)

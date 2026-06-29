@@ -77,13 +77,20 @@ export default function ApplyQueuePage() {
     try {
       // Mark the current item as in_progress
       const res = await authFetch(`/api/v1/auto-apply/queue/${current.id}/start`, { method: 'POST' });
-      if (res.ok) {
-        const data = await res.json();
-        setCurrent(data.queue_item);
-        // Open the application URL in a new tab — the extension content script will
-        // auto-fill the form + attach the tailored PDF CV
-        window.open(data.queue_item.job.external_url, '_blank');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Failed to start (${res.status})`);
+      }
+      const data = await res.json();
+      setCurrent(data.queue_item);
+      // Open the application URL in a new tab — the extension content script will
+      // auto-fill the form + attach the tailored PDF CV
+      const url = data.queue_item?.job?.external_url;
+      if (url) {
+        window.open(url, '_blank');
         toast.success('Application page opened — the extension will auto-fill the form. Click Submit when ready.');
+      } else {
+        toast.error('Job URL missing — try the next job');
       }
     } catch (err: any) {
       toast.error(err.message || 'Failed to start');
@@ -101,17 +108,19 @@ export default function ApplyQueuePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ skip: false }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        toast.success('Marked as applied! 🎉');
-        if (data.next) {
-          setCurrent(data.next);
-        } else {
-          setCurrent(null);
-          toast.success('🎉 Queue complete! You\'ve applied to all your approved jobs.');
-        }
-        loadQueue();
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Failed to mark applied (${res.status})`);
       }
+      const data = await res.json();
+      toast.success('Marked as applied! 🎉');
+      if (data.next) {
+        setCurrent(data.next);
+      } else {
+        setCurrent(null);
+        toast.success("🎉 Queue complete! You've applied to all your approved jobs.");
+      }
+      loadQueue();
     } catch (err: any) {
       toast.error(err.message || 'Failed to mark applied');
     } finally {
@@ -128,16 +137,18 @@ export default function ApplyQueuePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ skip: true }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        toast.info('Skipped — moving to next job');
-        if (data.next) {
-          setCurrent(data.next);
-        } else {
-          setCurrent(null);
-        }
-        loadQueue();
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Failed to skip (${res.status})`);
       }
+      const data = await res.json();
+      toast.info('Skipped — moving to next job');
+      if (data.next) {
+        setCurrent(data.next);
+      } else {
+        setCurrent(null);
+      }
+      loadQueue();
     } catch (err: any) {
       toast.error(err.message || 'Failed to skip');
     } finally {
@@ -161,6 +172,30 @@ export default function ApplyQueuePage() {
     if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
     if (process.env.NEXT_PUBLIC_BACKEND_URL) return `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1`;
     return '/api/v1';
+  }
+
+  // Authenticated file download — fetches with the user's token and opens as a
+  // blob URL so the browser can display/download it. Plain <a href> would 401
+  // because browsers don't send Authorization headers on navigation.
+  async function openAuthenticatedFile(path: string, filename: string, mime: string) {
+    try {
+      const res = await authFetch(path);
+      if (!res.ok) {
+        toast.error('Could not load file — please sign in again');
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(new Blob([blob], { type: mime }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    } catch (err: any) {
+      toast.error(err.message || 'Download failed');
+    }
   }
 
   if (authLoading || loading) {
@@ -251,18 +286,32 @@ export default function ApplyQueuePage() {
                   href={current.tailored_cv_url}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    try {
+                      const res = await authFetch(current.tailored_cv_url);
+                      if (res.ok) {
+                        const blob = await res.blob();
+                        const url = URL.createObjectURL(blob);
+                        window.open(url, '_blank');
+                        setTimeout(() => URL.revokeObjectURL(url), 60000);
+                      } else {
+                        toast.error('Could not preview CV — please sign in again');
+                      }
+                    } catch {
+                      toast.error('Preview failed');
+                    }
+                  }}
                   className="text-xs px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/20 transition-colors"
                 >
                   Preview
                 </a>
-                <a
-                  href={current.tailored_cv_pdf_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  onClick={() => openAuthenticatedFile(current.tailored_cv_pdf_url, 'tailored_cv.pdf', 'application/pdf')}
                   className="text-xs px-3 py-1.5 rounded-md bg-teal-500 hover:bg-teal-600 transition-colors font-medium"
                 >
                   Download PDF
-                </a>
+                </button>
               </div>
             </div>
 

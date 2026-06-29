@@ -186,7 +186,9 @@ function DashboardPage() {
         const autoApplyRes = await authFetch('/api/v1/auto-apply/jobs');
         if (autoApplyRes.ok) {
           const autoApplyData = await autoApplyRes.json();
-          setSelectedJobs(new Set((autoApplyData.jobs || []).map((j: { id: number }) => j.id)));
+          // auto-apply/jobs returns queue items with both `id` (queue id) and `job_id` (the actual job).
+          // We want job_id so checkboxes match the jobs list and approve targets the right jobs.
+          setSelectedJobs(new Set((autoApplyData.jobs || []).map((j: { id: number; job_id?: number; job?: { id?: number } }) => j.job_id ?? j.job?.id ?? j.id)));
         }
       }
       const statsRes = await authFetch('/api/v1/applications/stats/summary');

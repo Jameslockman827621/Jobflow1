@@ -69,8 +69,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     ]);
 
     const jobs = jobsRes.ok ? (await jobsRes.json()).jobs || [] : [];
-    const autoApplyJobs = autoApplyRes.ok ? (await autoApplyRes.json()).jobs || [] : [];
-    const selectedIds = new Set(autoApplyJobs.map(j => j.id));
+    const autoApplyJobs = autoApplyRes.ok ? (await autoApplyRes.json()).jobs || [];
+    // auto-apply/jobs returns queue items with both `id` (queue id) and `job_id`.
+    // We want job_id so checkboxes match the jobs list and approve targets the right jobs.
+    const selectedIds = new Set(autoApplyJobs.map(j => j.job_id || j.job?.id || j.id));
 
     if (jobs.length === 0) {
       jobsListEl.innerHTML = '<div class="empty-state">No jobs yet. Open dashboard and run a search first.</div>';
@@ -126,97 +128,86 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   applyBtn.addEventListener('click', async () => {
     const { jobscale_token } = await chrome.storage.local.get('jobscale_token');
-    if (!jobscale_token) return;
+    if (!jobscale_token) {
+      alert('Please sign in to JobScale first.');
+      return;
+    }
 
-    const res = await fetch(`${API_BASE}/auto-apply/jobs`, {
-      headers: { Authorization: `Bearer ${jobscale_token}` }
-    });
-    if (!res.ok) return;
-
-    const { jobs } = await res.json();
-    if (!jobs || jobs.length === 0) {
+    // Use the new approve-and-go queue flow: approve the selected jobs (which
+    // tailors a CV per job), then walk through the queue opening each job URL.
+    const selectedJobIds = Array.from(jobsListEl.querySelectorAll('input:checked')).map(cb =>
+      parseInt(cb.id.replace('job-', ''), 10)
+    );
+    if (selectedJobIds.length === 0) {
       alert('Select at least one job first (check the boxes above).');
       return;
     }
 
     applyBtn.disabled = true;
-    applyBtn.textContent = `⏳ Tailoring CV & opening ${jobs.length} job(s)...`;
+    applyBtn.textContent = `⏳ Tailoring ${selectedJobIds.length} CV(s)...`;
 
-    let tailoredCount = 0;
-    let totalAts = 0;
+    try {
+      const approveRes = await fetch(`${API_BASE}/auto-apply/approve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${jobscale_token}`
+        },
+        body: JSON.stringify({ job_ids: selectedJobIds })
+      });
+      if (!approveRes.ok) {
+        const err = await approveRes.json().catch(() => ({}));
+        applyBtn.disabled = false;
+        applyBtn.textContent = '✨ Apply to Selected Jobs';
+        alert(err.detail || 'Failed to approve jobs. Please try again.');
+        return;
+      }
 
-    for (let i = 0; i < jobs.length; i++) {
-      const job = jobs[i];
-      try {
-        // start_application now tailors the CV per job and returns the tailored CV URL + ATS score
-        const startRes = await fetch(`${API_BASE}/applications/start`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${jobscale_token}`
-          },
-          body: JSON.stringify({ job_id: job.id })
-        });
+      // Now walk the queue: get next approved, start it, open the URL
+      const queueRes = await fetch(`${API_BASE}/auto-apply/queue?status=approved`, {
+        headers: { Authorization: `Bearer ${jobscale_token}` }
+      });
+      const queueData = queueRes.ok ? await queueRes.json() : { queue: [] };
+      const approvedQueue = queueData.queue || [];
 
-        if (startRes.ok) {
-          const data = await startRes.json();
-          // Open the job application page
-          if (data.job_url) {
-            chrome.tabs.create({ url: data.job_url });
-          }
-          // Track the tailored CV stats
-          if (data.tailoring_method && data.tailoring_method !== 'none') {
-            tailoredCount++;
-            totalAts += data.ats_score || 0;
-          }
-          // Auto-download the tailored CV in the background so it's ready to upload
-          if (data.cv_download_url && data.cv_download_url.includes('/tailored-cv')) {
-            try {
-              const cvRes = await fetch(`${DASHBOARD_URL}${data.cv_download_url}`, {
-                headers: { Authorization: `Bearer ${jobscale_token}` }
-              });
-              if (cvRes.ok) {
-                const html = await cvRes.text();
-                const blob = new Blob([html], { type: 'text/html' });
-                const url = URL.createObjectURL(blob);
-                // We can't auto-trigger download silently from a popup, but we can
-                // stash the tailored CV URL so the user can grab it from the dashboard.
-                chrome.storage.local.set({
-                  [`tailored_cv_${data.application_id}`]: {
-                    url: `${DASHBOARD_URL}${data.cv_download_url}`,
-                    job_title: data.job_title,
-                    company: data.company,
-                    ats_score: data.ats_score,
-                  }
-                });
-                // Revoke after 30 seconds to free memory
-                setTimeout(() => URL.revokeObjectURL(url), 30000);
-              }
-            } catch (e) {
-              console.log('Tailored CV prefetch failed:', e);
+      let openedCount = 0;
+      for (let i = 0; i < approvedQueue.length && i < 5; i++) {
+        const item = approvedQueue[i];
+        try {
+          const startRes = await fetch(`${API_BASE}/auto-apply/queue/${item.id}/start`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${jobscale_token}` }
+          });
+          if (startRes.ok) {
+            const startData = await startRes.json();
+            const jobUrl = startData.queue_item?.job?.external_url;
+            if (jobUrl) {
+              chrome.tabs.create({ url: jobUrl });
+              openedCount++;
             }
           }
+          if (i < approvedQueue.length - 1 && i < 4) {
+            await new Promise(r => setTimeout(r, 500));
+          }
+        } catch (e) {
+          console.error('Apply error:', e);
         }
-        if (i < jobs.length - 1) {
-          await new Promise(r => setTimeout(r, 500));
-        }
-      } catch (e) {
-        console.error('Apply error:', e);
       }
-    }
 
-    applyBtn.disabled = false;
-    if (tailoredCount > 0) {
-      const avgAts = Math.round(totalAts / tailoredCount);
-      applyBtn.textContent = `✨ Apply to Selected Jobs`;
-      // Show success message with ATS score
-      const statsEl = document.getElementById('apply-stats');
-      if (statsEl) {
-        statsEl.innerHTML = `✅ ${tailoredCount} CV${tailoredCount !== 1 ? 's' : ''} tailored · avg ATS score ${avgAts}/100`;
-        statsEl.classList.remove('hidden');
-      }
-    } else {
+      applyBtn.disabled = false;
       applyBtn.textContent = '✨ Apply to Selected Jobs';
+      const statsEl = document.getElementById('apply-stats');
+      if (statsEl && openedCount > 0) {
+        statsEl.innerHTML = `✅ ${openedCount} CV${openedCount !== 1 ? 's' : ''} tailored & application${openedCount !== 1 ? 's' : ''} opened. Click Submit on each.`;
+        statsEl.classList.remove('hidden');
+      } else {
+        alert('No approved jobs to apply to. Open the Apply Queue to manage them.');
+      }
+    } catch (e) {
+      console.error('Apply error:', e);
+      applyBtn.disabled = false;
+      applyBtn.textContent = '✨ Apply to Selected Jobs';
+      alert('Something went wrong. Please try again.');
     }
   });
 
