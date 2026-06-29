@@ -270,11 +270,18 @@ function DashboardPage() {
         throw new Error(err.detail || 'Failed to approve jobs');
       }
       const data = await res.json();
-      const approvedCount = (data.results || []).filter((r: any) => r.status === 'approved').length;
+      const approvedCount = (data.results || []).filter((r: any) => r.status === 'approved' || r.status === 'already_in_queue').length;
+      const tailoredCount = (data.results || []).filter((r: any) => r.status === 'approved').length;
       setSelectedJobs(new Set());
-      toast.success(`${approvedCount} job${approvedCount !== 1 ? 's' : ''} approved! Taking you to the apply queue...`);
+      if (tailoredCount > 0) {
+        toast.success(`${tailoredCount} CV${tailoredCount !== 1 ? 's' : ''} tailored — taking you to the apply queue...`);
+      } else if (approvedCount > 0) {
+        toast.success(`${approvedCount} job${approvedCount !== 1 ? 's' : ''} in your queue — taking you there...`);
+      } else {
+        toast.info('No new jobs to approve');
+      }
       // Send the user to the apply queue to walk through the approved jobs
-      setTimeout(() => router.push('/apply'), 800);
+      setTimeout(() => router.push('/apply'), 1000);
     } catch (err: any) {
       toast.error(err.message || 'Failed to approve jobs');
     } finally {
