@@ -16,6 +16,8 @@
     "https://*.greenhouse.io/*",
     "https://*.lever.co/*",
     "https://*.workable.com/*",
+    "https://*.ashbyhq.com/*",
+    "https://*.ashby.com/*",
     "http://localhost:3000/*",
     "http://localhost:8000/*"
   ],
@@ -43,6 +45,20 @@
       ],
       "js": ["content.js"],
       "css": ["styles.css"]
+    },
+    {
+      "matches": [
+        "https://*.greenhouse.io/*",
+        "https://*.lever.co/*",
+        "https://*.workable.com/*",
+        "https://*.ashbyhq.com/*",
+        "https://*.ashby.com/*",
+        "https://job-boards.greenhouse.io/*",
+        "https://jobs.lever.co/*"
+      ],
+      "js": ["form_fill.js"],
+      "all_frames": true,
+      "run_at": "document_idle"
     },
     {
       "matches": ["http://localhost:3000/*"],

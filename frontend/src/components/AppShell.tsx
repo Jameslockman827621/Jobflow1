@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/auth';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: 'grid' },
+  { href: '/apply', label: 'Apply Queue', icon: 'rocket', highlight: true },
   { href: '/cv-builder', label: 'CV Builder', icon: 'document' },
   { href: '/kanban', label: 'Tracker', icon: 'columns' },
   { href: '/analytics', label: 'Analytics', icon: 'chart' },
@@ -16,6 +17,7 @@ const NAV_ITEMS = [
 function NavIcon({ name, className = 'w-5 h-5' }: { name: string; className?: string }) {
   const icons: Record<string, JSX.Element> = {
     grid: <svg className={className} fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" /></svg>,
+    rocket: <svg className={className} fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 006.16-12.12A14.98 14.98 0 009.631 8.41m5.96 5.96a14.926 14.926 0 01-5.841 2.58m-.119-8.54a6 6 0 00-7.381 5.84h4.8m2.58-5.96a14.926 14.926 0 00-2.58 5.84m8.54 0a6 6 0 01-5.84 7.38" /></svg>,
     document: <svg className={className} fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>,
     columns: <svg className={className} fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 4.5v15m6-15v15m-10.875 0h15.75c.621 0 1.125-.504 1.125-1.125V5.625c0-.621-.504-1.125-1.125-1.125H4.125C3.504 4.5 3 5.004 3 5.625v12.75c0 .621.504 1.125 1.125 1.125z" /></svg>,
     chart: <svg className={className} fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" /></svg>,
@@ -96,6 +98,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="space-y-0.5">
             {NAV_ITEMS.map((item) => {
               const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
+              const isHighlighted = (item as any).highlight;
               return (
                 <a
                   key={item.href}
@@ -103,11 +106,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   onClick={(e) => { e.preventDefault(); router.push(item.href); setMobileOpen(false); }}
                   className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                     isActive
-                      ? 'bg-slate-100 text-slate-900'
-                      : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                      ? (isHighlighted ? 'bg-teal-500 text-white' : 'bg-slate-100 text-slate-900')
+                      : isHighlighted
+                        ? 'bg-teal-50 text-teal-700 hover:bg-teal-100'
+                        : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
                   }`}
                 >
-                  <NavIcon name={item.icon} className={`w-[18px] h-[18px] ${isActive ? 'text-teal-600' : ''}`} />
+                  <NavIcon name={item.icon} className={`w-[18px] h-[18px] ${isActive ? (isHighlighted ? 'text-white' : 'text-teal-600') : ''}`} />
                   {item.label}
                 </a>
               );

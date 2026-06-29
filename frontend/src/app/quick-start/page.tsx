@@ -87,7 +87,7 @@ export default function QuickStartPage() {
       return;
     }
     if (selectedRoles.length === 0) {
-      toast.error("Pick at least one role you're interested in");
+      toast.error("Pick at least one role you are interested in");
       return;
     }
     setSubmitting(true);
@@ -184,7 +184,7 @@ export default function QuickStartPage() {
           {step === 'upload' && (
             <div className="text-center">
               <h1 className="text-3xl sm:text-4xl font-bold text-navy-900 mb-3 tracking-tight">
-                Upload your CV.<br />We'll handle the rest.
+                Upload your CV.<br />We will handle the rest.
               </h1>
               <p className="text-slate-600 mb-8 max-w-md mx-auto">
                 For every job you apply to, we auto-tailor your CV to pass AI screening and highlight your most relevant skills.
@@ -247,7 +247,7 @@ export default function QuickStartPage() {
                 What roles are you after?
               </h1>
               <p className="text-slate-600 mb-8 text-center max-w-md mx-auto">
-                Pick up to 5 roles. We'll search 15 job boards and company career pages in parallel.
+                Pick up to 5 roles. We will search 15 job boards and company career pages in parallel.
               </p>
 
               <div className="mb-6">
@@ -377,7 +377,7 @@ export default function QuickStartPage() {
                 <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
               </div>
               <h1 className="text-3xl sm:text-4xl font-bold text-navy-900 mb-3 tracking-tight">
-                You're all set! 🎉
+                You are all set! 🎉
               </h1>
               <p className="text-slate-600 mb-8 max-w-md mx-auto">
                 We parsed your CV, extracted <strong className="text-navy-900">{result.cv?.skills?.length || 0} skills</strong>, and found <strong className="text-teal-600">{result.total_jobs} matching jobs</strong> across {Object.keys(result.sources_used || {}).filter(k => result.sources_used[k] > 0).length} sources.
@@ -405,7 +405,7 @@ export default function QuickStartPage() {
               </button>
 
               <p className="text-xs text-slate-400 mt-6">
-                💡 Pro tip: when you batch-apply, we'll auto-tailor your CV for each job to maximize your interview chances.
+                💡 Pro tip: when you batch-apply, we will auto-tailor your CV for each job to maximize your interview chances.
               </p>
             </div>
           )}

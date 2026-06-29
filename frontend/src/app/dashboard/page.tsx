@@ -249,12 +249,13 @@ function DashboardPage() {
 
   async function handleApplySelected() {
     if (selectedJobs.size === 0) {
-      toast.error('Select at least one job to apply to');
+      toast.error('Select at least one job to approve');
       return;
     }
     setApplying(true);
     try {
-      const res = await authFetch('/api/v1/applications/batch-start', {
+      // Use the approve-and-go queue endpoint — tailors a CV per job + adds to queue
+      const res = await authFetch('/api/v1/auto-apply/approve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ job_ids: Array.from(selectedJobs) })
@@ -262,20 +263,20 @@ function DashboardPage() {
       if (!res.ok) {
         const err = await res.json();
         if (err.detail?.includes('No CV found')) {
-          toast.error('Please create a CV first');
-          router.push('/cv-builder');
+          toast.error('Please upload a CV first');
+          router.push('/quick-start');
           return;
         }
-        throw new Error(err.detail || 'Failed to start applications');
+        throw new Error(err.detail || 'Failed to approve jobs');
       }
       const data = await res.json();
-      setBatchResults(data.applications || []);
-      setShowModal(true);
+      const approvedCount = (data.results || []).filter((r: any) => r.status === 'approved').length;
       setSelectedJobs(new Set());
-      toast.success(`${data.total} applications started!`);
-      loadDashboard();
+      toast.success(`${approvedCount} job${approvedCount !== 1 ? 's' : ''} approved! Taking you to the apply queue...`);
+      // Send the user to the apply queue to walk through the approved jobs
+      setTimeout(() => router.push('/apply'), 800);
     } catch (err: any) {
-      toast.error(err.message || 'Failed to apply');
+      toast.error(err.message || 'Failed to approve jobs');
     } finally {
       setApplying(false);
     }
@@ -474,12 +475,12 @@ function DashboardPage() {
                 {applying ? (
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white" />
-                    <span>Applying...</span>
+                    <span>Tailoring CVs...</span>
                   </>
                 ) : (
                   <>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>
-                    <span>Apply to Selected</span>
+                    <span>Approve &amp; Tailor CVs</span>
                   </>
                 )}
               </button>

@@ -227,6 +227,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   dashboardBtn.addEventListener('click', () => {
     chrome.tabs.create({ url: `${DASHBOARD_URL}/dashboard` });
   });
+
+  const applyQueueBtn = document.getElementById('apply-queue-btn');
+  if (applyQueueBtn) {
+    applyQueueBtn.addEventListener('click', () => {
+      chrome.tabs.create({ url: `${DASHBOARD_URL}/apply` });
+    });
+  }
 });
 
 function escapeHtml(str) {
