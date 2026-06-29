@@ -33,7 +33,17 @@ class UserProfile(Base, TimestampMixin):
     # Resume
     resume_text = Column(Text)  # Parsed resume content
     resume_url = Column(String)  # S3 or local path
-    
+
+    # Application answers — saved once, reused by the extension to auto-fill forms
+    # Common questions: work authorization, sponsorship, years of experience, etc.
+    # Format: {"work_authorization": "Yes, I am authorized", "requires_sponsorship": "No", ...}
+    application_answers = Column(JSON, default=dict)
+
+    # Personal details used for form auto-fill (separate from the CV so they can
+    # be edited without re-uploading the CV)
+    # Format: {"linkedin_url": "...", "github_url": "...", "website": "...", "cover_letter_default": "..."}
+    application_profile = Column(JSON, default=dict)
+
     # Relationships
     user = relationship("User", back_populates="profile")
     skills = relationship("Skill", back_populates="profile", cascade="all, delete-orphan")
