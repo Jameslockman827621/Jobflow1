@@ -4,8 +4,10 @@ from pydantic import BaseModel
 from sqlalchemy import or_, and_
 from sqlalchemy.orm import Session
 
-from app.database import SessionLocal
+from app.database import SessionLocal, get_db
 from app.models.job import Job, JobSource
+from app.models.user import User
+from app.api.auth import get_current_user
 
 router = APIRouter()
 
@@ -97,19 +99,30 @@ async def get_job(job_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/scrape/{source}")
-async def trigger_scrape(source: str, db: Session = Depends(get_db)):
+async def trigger_scrape(
+    source: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
     Trigger job scraping for a source.
     Sources: greenhouse, lever, workable
+    Requires authentication.
     """
     from app.tasks.jobs import scrape_greenhouse_companies, scrape_lever_companies
     from app.scrapers.companies import GREENHOUSE_COMPANIES, LEVER_COMPANIES
-    
+
     if source == "greenhouse":
-        scrape_greenhouse_companies.delay(GREENHOUSE_COMPANIES)
+        try:
+            scrape_greenhouse_companies.delay(GREENHOUSE_COMPANIES)
+        except Exception as e:
+            raise HTTPException(status_code=503, detail=f"Scrape broker unavailable: {e}")
         return {"status": "scrape started", "source": source, "companies": len(GREENHOUSE_COMPANIES)}
     elif source == "lever":
-        scrape_lever_companies.delay(LEVER_COMPANIES)
+        try:
+            scrape_lever_companies.delay(LEVER_COMPANIES)
+        except Exception as e:
+            raise HTTPException(status_code=503, detail=f"Scrape broker unavailable: {e}")
         return {"status": "scrape started", "source": source, "companies": len(LEVER_COMPANIES)}
     else:
         raise HTTPException(status_code=400, detail=f"Unknown source: {source}")
@@ -146,6 +159,7 @@ async def list_source_coverage():
 async def aggregator_search(
     body: dict,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Run a direct search across all sources via the aggregator.

@@ -92,10 +92,20 @@ class Settings(BaseSettings):
     def assert_safe_for_production(self) -> None:
         if self.ENVIRONMENT.lower() != "production":
             return
+        problems = []
         weak = "change-me" in self.SECRET_KEY.lower() or len(self.SECRET_KEY) < 32
         if weak:
+            problems.append("SECRET_KEY must be 32+ chars and not the default")
+        if self.DEBUG:
+            problems.append("DEBUG must be false in production")
+        if self.AUTO_SEED_DEMO_JOBS:
+            problems.append("AUTO_SEED_DEMO_JOBS must be false in production (would show fake jobs)")
+        if "postgres:postgres" in self.DATABASE_URL:
+            problems.append("DATABASE_URL must not use the default postgres:postgres credentials")
+        if problems:
             raise RuntimeError(
-                "ENVIRONMENT=production requires a strong SECRET_KEY (32+ chars, not the default)."
+                "ENVIRONMENT=production requires safe config:\n  - " +
+                "\n  - ".join(problems)
             )
 
 
