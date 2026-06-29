@@ -261,7 +261,18 @@ class OnDemandSearchService:
             source_name = job_data.pop("_source", "unknown")
             src = sources.get(source_name) or default_source
             source_id = src.id
-            
+
+            # Skip jobs missing required fields (DB has NOT NULL on title/company/external_url)
+            if not job_data.get("title") or not job_data.get("company") or not job_data.get("external_url"):
+                continue
+
+            # Enrich the job with structured fields extracted from the description
+            try:
+                from app.services.job_enricher import enrich_job
+                job_data = enrich_job(job_data)
+            except Exception as e:
+                print(f"  enrich error: {e}")
+
             posted_raw = job_data.get("posted_date")
             posted_date = None
             if posted_raw:
@@ -283,7 +294,20 @@ class OnDemandSearchService:
                 existing_job.company = job_data.get("company", existing_job.company)
                 existing_job.location = job_data.get("location", existing_job.location)
                 existing_job.remote = job_data.get("remote", existing_job.remote)
+                existing_job.hybrid = job_data.get("hybrid", existing_job.hybrid)
                 existing_job.external_url = job_data.get("external_url", existing_job.external_url)
+                existing_job.description = job_data.get("description", existing_job.description)
+                existing_job.seniority = job_data.get("seniority") or existing_job.seniority
+                existing_job.employment_type = job_data.get("employment_type") or existing_job.employment_type
+                existing_job.min_salary = job_data.get("min_salary") or existing_job.min_salary
+                existing_job.max_salary = job_data.get("max_salary") or existing_job.max_salary
+                existing_job.skills_required = job_data.get("skills_required") or existing_job.skills_required
+                existing_job.experience_years_min = job_data.get("experience_years_min") or existing_job.experience_years_min
+                existing_job.experience_years_max = job_data.get("experience_years_max") or existing_job.experience_years_max
+                existing_job.visa_sponsorship = job_data.get("visa_sponsorship")
+                existing_job.industry = job_data.get("industry") or existing_job.industry
+                existing_job.company_size = job_data.get("company_size") or existing_job.company_size
+                existing_job.benefits_extracted = job_data.get("benefits_extracted") or existing_job.benefits_extracted
                 existing_job.scraped_at = datetime.utcnow()
                 existing_job.is_active = True
                 self.db.commit()
@@ -301,8 +325,16 @@ class OnDemandSearchService:
                     description=job_data.get("description", ""),
                     department=job_data.get("department", ""),
                     seniority=job_data.get("seniority", ""),
+                    employment_type=job_data.get("employment_type", "full_time"),
                     min_salary=job_data.get("min_salary"),
                     max_salary=job_data.get("max_salary"),
+                    skills_required=job_data.get("skills_required", []),
+                    experience_years_min=job_data.get("experience_years_min"),
+                    experience_years_max=job_data.get("experience_years_max"),
+                    visa_sponsorship=job_data.get("visa_sponsorship"),
+                    industry=job_data.get("industry"),
+                    company_size=job_data.get("company_size"),
+                    benefits_extracted=job_data.get("benefits_extracted", []),
                     scraped_at=datetime.utcnow(),
                     posted_date=posted_date,
                     is_active=True
@@ -311,7 +343,7 @@ class OnDemandSearchService:
                 self.db.commit()
                 self.db.refresh(job)
                 job_ids.append(job.id)
-        
+
         return job_ids
     
     def _update_cache(
@@ -370,7 +402,7 @@ class OnDemandSearchService:
         return [self._job_to_dict(job) for job in jobs]
     
     def _job_to_dict(self, job: Job) -> Dict:
-        """Convert Job model to dictionary"""
+        """Convert Job model to dictionary (includes enriched fields for matching)"""
         return {
             "id": job.id,
             "title": job.title,
@@ -380,12 +412,22 @@ class OnDemandSearchService:
             "hybrid": job.hybrid,
             "min_salary": job.min_salary,
             "max_salary": job.max_salary,
+            "salary_currency": job.salary_currency,
             "seniority": job.seniority,
             "department": job.department,
+            "employment_type": job.employment_type,
             "description": job.description[:500] + "..." if job.description and len(job.description) > 500 else job.description,
             "external_url": job.external_url,
             "posted_date": job.posted_date.isoformat() if job.posted_date else None,
             "source": job.source.name if job.source else "unknown",
+            # Enriched fields for 1:1 matching
+            "skills_required": job.skills_required or [],
+            "experience_years_min": job.experience_years_min,
+            "experience_years_max": job.experience_years_max,
+            "visa_sponsorship": job.visa_sponsorship,
+            "industry": job.industry,
+            "company_size": job.company_size,
+            "benefits_extracted": job.benefits_extracted or [],
         }
     
     def _get_sources_used(self, jobs: List[Dict]) -> Dict[str, int]:

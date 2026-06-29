@@ -205,3 +205,83 @@ async def detect_ats(url: str):
     ats = detect_ats_from_url(url)
     slug = extract_company_slug(url, ats) if ats else None
     return {"url": url, "ats": ats, "slug": slug}
+
+
+@router.post("/match")
+async def match_jobs_endpoint(
+    body: Optional[dict] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """1:1 matching: apply the user's must-haves to their cached jobs.
+
+    Loads the user's must_haves + priority_weights from UserPreferences,
+    fetches their cached jobs (from the last search), enriches any that
+    haven't been enriched yet, then filters to only jobs that satisfy ALL
+    must-haves — with a transparent per-job breakdown.
+
+    Body (optional — overrides saved priorities for this request):
+      {"must_haves": [...], "priority_weights": [...]}
+
+    Returns:
+      {
+        "jobs": [...],          # filtered + ranked, each with match_breakdown
+        "total": int,
+        "total_before_filter": int,
+        "must_haves": [...],
+        "priority_weights": [...]
+      }
+    """
+    from app.models.preferences import UserPreferences
+    from app.models.search_cache import SearchCache
+    from app.services.on_demand_search import OnDemandSearchService
+    from app.services.job_matcher import match_jobs as do_match
+
+    # Load priorities (from body override or saved preferences)
+    prefs = db.query(UserPreferences).filter_by(user_id=current_user.id).first()
+    body = body or {}
+    must_haves = body.get("must_haves") or (prefs.must_haves if prefs else []) or []
+    priority_weights = body.get("priority_weights") or (prefs.priority_weights if prefs else []) or []
+
+    if not must_haves:
+        return {
+            "jobs": [],
+            "total": 0,
+            "total_before_filter": 0,
+            "must_haves": [],
+            "priority_weights": [],
+            "message": "No must-haves set. Visit /priorities to pick what matters most to you.",
+        }
+
+    # Load cached jobs (from the most recent search)
+    cache = (
+        db.query(SearchCache)
+        .filter_by(user_id=current_user.id, is_valid=True)
+        .order_by(SearchCache.created_at.desc())
+        .first()
+    )
+    if not cache or not cache.job_ids:
+        return {
+            "jobs": [],
+            "total": 0,
+            "total_before_filter": 0,
+            "must_haves": must_haves,
+            "priority_weights": priority_weights,
+            "message": "No cached jobs. Run a search first.",
+        }
+
+    search_service = OnDemandSearchService(db)
+    jobs = search_service._fetch_jobs_by_ids(cache.job_ids)
+    total_before = len(jobs)
+
+    # 1:1 match
+    matched = do_match(must_haves, priority_weights, jobs)
+
+    return {
+        "jobs": matched,
+        "total": len(matched),
+        "total_before_filter": total_before,
+        "must_haves": must_haves,
+        "priority_weights": priority_weights,
+        "message": f"{len(matched)} of {total_before} jobs meet all {len(must_haves)} must-haves.",
+    }

@@ -505,7 +505,7 @@ async def get_my_onboarding(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get the current user's onboarding state — CV, preferences, and stats."""
+    """Get the current user's onboarding state — CV, preferences, priorities, and stats."""
     from app.models.cv import CV
     preferences = db.query(UserPreferences).filter_by(user_id=current_user.id).first()
     primary_cv = db.query(CV).filter(CV.user_id == current_user.id, CV.is_primary == True).first()
@@ -521,4 +521,83 @@ async def get_my_onboarding(
             "skills": primary_cv.skills or [],
             "experience_count": len(primary_cv.experience or []),
         } if primary_cv else None,
+    }
+
+
+# ===== 1:1 MATCHING PRIORITIES =====
+
+@router.get("/priorities/dimensions")
+async def get_priority_dimensions():
+    """Get the list of supported priority dimensions for the 'what matters most to you' picker.
+
+    Returns the 12 dimensions we can match on: salary, remote, location, seniority,
+    employment type, skills, visa sponsorship, experience, company size, industry, etc.
+    Each has a label, input type, and description for the frontend UI.
+    """
+    from app.services.job_matcher import get_priority_dimensions
+    return {"dimensions": get_priority_dimensions()}
+
+
+@router.get("/priorities")
+async def get_priorities(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get the current user's must-haves + ranked priority weights."""
+    prefs = db.query(UserPreferences).filter_by(user_id=current_user.id).first()
+    if not prefs:
+        return {"must_haves": [], "priority_weights": []}
+    return {
+        "must_haves": prefs.must_haves or [],
+        "priority_weights": prefs.priority_weights or [],
+    }
+
+
+@router.put("/priorities")
+async def update_priorities(
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Save the user's top 5 must-haves + ranked priority weights.
+
+    Body:
+      {
+        "must_haves": [
+          {"field": "salary_min", "value": 80000},
+          {"field": "remote", "value": true},
+          {"field": "skills", "value": ["Python", "React"]},
+          {"field": "visa_sponsorship", "value": true},
+          {"field": "seniority", "value": ["senior", "lead"]}
+        ],
+        "priority_weights": [
+          {"field": "salary_min", "weight": 5},
+          {"field": "remote", "weight": 4},
+          {"field": "skills", "weight": 3}
+        ]
+      }
+
+    Jobs must satisfy ALL must_haves to be shown. priority_weights rank the
+    jobs that pass the must-have filter.
+    """
+    prefs = db.query(UserPreferences).filter_by(user_id=current_user.id).first()
+    if not prefs:
+        prefs = UserPreferences(user_id=current_user.id)
+        db.add(prefs)
+
+    must_haves = body.get("must_haves", [])
+    priority_weights = body.get("priority_weights", [])
+
+    # Cap at 5 must-haves so the user focuses on what really matters
+    if len(must_haves) > 5:
+        must_haves = must_haves[:5]
+
+    prefs.must_haves = must_haves
+    prefs.priority_weights = priority_weights
+    db.commit()
+
+    return {
+        "must_haves": prefs.must_haves,
+        "priority_weights": prefs.priority_weights,
+        "message": f"Saved {len(must_haves)} must-haves. Jobs will be filtered to only those that meet all of them.",
     }

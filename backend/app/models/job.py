@@ -55,7 +55,13 @@ class Job(Base, TimestampMixin):
     
     # Skills extracted from description
     skills_required = Column(JSON, default=list)
-    
+
+    # Enriched fields (extracted from description by job_enricher service)
+    visa_sponsorship = Column(Boolean)  # True if job offers visa sponsorship / relocation
+    industry = Column(String)  # e.g. "Fintech", "SaaS", "AI"
+    company_size = Column(String)  # "startup", "mid", "enterprise"
+    benefits_extracted = Column(JSON, default=list)  # ["health", "equity", "remote stipend", ...]
+
     # Matching
     match_score = Column(Float)  # Calculated per user
     is_active = Column(Boolean, default=True)

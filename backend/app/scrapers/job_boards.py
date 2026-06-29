@@ -123,14 +123,19 @@ class WellfoundScraper(BaseScraper):
         title = job.get("title") or "Unknown Position"
         company_obj = job.get("company") or job.get("startup") or {}
         company = company_obj.get("name") if isinstance(company_obj, dict) else str(company_obj or "Unknown")
+        if not company:
+            company = "Unknown"
         location = job.get("location") or job.get("remote") or ""
         if isinstance(location, dict):
             location = location.get("name") or str(location)
+        # Don't stringify booleans — if location is a bool (remote flag), clear it
+        if isinstance(location, bool):
+            location = "Remote" if location else ""
         remote = job.get("remote") is True or "remote" in str(location).lower()
         return JobData(
             title=title,
             company=company,
-            location=str(location),
+            location=str(location) if location else "",
             external_id=str(job.get("id", "")),
             external_url=job.get("url") or f"https://wellfound.com/jobs/{job.get('id', '')}",
             description=job.get("description") or job.get("summary") or "",
