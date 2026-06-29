@@ -2,11 +2,11 @@
 Ashby ATS Scraper
 
 Ashby powers 2,000+ modern company career pages (Notion, Linear, Vercel, Retool, etc).
-Ashby exposes a public GraphQL endpoint at:
-  https://api.ashby.com/api/v1/get-postings
+Public Job Board API (no auth):
+  GET https://api.ashbyhq.com/posting-api/job-board/{job_board_name}?includeCompensation=true
 
-The endpoint accepts a JSON body with company subdomain and optional filters.
-No auth required.
+The job_board_name is the final segment of the company's Ashby-hosted career page URL.
+Example: https://jobs.ashbyhq.com/Ashby -> "Ashby"
 """
 
 from typing import List, Dict, Optional
@@ -18,56 +18,54 @@ from .base import BaseScraper, JobData
 
 class AshbyScraper(BaseScraper):
     name = "ashby"
-    base_url = "https://api.ashby.com"
+    base_url = "https://api.ashbyhq.com/posting-api/job-board"
 
     async def scrape_company_jobs(self, company_subdomain: str) -> List[JobData]:
-        """Scrape jobs for a specific company via Ashby API"""
-        url = f"{self.base_url}/api/v1/get-postings"
-        payload = {
-            "includeCompensation": True,
-            "includeLocation": True,
-            "includeReporting": True,
-            "compensationRangeFilter": [],
-            "locationFilter": [],
-            "locationTypeFilter": [],
-            "query": None,
-            "searchSimilarity": 0.6,
-            "departmentFilter": [],
-            "employmentTypeFilter": [],
-            "searchAfter": None,
-            "sortBy": "postDate",
-            "sortOrder": "desc",
-            "subdomain": company_subdomain,
-        }
+        """Scrape jobs for a specific company via Ashby public Job Board API."""
+        # Ashby slugs are case-sensitive (e.g. "Ashby", "Linear", "Notion")
+        # Try the provided slug, then a few capitalization variants.
+        candidates = [
+            company_subdomain,
+            company_subdomain.capitalize(),
+            company_subdomain.title(),
+        ]
+        # Deduplicate while preserving order
+        seen = set()
+        candidates = [c for c in candidates if not (c in seen or seen.add(c))]
 
-        async with httpx.AsyncClient(
-            headers={**self.headers, "Accept": "application/json", "Content-Type": "application/json"},
-            timeout=30.0,
-            follow_redirects=True,
-        ) as client:
-            try:
-                response = await client.post(url, json=payload)
-                if response.status_code == 404:
-                    return []
-                response.raise_for_status()
-                data = response.json()
-                if not data.get("success", True):
-                    return []
-                jobs = data.get("data", {}).get("postings", []) or []
-                print(f"  Ashby: API returned {len(jobs)} jobs for {company_subdomain}")
-                parsed = []
-                for job in jobs:
-                    try:
-                        parsed.append(self._parse_job(job, company_subdomain))
-                    except Exception as e:
-                        print(f"  Ashby: parse error: {e}")
-                return parsed
-            except httpx.HTTPError as e:
-                print(f"  Ashby: HTTP error for {company_subdomain}: {e}")
-                return []
+        for slug in candidates:
+            url = f"{self.base_url}/{slug}"
+            params = {"includeCompensation": "true"}
+            async with httpx.AsyncClient(
+                headers=self.headers,
+                timeout=30.0,
+                follow_redirects=True,
+            ) as client:
+                try:
+                    response = await client.get(url, params=params)
+                    if response.status_code == 404:
+                        continue
+                    response.raise_for_status()
+                    data = response.json()
+                    jobs = data.get("jobs", []) or []
+                    print(f"  Ashby: API returned {len(jobs)} jobs for {slug}")
+                    parsed = []
+                    for job in jobs:
+                        try:
+                            parsed.append(self._parse_job(job, slug))
+                        except Exception as e:
+                            print(f"  Ashby: parse error: {e}")
+                    return parsed
+                except httpx.HTTPError as e:
+                    print(f"  Ashby: HTTP error for {slug}: {e}")
+                    continue
+                except Exception as e:
+                    print(f"  Ashby: error scraping {slug}: {e}")
+                    continue
+        return []
 
     async def scrape_all_jobs(self, limit: int = 100) -> List[JobData]:
-        """Scrape jobs across curated list of known Ashby companies"""
+        """Scrape jobs across curated list of known Ashby companies."""
         from .companies import ASHBY_COMPANIES
         all_jobs: List[JobData] = []
         for company in ASHBY_COMPANIES[:limit]:
@@ -84,7 +82,7 @@ class AshbyScraper(BaseScraper):
         location: Optional[str] = None,
         max_jobs: int = 50,
     ) -> List[JobData]:
-        """Search Ashby jobs across curated companies by keyword"""
+        """Search Ashby jobs across curated companies by keyword."""
         from .companies import ASHBY_COMPANIES
         results: List[JobData] = []
         kw = (keywords or "").lower()
@@ -107,63 +105,63 @@ class AshbyScraper(BaseScraper):
         return results
 
     def _parse_job(self, job: Dict, company: str) -> JobData:
-        """Parse Ashby job API response"""
-        # Location
-        location = ""
-        loc_list = job.get("locationLocations") or []
-        if isinstance(loc_list, list) and loc_list:
-            first = loc_list[0]
-            if isinstance(first, dict):
-                city = first.get("city")
-                region = first.get("region")
-                country = first.get("country")
-                parts = [p for p in [city, region, country] if p]
-                location = ", ".join(parts)
-        if not location:
-            location = job.get("locationName") or job.get("location") or ""
-        remote = (job.get("isRemote") is True) or "remote" in location.lower()
-        hybrid = (job.get("isHybrid") is True) or "hybrid" in location.lower()
+        """Parse Ashby Job Board API response."""
+        title = job.get("title") or "Unknown Position"
+        location = job.get("location") or ""
+        # Ashby uses 'workplaceType' for remote/hybrid/office
+        workplace = (job.get("workplaceType") or "").lower()
+        remote = "remote" in workplace or "remote" in location.lower()
+        hybrid = "hybrid" in workplace or "hybrid" in location.lower()
 
         # Department
-        department = None
-        dept_list = job.get("department") or []
-        if isinstance(dept_list, list) and dept_list:
-            first = dept_list[0]
-            if isinstance(first, dict):
-                department = first.get("name")
+        department = job.get("department") or job.get("departmentName")
+        if isinstance(department, dict):
+            department = department.get("name")
 
-        # Compensation
+        # Compensation — Ashby returns structured comp when includeCompensation=true
         min_salary = None
         max_salary = None
         comp = job.get("compensation") or {}
         if isinstance(comp, dict):
-            band = comp.get("band") or comp.get("range") or {}
-            if isinstance(band, dict):
-                try:
-                    if band.get("minValue"):
-                        min_salary = int(float(band["minValue"]))
-                    if band.get("maxValue"):
-                        max_salary = int(float(band["maxValue"]))
-                except (ValueError, TypeError):
-                    pass
+            # Try scrapeableCompensationSalarySummary first (e.g. "$190K - $255K")
+            summary = comp.get("scrapeableCompensationSalarySummary") or ""
+            if summary:
+                min_salary, max_salary = self.parse_salary(summary)
+            if min_salary is None or max_salary is None:
+                tier = comp.get("compensationTierSummary") or ""
+                if tier:
+                    t_min, t_max = self.parse_salary(tier)
+                    if t_min and (min_salary is None or t_min < min_salary):
+                        min_salary = t_min
+                    if t_max and (max_salary is None or t_max > max_salary):
+                        max_salary = t_max
 
-        # Description — Ashby returns HTML in 'descriptionHtml'
-        description = job.get("descriptionHtml") or job.get("descriptionPlainText") or job.get("description") or ""
+        # Description — Ashby doesn't include full description in the public feed
+        description = job.get("descriptionPlainText") or job.get("descriptionHtml") or ""
+
+        # URLs
+        job_url = job.get("jobUrl") or ""
+        apply_url = job.get("applyUrl") or job_url
+
+        # Employment type
+        employment_type = job.get("employmentType") or job.get("employment") or None
+        if employment_type:
+            employment_type = self.parse_employment_type(str(employment_type)) or employment_type
 
         return JobData(
-            title=job.get("title") or "Unknown Position",
-            company=job.get("companyName") or company,
+            title=title,
+            company=company,
             location=location,
             external_id=str(job.get("id", "")),
-            external_url=job.get("externalUrl") or job.get("url") or f"https://{company}.ashbyhq.com/{job.get('id', '')}",
+            external_url=job_url,
             description=description,
             remote=remote,
             hybrid=hybrid,
             min_salary=min_salary,
             max_salary=max_salary,
             department=department,
-            seniority=self.parse_seniority(job.get("title") or ""),
-            employment_type=job.get("employmentType") or self.parse_employment_type(job.get("title") or ""),
+            seniority=self.parse_seniority(title),
+            employment_type=employment_type,
             posted_date=self._parse_date(job.get("postedDate") or job.get("createdAt")),
             raw_data=job,
         )
@@ -176,7 +174,6 @@ class AshbyScraper(BaseScraper):
             return datetime.fromisoformat(value.replace("Z", "+00:00"))
         except (ValueError, TypeError):
             try:
-                # Ashby sometimes returns epoch ms
                 return datetime.utcfromtimestamp(int(value) / 1000)
             except (ValueError, TypeError, OSError):
                 return None

@@ -251,23 +251,31 @@ class HimalayasScraper(BaseScraper):
     """Himalayas public API."""
 
     name = "himalayas"
-    base_url = "https://himalayas.app/api/jobs"
+    base_url = "https://himalayas.app/jobs/api"
 
     async def scrape_company_jobs(self, company_subdomain: str) -> List[JobData]:
         return []
 
     async def scrape_all_jobs(self, limit: int = 100) -> List[JobData]:
-        data = await self.fetch_json(self.base_url)
-        if not data or not isinstance(data, dict):
-            return []
-        jobs = data.get("jobs", []) or []
+        # Himalayas returns max 20 per request; paginate
         results = []
-        for job in jobs[:limit]:
-            try:
-                results.append(self._parse_job(job))
-            except Exception:
-                continue
-        return results
+        offset = 0
+        while len(results) < limit:
+            data = await self.fetch_json(self.base_url, params={"limit": 20, "offset": offset})
+            if not data or not isinstance(data, dict):
+                break
+            jobs = data.get("jobs", []) or []
+            if not jobs:
+                break
+            for job in jobs:
+                try:
+                    results.append(self._parse_job(job))
+                except Exception:
+                    continue
+            if len(jobs) < 20:
+                break
+            offset += 20
+        return results[:limit]
 
     async def search_jobs(
         self,
@@ -275,55 +283,55 @@ class HimalayasScraper(BaseScraper):
         location: Optional[str] = None,
         max_jobs: int = 50,
     ) -> List[JobData]:
-        # Himalayas supports search via query parameter
-        url = self.base_url
+        # Himalayas has a dedicated search endpoint
+        url = f"{self.base_url}/search"
+        params = {"page": 1}
         if keywords:
-            url = f"{self.base_url}?search={keywords.replace(' ', '+')}"
-        data = await self.fetch_json(url)
+            params["q"] = keywords
+        if location:
+            params["country"] = location
+        data = await self.fetch_json(url, params=params)
         if not data or not isinstance(data, dict):
             return []
-        jobs = data.get("jobs", []) or []
+        jobs = data.get("jobs", []) or data.get("results", []) or []
         results = []
-        kw = (keywords or "").lower()
-        loc = (location or "").lower()
-        for job in jobs:
-            title = job.get("title", "")
-            job_loc = job.get("location") or ""
-            if kw and kw not in title.lower() and kw not in (job.get("description") or "").lower():
-                continue
-            if loc and loc not in str(job_loc).lower():
-                continue
+        for job in jobs[:max_jobs]:
             try:
                 results.append(self._parse_job(job))
             except Exception:
                 continue
-            if len(results) >= max_jobs:
-                break
         return results
 
     def _parse_job(self, job: Dict) -> JobData:
         title = job.get("title") or "Unknown Position"
-        company_obj = job.get("company") or {}
-        company = company_obj.get("name") if isinstance(company_obj, dict) else str(company_obj)
-        location = job.get("location") or "Remote"
-        remote = job.get("is_remote") is True or "remote" in str(location).lower()
-        salary_min = job.get("salary_min")
-        salary_max = job.get("salary_max")
+        company = job.get("companyName") or job.get("company") or "Unknown"
+        # Location is an array of strings
+        loc_arr = job.get("locationRestrictions") or []
+        if isinstance(loc_arr, list) and loc_arr:
+            location = ", ".join(str(l) for l in loc_arr)
+        else:
+            location = job.get("location") or "Remote"
+        remote = True  # Himalayas is remote-only
+        salary_min = job.get("minSalary")
+        salary_max = job.get("maxSalary")
+        # Seniority is an array
+        seniority_arr = job.get("seniority") or []
+        seniority = seniority_arr[0].lower().replace("-level", "").replace(" ", "") if seniority_arr else self.parse_seniority(title)
         return JobData(
             title=title,
             company=company,
             location=location,
-            external_id=str(job.get("id", "")),
-            external_url=job.get("url") or f"https://himalayas.app/jobs/{job.get('id', '')}",
-            description=job.get("description") or "",
+            external_id=str(job.get("id") or job.get("slug") or ""),
+            external_url=job.get("url") or f"https://himalayas.app/jobs/{job.get('slug', '')}",
+            description=job.get("description") or job.get("excerpt") or "",
             remote=remote,
-            hybrid="hybrid" in str(location).lower(),
+            hybrid=False,
             min_salary=int(salary_min) if salary_min else None,
             max_salary=int(salary_max) if salary_max else None,
-            department=job.get("category") or job.get("tags"),
-            seniority=self.parse_seniority(title),
-            employment_type=job.get("employment_type"),
-            posted_date=self._parse_date(job.get("posted_at") or job.get("created_at")),
+            department=(job.get("categories") or [None])[0] if job.get("categories") else None,
+            seniority=seniority,
+            employment_type=job.get("employmentType"),
+            posted_date=self._parse_date(job.get("postedAt") or job.get("publishedAt") or job.get("created_at")),
             raw_data=job,
         )
 
