@@ -315,6 +315,27 @@ function DashboardPage() {
           <p className="text-sm text-slate-500 mt-1">Your job search at a glance</p>
         </div>
 
+        {/* First-time user guidance banner — shows when user has jobs but no applications */}
+        {jobs.length > 0 && appCount === 0 && (
+          <div className="bg-gradient-to-r from-teal-500 to-emerald-500 rounded-xl p-5 mb-6 text-white shadow-md">
+            <h2 className="text-sm font-semibold mb-2 flex items-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+              How to apply in 3 steps
+            </h2>
+            <div className="grid grid-cols-3 gap-3 text-xs">
+              <div className="bg-white/15 rounded-lg p-3">
+                <span className="font-bold text-base">1.</span> Check the jobs you like
+              </div>
+              <div className="bg-white/15 rounded-lg p-3">
+                <span className="font-bold text-base">2.</span> Click "Approve &amp; Tailor CVs"
+              </div>
+              <div className="bg-white/15 rounded-lg p-3">
+                <span className="font-bold text-base">3.</span> Apply from the queue — we auto-fill each form
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Stat cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           <div className="bg-white rounded-lg border border-slate-200 p-5">
@@ -453,7 +474,9 @@ function DashboardPage() {
                                 <span className="inline-flex items-center px-1.5 py-0.5 bg-violet-50 text-violet-700 rounded text-[11px] font-medium">Hybrid</span>
                               )}
                               {job.max_salary && (
-                                <span className="inline-flex items-center px-1.5 py-0.5 bg-slate-50 text-slate-600 rounded text-[11px] font-medium">{'\u00A3'}{job.max_salary.toLocaleString()}{job.min_salary ? `-${job.max_salary?.toLocaleString()}` : '+'}</span>
+                                <span className="inline-flex items-center px-1.5 py-0.5 bg-slate-50 text-slate-600 rounded text-[11px] font-medium">
+                                  {'\u00A3'}{job.min_salary ? `${job.min_salary.toLocaleString()}-${job.max_salary.toLocaleString()}` : `${job.max_salary.toLocaleString()}+`}
+                                </span>
                               )}
                               {job.seniority && job.seniority !== 'mid' && (
                                 <span className="inline-flex items-center px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded text-[11px] font-medium capitalize">{job.seniority}</span>

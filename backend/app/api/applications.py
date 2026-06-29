@@ -323,30 +323,76 @@ async def update_application(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Update application status/notes"""
+    """Update application status/notes — sends email notifications on stage changes."""
     application = db.query(Application).filter(
         Application.id == application_id,
         Application.user_id == current_user.id
     ).first()
-    
+
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
-    
+
+    old_stage = application.stage
+    old_status = application.status
+
     # Update fields
     if status:
         application.status = status
         if status == "submitted":
             application.submitted_at = datetime.utcnow()
-    
+
     if stage:
         application.stage = stage
-    
+        # Track interview count
+        if stage in ("phone_screen", "technical", "onsite") and old_stage not in ("phone_screen", "technical", "onsite"):
+            application.interview_count = (application.interview_count or 0) + 1
+
     if internal_notes:
         application.internal_notes = internal_notes
-    
+
     db.commit()
     db.refresh(application)
-    
+
+    # Send email notifications on stage transitions
+    job = db.query(Job).filter(Job.id == application.job_id).first()
+    if job and stage and stage != old_stage:
+        try:
+            from app.services.email import email_service
+            if stage in ("phone_screen", "technical", "onsite"):
+                email_service.send_interview_notification(
+                    to=current_user.email,
+                    job_title=job.title,
+                    company=job.company,
+                    details=f"You moved this application to '{stage.replace('_', ' ')}' stage. Log in to update details and prepare.",
+                )
+            elif stage == "offer":
+                email_service.send_email(
+                    to=current_user.email,
+                    subject=f"🎉 Offer Received: {job.title} at {job.company}",
+                    html_content=f"""
+                    <html><body style="font-family:Arial,sans-serif;line-height:1.6;color:#333;max-width:600px;margin:0 auto;">
+                    <div style="background:linear-gradient(135deg,#059669,#10b981);color:white;padding:30px;border-radius:12px 12px 0 0;text-align:center;">
+                    <h1 style="margin:0;font-size:24px;">Congratulations! 🎉</h1>
+                    <p style="margin:8px 0 0 0;opacity:0.9;">You received an offer for {job.title} at {job.company}</p>
+                    </div>
+                    <div style="padding:25px;background:white;border:1px solid #e5e7eb;border-top:none;">
+                    <p>This is amazing news! Take a moment to celebrate, then:</p>
+                    <ol>
+                    <li>Review the offer carefully (salary, benefits, start date)</li>
+                    <li>Prepare any questions you have for the recruiter</li>
+                    <li>You usually have 3-5 days to respond</li>
+                    </ol>
+                    <p style="margin-top:25px;text-align:center;">
+                    <a href="http://localhost:3000/kanban" style="background-color:#059669;color:white;padding:14px 28px;text-decoration:none;border-radius:8px;display:inline-block;font-weight:600;">View in Tracker</a>
+                    </p>
+                    </div>
+                    <div style="padding:15px;text-align:center;color:#9ca3af;font-size:12px;">The JobScale Team</div>
+                    </body></html>
+                    """,
+                )
+        except Exception as e:
+            print(f"  Email notification error (non-blocking): {e}")
+
     return application
 
 

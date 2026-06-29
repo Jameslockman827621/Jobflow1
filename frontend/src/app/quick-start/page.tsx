@@ -404,9 +404,24 @@ export default function QuickStartPage() {
                 See my matched jobs →
               </button>
 
-              <p className="text-xs text-slate-400 mt-6">
-                💡 Pro tip: when you batch-apply, we will auto-tailor your CV for each job to maximize your interview chances.
-              </p>
+              {/* Next steps guidance */}
+              <div className="mt-8 max-w-md mx-auto bg-slate-50 rounded-xl p-4 text-left">
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3 text-center">What happens next</p>
+                <div className="space-y-2.5">
+                  <div className="flex items-start gap-2.5">
+                    <div className="w-5 h-5 rounded-full bg-teal-500 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">1</div>
+                    <p className="text-xs text-slate-600">Check the jobs you like on your dashboard</p>
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <div className="w-5 h-5 rounded-full bg-teal-500 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">2</div>
+                    <p className="text-xs text-slate-600">Click &quot;Approve &amp; Tailor CVs&quot; — we create a unique CV for each job</p>
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <div className="w-5 h-5 rounded-full bg-teal-500 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">3</div>
+                    <p className="text-xs text-slate-600">Apply from the queue — our Chrome extension auto-fills each form</p>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>

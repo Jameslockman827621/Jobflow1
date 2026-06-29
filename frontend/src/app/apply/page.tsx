@@ -50,8 +50,10 @@ export default function ApplyQueuePage() {
         const data: QueueResponse = await res.json();
         setQueue(data.queue);
         setCounts(data.counts);
-        // Auto-pick the next approved item to focus on
-        const next = data.queue.find(q => q.status === 'approved');
+        // Auto-pick the next item to focus on — prioritize in_progress (resume mid-application)
+        // over approved (haven't started yet)
+        const inProgress = data.queue.find(q => q.status === 'in_progress');
+        const next = inProgress || data.queue.find(q => q.status === 'approved');
         setCurrent(next || null);
       }
     } catch (err) {
@@ -229,7 +231,7 @@ export default function ApplyQueuePage() {
         </div>
 
         {/* Stats + progress */}
-        <div className="grid grid-cols-4 gap-3 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           <div className="bg-white rounded-lg border border-slate-200 p-4">
             <div className="text-xs text-slate-500 uppercase tracking-wide">Approved</div>
             <div className="text-2xl font-bold text-teal-600 mt-1">{counts.approved}</div>
@@ -326,7 +328,7 @@ export default function ApplyQueuePage() {
                   {busy ? (
                     <><div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white" /> Opening...</>
                   ) : (
-                    <>🚀 Start applying</>
+                    <>🚀 Open application page (auto-fill enabled)</>
                   )}
                 </button>
               )}
