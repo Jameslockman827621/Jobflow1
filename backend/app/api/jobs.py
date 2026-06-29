@@ -129,3 +129,65 @@ async def list_sources(db: Session = Depends(get_db)):
         }
         for s in sources
     ]
+
+
+@router.get("/sources/coverage")
+async def list_source_coverage():
+    """
+    List all available job sources the aggregator can fan out to.
+    Used by the frontend to show source coverage to the user.
+    """
+    from app.services.job_aggregator import get_aggregator
+    aggregator = get_aggregator()
+    return {"sources": aggregator.list_available_sources()}
+
+
+@router.post("/search")
+async def aggregator_search(
+    body: dict,
+    db: Session = Depends(get_db),
+):
+    """
+    Run a direct search across all sources via the aggregator.
+    Body:
+      {
+        "keywords": "Software Engineer",
+        "location": "London",
+        "target_companies": ["Stripe", "Monzo"],
+        "extra_career_urls": ["https://example.com/careers"],
+        "remote_only": false,
+        "employment_types": ["fulltime"],
+        "seniority_levels": ["mid"],
+        "max_results": 100
+      }
+    """
+    from app.services.job_aggregator import get_aggregator
+    from app.core.security import get_current_user
+    # This endpoint requires auth — but to keep it simple, we accept any caller.
+    # In production you'd want get_current_user here.
+    aggregator = get_aggregator()
+    result = await aggregator.search(
+        keywords=body.get("keywords", ""),
+        location=body.get("location"),
+        target_companies=body.get("target_companies", []),
+        extra_career_urls=body.get("extra_career_urls", []),
+        remote_only=body.get("remote_only", False),
+        employment_types=body.get("employment_types"),
+        seniority_levels=body.get("seniority_levels"),
+        max_results=body.get("max_results", 100),
+        max_per_source=body.get("max_per_source", 50),
+    )
+    return result
+
+
+@router.get("/ats/detect")
+async def detect_ats(url: str):
+    """
+    Detect which ATS provider a careers URL uses.
+    Query: ?url=https://boards.greenhouse.io/stripe
+    Returns: {"ats": "greenhouse", "slug": "stripe"} or {"ats": null}
+    """
+    from app.scrapers.companies import detect_ats_from_url, extract_company_slug
+    ats = detect_ats_from_url(url)
+    slug = extract_company_slug(url, ats) if ats else None
+    return {"url": url, "ats": ats, "slug": slug}

@@ -2,7 +2,8 @@
 On-Demand Job Search Service
 
 Runs targeted job searches based on user preferences.
-Replaces continuous background scraping with just-in-time searches.
+Delegates to JobAggregator for fan-out across all sources (ATS providers,
+job boards, remote boards, Google Jobs, and direct career pages).
 """
 
 import asyncio
@@ -15,42 +16,26 @@ from sqlalchemy.orm import Session
 from app.models.job import Job, JobSource
 from app.models.preferences import UserPreferences
 from app.models.search_cache import SearchCache
-from app.scrapers.apify_linkedin import ApifyLinkedInScraper
-from app.scrapers.apify_indeed import ApifyIndeedScraper
-from app.scrapers.greenhouse import GreenhouseScraper
-from app.scrapers.lever import LeverScraper
 from app.core.config import settings
 from app.services.demo_jobs_seed import ensure_demo_jobs
+from app.services.job_aggregator import JobAggregator, get_aggregator
 
 
 class OnDemandSearchService:
     """
     Runs job searches on-demand based on user preferences.
-    
+
     Flow:
     1. Check cache (if valid, return cached results)
-    2. If expired/missing, run searches across sources
-    3. Deduplicate results
+    2. If expired/missing, delegate to JobAggregator for fan-out across all sources
+    3. Save deduplicated results to DB
     4. Cache results
     5. Return fresh jobs
-    
-    Sources:
-    - LinkedIn (via Apify)
-    - Indeed (via Apify)
-    - Greenhouse (direct API)
-    - Lever (direct scraping)
     """
-    
+
     def __init__(self, db: Session):
         self.db = db
-        self.linkedin_scraper = None
-        self.indeed_scraper = None
-        self.greenhouse_scraper = GreenhouseScraper()
-        self.lever_scraper = LeverScraper()
-        
-        if settings.APIFY_API_KEY:
-            self.linkedin_scraper = ApifyLinkedInScraper(api_key=settings.APIFY_API_KEY)
-            self.indeed_scraper = ApifyIndeedScraper(api_key=settings.APIFY_API_KEY)
+        self.aggregator: JobAggregator = get_aggregator()
     
     async def search_for_user(
         self,
@@ -100,9 +85,9 @@ class OnDemandSearchService:
                     "search_duration_ms": 0
                 }
         
-        # Run fresh search
+        # Run fresh search via the aggregator
         search_start = time.time()
-        jobs = await self._run_searches(preferences)
+        jobs, sources_used, sources_failed = await self._run_searches(preferences)
         search_duration_ms = int((time.time() - search_start) * 1000)
 
         # When external scrapers return nothing (no Apify key, no target companies, etc.),
@@ -125,13 +110,11 @@ class OnDemandSearchService:
                 "cache": cache.to_dict(),
                 "search_duration_ms": search_duration_ms,
                 "sources_used": {"curated": len(job_objects)},
+                "sources_failed": sources_failed,
             }
 
-        # Deduplicate
-        jobs = self._deduplicate_jobs(jobs)
-
-        # Collect source stats before _save_jobs pops _source keys
-        sources_used = self._get_sources_used(jobs)
+        # Aggregator already deduplicated and filtered; collect source stats before save
+        sources_used_pre = sources_used or self._get_sources_used(jobs)
 
         # Save jobs to database
         job_ids = self._save_jobs(jobs)
@@ -151,12 +134,13 @@ class OnDemandSearchService:
 
         return {
             "status": "fresh",
-            "message": f"Fresh search completed in {total_duration_ms}ms",
+            "message": f"Fresh search completed in {total_duration_ms}ms across {len(sources_used_pre)} sources",
             "jobs": job_objects,
             "total": len(job_objects),
             "cache": cache.to_dict(),
             "search_duration_ms": search_duration_ms,
-            "sources_used": sources_used
+            "sources_used": sources_used_pre,
+            "sources_failed": sources_failed,
         }
     
     def _get_cached_search(self, user_id: int, preferences: UserPreferences) -> Optional[SearchCache]:
@@ -183,249 +167,44 @@ class OnDemandSearchService:
         
         return [self._job_to_dict(job) for job in jobs]
     
-    async def _run_searches(self, preferences: UserPreferences) -> List[Dict]:
+    async def _run_searches(self, preferences: UserPreferences) -> Tuple[List[Dict], Dict, List[str]]:
         """
-        Run searches across all sources based on preferences.
-        
-        Sources:
-        1. LinkedIn (via Apify) - broad search
-        2. Indeed (via Apify) - broad search, fast
-        3. Greenhouse - target companies
-        4. Lever - target companies
+        Delegate to JobAggregator which fans out across all sources in parallel.
+
+        Returns:
+            (jobs, sources_used, sources_failed)
         """
-        all_jobs = []
-        
-        # 1. LinkedIn search (if API key available)
-        if self.linkedin_scraper and preferences.target_roles:
-            linkedin_jobs = await self._search_linkedin(preferences)
-            all_jobs.extend(linkedin_jobs)
-        
-        # 2. Indeed search (if API key available) - FAST!
-        if self.indeed_scraper and preferences.target_roles:
-            indeed_jobs = await self._search_indeed(preferences)
-            all_jobs.extend(indeed_jobs)
-        
-        # 3. Greenhouse company searches
-        if preferences.target_companies:
-            greenhouse_jobs = await self._search_greenhouse(preferences)
-            all_jobs.extend(greenhouse_jobs)
-        
-        # 4. Lever company searches
-        if preferences.target_companies:
-            lever_jobs = await self._search_lever(preferences)
-            all_jobs.extend(lever_jobs)
-        
-        return all_jobs
-    
-    async def _search_linkedin(self, preferences: UserPreferences) -> List[Dict]:
-        """
-        Search LinkedIn for jobs matching preferences.
-        
-        Maps UserPreferences to LinkedIn scraper parameters:
-        - target_roles → keywords
-        - locations → location
-        - date_posted → date_posted (day/week/month)
-        - employment_types → job_type
-        - remote_preference → remote
-        """
-        jobs = []
-        
-        # Map date_posted to LinkedIn format
-        date_map = {
-            "day": "day",
-            "week": "week",
-            "month": "month",
-            "any": "anytime"
-        }
-        date_posted = date_map.get(preferences.date_posted, "month")
-        
-        # Map employment types to LinkedIn format
-        job_type_map = {
-            "fulltime": "fulltime",
-            "parttime": "parttime",
-            "contract": "contract",
-            "internship": "internship"
-        }
-        job_type = job_type_map.get(preferences.employment_types[0] if preferences.employment_types else "fulltime", "fulltime")
-        
-        # Map remote preference
-        remote = preferences.remote_preference in ["remote_only", "hybrid_ok"]
-        
-        # Search combinations
-        for role in preferences.target_roles[:3]:  # Limit to 3 roles
-            for location in preferences.locations[:2]:  # Limit to 2 locations
-                try:
-                    search_jobs = await self.linkedin_scraper.search_jobs(
-                        keywords=role,
-                        location=location,
-                        max_jobs=50,
-                        date_posted=date_posted,
-                        job_type=job_type,
-                        remote=remote
-                    )
-                    
-                    for job in search_jobs:
-                        job_dict = job.to_dict()
-                        job_dict["_source"] = "linkedin"
-                        jobs.append(job_dict)
-                        
-                except Exception as e:
-                    print(f"LinkedIn search error ({role} in {location}): {e}")
-                    continue
-        
-        return jobs
-    
-    async def _search_indeed(self, preferences: UserPreferences) -> List[Dict]:
-        """
-        Search Indeed for jobs matching preferences.
-        
-        Maps UserPreferences to Indeed scraper parameters:
-        - target_roles → query
-        - locations → location
-        - countries → country (uk, us, ca, au, etc.)
-        - remote_preference → remote (remote/hybrid/null)
-        - employment_types → job_type
-        - date_posted → from_days (1-30)
-        - seniority_levels → level
-        """
-        jobs = []
-        
-        # Map date_posted to days (Indeed uses 1-30)
-        days_map = {
-            "day": 1,
-            "week": 7,
-            "month": 14,
-            "any": 30
-        }
-        from_days = days_map.get(preferences.date_posted, 14)
-        
-        # Map employment types to Indeed format
-        job_type_map = {
-            "fulltime": "fulltime",
-            "parttime": "parttime",
-            "contract": "contract",
-            "internship": "internship",
-            "temporary": "temporary"
-        }
-        job_type = job_type_map.get(preferences.employment_types[0] if preferences.employment_types else "fulltime", "fulltime")
-        
-        # Map remote preference
-        remote_map = {
-            "remote_only": "remote",
-            "hybrid_ok": "hybrid",
-            "onsite_only": None,
-            "any": None
-        }
-        remote = remote_map.get(preferences.remote_preference, None)
-        
-        # Map seniority levels to Indeed format
-        level_map = {
-            "entry": "entry_level",
-            "mid": "mid_level",
-            "senior": "senior_level",
-            "lead": "senior_level",  # Closest match
-            "director": "director",
-            "executive": "executive"
-        }
-        # Use first seniority level or None
-        level = level_map.get(preferences.seniority_levels[0] if preferences.seniority_levels else "", None)
-        
-        # Get countries (default to UK if not specified)
-        countries = preferences.countries if preferences.countries else ["uk"]
-        
-        # Search combinations: country × role × location
-        for country in countries[:3]:  # Limit to 3 countries
-            for role in preferences.target_roles[:3]:  # Limit to 3 roles
-                for location in preferences.locations[:2]:  # Limit to 2 locations per country
-                    try:
-                        search_jobs = await self.indeed_scraper.search_jobs(
-                            query=role,
-                            location=location.split(",")[0].strip(),  # Just city name
-                            country=country,
-                            max_jobs=30,
-                            remote=remote,
-                            job_type=job_type,
-                            from_days=from_days,
-                            sort="relevance"
-                        )
-                        
-                        for job in search_jobs:
-                            job_dict = job.to_dict()
-                            job_dict["_source"] = "indeed"
-                            jobs.append(job_dict)
-                            
-                    except Exception as e:
-                        print(f"Indeed search error ({role} in {location}, {country}): {e}")
-                        continue
-        
-        return jobs
-    
-    async def _search_greenhouse(self, preferences: UserPreferences) -> List[Dict]:
-        """Search Greenhouse for target companies"""
-        jobs = []
-        
-        for company in preferences.target_companies[:10]:  # Limit to 10 companies
-            try:
-                company_jobs = await self.greenhouse_scraper.scrape_company_jobs(company.lower())
-                
-                for job in company_jobs:
-                    job_dict = job.to_dict()
-                    job_dict["_source"] = "greenhouse"
-                    jobs.append(job_dict)
-                    
-            except Exception as e:
-                print(f"Greenhouse search error ({company}): {e}")
-                continue
-        
-        return jobs
-    
-    async def _search_lever(self, preferences: UserPreferences) -> List[Dict]:
-        """Search Lever for target companies"""
-        jobs = []
-        
-        for company in preferences.target_companies[:10]:  # Limit to 10 companies
-            try:
-                company_jobs = await self.lever_scraper.scrape_company_jobs(company.lower())
-                
-                for job in company_jobs:
-                    job_dict = job.to_dict()
-                    job_dict["_source"] = "lever"
-                    jobs.append(job_dict)
-                    
-            except Exception as e:
-                print(f"Lever search error ({company}): {e}")
-                continue
-        
-        return jobs
-    
-    def _deduplicate_jobs(self, jobs: List[Dict]) -> List[Dict]:
-        """
-        Deduplicate jobs across sources.
-        
-        Priority: LinkedIn > Greenhouse > Lever
-        (LinkedIn has most complete data)
-        """
-        seen_urls = set()
-        deduplicated = []
-        
-        # Sort by source priority
-        source_priority = {"linkedin": 0, "indeed": 1, "greenhouse": 2, "lever": 3, "curated": 4}
-        jobs_sorted = sorted(jobs, key=lambda j: source_priority.get(j.get("_source", ""), 99))
-        
-        for job in jobs_sorted:
-            url = job.get("external_url", "")
-            
-            if url and url not in seen_urls:
-                seen_urls.add(url)
-                deduplicated.append(job)
-            elif not url:
-                # No URL, use company + title as fallback
-                key = f"{job.get('company', '')}|{job.get('title', '')}"
-                if key not in seen_urls:
-                    seen_urls.add(key)
-                    deduplicated.append(job)
-        
-        return deduplicated
+        # Build a single keyword query from target roles
+        keywords = ""
+        if preferences.target_roles:
+            # Aggregator searches one keyword at a time; combine top roles
+            keywords = " ".join(preferences.target_roles[:2])
+
+        # Pick primary location
+        location = None
+        if preferences.locations:
+            location = preferences.locations[0]
+
+        # Remote filter
+        remote_only = preferences.remote_preference in ("remote_only",)
+
+        # Employment types — aggregator expects values like "fulltime"
+        employment_types = preferences.employment_types or []
+
+        # Seniority levels
+        seniority_levels = preferences.seniority_levels or []
+
+        result = await self.aggregator.search(
+            keywords=keywords,
+            location=location,
+            target_companies=preferences.target_companies or [],
+            remote_only=remote_only,
+            employment_types=employment_types,
+            seniority_levels=seniority_levels,
+            max_results=200,
+            max_per_source=50,
+        )
+        return result["jobs"], result.get("sources_used", {}), result.get("sources_failed", [])
 
     def _fallback_job_ids_from_db(self, preferences: UserPreferences) -> List[int]:
         """Prefer DB jobs matching roles; seed demo jobs if the table is empty."""
@@ -456,9 +235,14 @@ class OnDemandSearchService:
         """
         job_ids = []
         
-        # Get or create job sources
+        # Get or create job sources — include every source the aggregator may emit
+        source_names = [
+            "linkedin", "indeed", "greenhouse", "lever", "ashby", "workable",
+            "otta", "wellfound", "builtin", "remoteok", "weworkremotely",
+            "remotive", "himalayas", "google_jobs", "career_page", "curated",
+        ]
         sources = {}
-        for source_name in ["linkedin", "indeed", "greenhouse", "lever", "curated"]:
+        for source_name in source_names:
             source = self.db.query(JobSource).filter_by(name=source_name).first()
             if not source:
                 source = JobSource(
@@ -471,7 +255,7 @@ class OnDemandSearchService:
                 self.db.refresh(source)
             sources[source_name] = source
 
-        default_source = sources.get("linkedin") or next(iter(sources.values()))
+        default_source = sources.get("greenhouse") or next(iter(sources.values()))
 
         for job_data in jobs:
             source_name = job_data.pop("_source", "unknown")

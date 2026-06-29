@@ -251,53 +251,24 @@ async def delete_preferences(
 @router.get("/companies/suggested")
 async def get_suggested_companies(
     query: Optional[str] = None,
-    limit: int = 20,
+    limit: int = 50,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
     Get suggested companies for user to select.
-    
+
+    Returns companies from our curated directory with ATS metadata so the
+    frontend can show which ATS each company uses and the aggregator knows
+    where to scrape.
+
     Query params:
     - query: Search filter (optional)
-    - limit: Max results (default 20)
+    - limit: Max results (default 50)
     """
-    # Curated list of top tech companies
-    suggested = [
-        {"name": "Stripe", "industry": "Fintech", "size": "mid"},
-        {"name": "Figma", "industry": "Design", "size": "mid"},
-        {"name": "Airbnb", "industry": "Travel", "size": "enterprise"},
-        {"name": "GitLab", "industry": "DevTools", "size": "mid"},
-        {"name": "Monzo", "industry": "Fintech", "size": "mid"},
-        {"name": "Revolut", "industry": "Fintech", "size": "enterprise"},
-        {"name": "Coinbase", "industry": "Crypto", "size": "enterprise"},
-        {"name": "Shopify", "industry": "E-commerce", "size": "enterprise"},
-        {"name": "Zendesk", "industry": "SaaS", "size": "enterprise"},
-        {"name": "Twitch", "industry": "Entertainment", "size": "enterprise"},
-        {"name": "Dropbox", "industry": "Cloud", "size": "enterprise"},
-        {"name": "Snowflake", "industry": "Data", "size": "enterprise"},
-        {"name": "Databricks", "industry": "Data/AI", "size": "mid"},
-        {"name": "Anthropic", "industry": "AI", "size": "startup"},
-        {"name": "OpenAI", "industry": "AI", "size": "mid"},
-        {"name": "Notion", "industry": "Productivity", "size": "mid"},
-        {"name": "Linear", "industry": "Productivity", "size": "startup"},
-        {"name": "Vercel", "industry": "DevTools", "size": "startup"},
-        {"name": "Supabase", "industry": "DevTools", "size": "startup"},
-        {"name": "Plaid", "industry": "Fintech", "size": "mid"},
-    ]
-    
-    # Filter by query if provided
-    if query:
-        query_lower = query.lower()
-        suggested = [
-            c for c in suggested
-            if query_lower in c["name"].lower() or query_lower in c["industry"].lower()
-        ]
-    
-    return {
-        "companies": suggested[:limit],
-        "total": len(suggested)
-    }
+    from app.scrapers.companies import get_company_suggestions
+    suggestions = get_company_suggestions(query=query, limit=limit)
+    return {"companies": suggestions, "total": len(suggestions)}
 
 
 @router.get("/roles/suggested")
