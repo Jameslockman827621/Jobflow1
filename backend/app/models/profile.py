@@ -48,6 +48,12 @@ class UserProfile(Base, TimestampMixin):
     # User must explicitly opt in — we never auto-submit without consent.
     auto_submit_enabled = Column(Boolean, default=False)
 
+    # Auto-approve: when True, the background monitor auto-approves jobs that meet
+    # ALL the user's must-haves + ATS score above the threshold. These go straight
+    # into the apply queue without the user manually selecting them.
+    auto_approve_enabled = Column(Boolean, default=False)
+    auto_approve_threshold = Column(Float, default=60.0)  # Min ATS score to auto-approve
+
     # Relationships
     user = relationship("User", back_populates="profile")
     skills = relationship("Skill", back_populates="profile", cascade="all, delete-orphan")

@@ -24,6 +24,9 @@ export default function ApplySettingsPage() {
   const [saving, setSaving] = useState(false);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [profile, setProfile] = useState<Record<string, string>>({});
+  const [autoApprove, setAutoApprove] = useState(false);
+  const [autoApproveThreshold, setAutoApproveThreshold] = useState(60);
+  const [autoSubmit, setAutoSubmit] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -37,14 +40,27 @@ export default function ApplySettingsPage() {
 
   async function loadAnswers() {
     try {
-      const res = await authFetch('/api/v1/auto-apply/answers');
-      if (res.ok) {
-        const data = await res.json();
+      const [ansRes, approveRes, submitRes] = await Promise.all([
+        authFetch('/api/v1/auto-apply/answers'),
+        authFetch('/api/v1/auto-apply/auto-approve'),
+        authFetch('/api/v1/auto-apply/auto-submit'),
+      ]);
+      if (ansRes.ok) {
+        const data = await ansRes.json();
         setAnswers(data.answers || {});
         setProfile(data.profile || {});
       }
+      if (approveRes.ok) {
+        const data = await approveRes.json();
+        setAutoApprove(data.auto_approve_enabled || false);
+        setAutoApproveThreshold(data.auto_approve_threshold || 60);
+      }
+      if (submitRes.ok) {
+        const data = await submitRes.json();
+        setAutoSubmit(data.auto_submit_enabled || false);
+      }
     } catch (err) {
-      console.error('Failed to load answers:', err);
+      console.error('Failed to load settings:', err);
     } finally {
       setLoading(false);
     }
@@ -153,8 +169,101 @@ export default function ApplySettingsPage() {
           {saving ? 'Saving...' : 'Save auto-fill answers'}
         </button>
 
+        {/* Autonomous settings */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5 mb-5">
+          <h2 className="text-sm font-semibold text-slate-900 mb-1">Autonomous apply settings</h2>
+          <p className="text-xs text-slate-500 mb-4">Control how much you want JobScale to do for you.</p>
+
+          {/* Auto-approve */}
+          <div className="border-t border-slate-100 pt-4 mt-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-slate-900">Auto-approve matching jobs</p>
+                <p className="text-xs text-slate-500 mt-0.5">When the background monitor finds jobs matching your must-haves, automatically add them to your apply queue (with tailored CVs) — no manual selection needed.</p>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer flex-shrink-0">
+                <input
+                  type="checkbox"
+                  checked={autoApprove}
+                  onChange={async (e) => {
+                    setAutoApprove(e.target.checked);
+                    try {
+                      await authFetch('/api/v1/auto-apply/auto-approve', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ enabled: e.target.checked, threshold: autoApproveThreshold }),
+                      });
+                      toast.success(e.target.checked ? 'Auto-approve enabled' : 'Auto-approve disabled');
+                    } catch {
+                      toast.error('Failed to update');
+                    }
+                  }}
+                  className="w-5 h-5 rounded text-teal-500 focus:ring-teal-500"
+                />
+              </label>
+            </div>
+            {autoApprove && (
+              <div className="mt-3 flex items-center gap-3">
+                <span className="text-xs text-slate-500">Min ATS score to auto-approve:</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={autoApproveThreshold}
+                  onChange={(e) => setAutoApproveThreshold(parseInt(e.target.value))}
+                  className="flex-1 max-w-xs"
+                />
+                <span className="text-sm font-semibold text-teal-600 w-12">{autoApproveThreshold}%</span>
+                <button
+                  onClick={async () => {
+                    await authFetch('/api/v1/auto-apply/auto-approve', {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ enabled: true, threshold: autoApproveThreshold }),
+                    });
+                    toast.success(`Threshold set to ${autoApproveThreshold}%`);
+                  }}
+                  className="text-xs px-2 py-1 bg-teal-500 text-white rounded font-medium"
+                >
+                  Save
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Auto-submit */}
+          <div className="border-t border-slate-100 pt-4 mt-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-slate-900">Auto-submit applications</p>
+                <p className="text-xs text-slate-500 mt-0.5">When enabled, the Chrome extension will click Submit after filling each form — you do not need to review each one. Use with caution: you are responsible for the applications submitted on your behalf.</p>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer flex-shrink-0">
+                <input
+                  type="checkbox"
+                  checked={autoSubmit}
+                  onChange={async (e) => {
+                    setAutoSubmit(e.target.checked);
+                    try {
+                      await authFetch('/api/v1/auto-apply/auto-submit', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ enabled: e.target.checked }),
+                      });
+                      toast.success(e.target.checked ? 'Auto-submit enabled — the extension will click Submit for you' : 'Auto-submit disabled');
+                    } catch {
+                      toast.error('Failed to update');
+                    }
+                  }}
+                  className="w-5 h-5 rounded text-teal-500 focus:ring-teal-500"
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+
         <p className="text-xs text-slate-400 mt-4 text-center">
-          We never submit applications for you — these just save you typing the same answers on every form.
+          With both auto-approve and auto-submit enabled, JobScale is fully autonomous: it finds jobs, tailors your CV, fills the form, and submits — all you do is click "Start autonomous session" once.
         </p>
       </div>
     </AppShell>

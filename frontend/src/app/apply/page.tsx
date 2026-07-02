@@ -226,8 +226,53 @@ export default function ApplyQueuePage() {
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-slate-900">Apply Queue</h1>
-          <p className="text-sm text-slate-500 mt-1">Approve jobs once, then walk through them with everything pre-filled</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900">Apply Queue</h1>
+              <p className="text-sm text-slate-500 mt-1">Approve jobs once, then walk through them with everything pre-filled</p>
+            </div>
+            {counts.approved > 0 && (
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await authFetch('/api/v1/auto-apply/auto-session/start', { method: 'POST' });
+                    if (!res.ok) throw new Error('Failed to start session');
+                    const data = await res.json();
+                    if (data.jobs && data.jobs.length > 0) {
+                      // Send the job list to the extension to process autonomously
+                      try {
+                        const chromeRef = (window as any).chrome;
+                        if (chromeRef?.runtime?.sendMessage) {
+                          chromeRef.runtime.sendMessage(
+                            { action: 'autoSession', jobs: data.jobs },
+                            (response: any) => {
+                              if (response?.ok) {
+                                toast.success(`Autonomous session started — the extension will apply to ${data.total} jobs automatically. You can walk away.`);
+                              } else {
+                                toast.error('Extension not responding. Make sure the JobScale extension is installed and enabled.');
+                              }
+                            }
+                          );
+                        } else {
+                          toast.error('Chrome extension not detected. Install it to use autonomous apply.');
+                        }
+                      } catch {
+                        toast.error('Extension not available — you can still apply manually with the buttons below.');
+                      }
+                    } else {
+                      toast.info(data.message || 'No approved jobs to apply to.');
+                    }
+                  } catch (err: any) {
+                    toast.error(err.message || 'Failed to start session');
+                  }
+                }}
+                className="px-5 py-2.5 bg-gradient-to-r from-teal-500 to-emerald-500 text-white rounded-lg font-semibold text-sm hover:from-teal-600 hover:to-emerald-600 transition-all flex items-center gap-2 shadow-md"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                Start autonomous session
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Stats + progress */}

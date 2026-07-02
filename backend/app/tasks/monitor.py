@@ -218,5 +218,79 @@ def _notify_matching_users(db, new_job_count: int):
                 except Exception as e:
                     print(f"  Monitor: email error for {user.email}: {e}")
 
+                # Auto-approve: if the user has auto-approve enabled, add matching
+                # jobs to their apply queue automatically (with tailored CVs)
+                try:
+                    from app.models.profile import UserProfile
+                    profile = db.query(UserProfile).filter(
+                        UserProfile.user_id == user.id
+                    ).first()
+                    if profile and profile.auto_approve_enabled:
+                        _auto_approve_jobs(db, user, matched, profile.auto_approve_threshold or 60.0)
+                except Exception as e:
+                    print(f"  Monitor: auto-approve error for {user.id}: {e}")
+
     except Exception as e:
         print(f"  Monitor: notification error: {e}")
+
+
+def _auto_approve_jobs(db, user, jobs, threshold):
+    """Auto-approve matching jobs for a user — adds them to the apply queue
+    with tailored CVs, just as if the user had clicked 'Approve & Tailor CVs'."""
+    from app.models.auto_apply import UserAutoApplyJob
+    from app.models.cv import CV
+    from app.services.cv_tailor import tailor_cv_for_job, score_cv_against_job
+    from app.services.cv_tailor import _generate_keyword_summary as _  # noqa — ensures import
+
+    cv = db.query(CV).filter(CV.user_id == user.id, CV.is_primary == True).first()
+    if not cv:
+        cv = db.query(CV).filter(CV.user_id == user.id).order_by(CV.created_at.desc()).first()
+    if not cv:
+        return 0
+
+    approved = 0
+    for job in jobs[:10]:  # Cap at 10 per monitor run to avoid overload
+        # Check if already in queue
+        existing = db.query(UserAutoApplyJob).filter(
+            UserAutoApplyJob.user_id == user.id,
+            UserAutoApplyJob.job_id == job.id,
+        ).first()
+        if existing:
+            continue
+
+        # Tailor + score
+        try:
+            tailored = tailor_cv_for_job(cv, job.description or "", job.title or "", job.company or "")
+            score = score_cv_against_job(tailored, job.description or "")
+            ats_score = score["overall"]
+        except Exception:
+            continue
+
+        # Only auto-approve if ATS score meets threshold
+        if ats_score < threshold:
+            continue
+
+        item = UserAutoApplyJob(
+            user_id=user.id,
+            job_id=job.id,
+            status="approved",
+            tailored_cv_data=tailored,
+            ats_score=ats_score,
+            approved_at=datetime.utcnow(),
+        )
+        db.add(item)
+        db.commit()
+        approved += 1
+        print(f"  Monitor: auto-approved '{job.title}' at {job.company} for {user.email} (ATS: {ats_score})")
+
+    if approved > 0:
+        try:
+            email_service.send_email(
+                to=user.email,
+                subject=f"🚀 {approved} new jobs auto-approved and ready to apply",
+                html_content=f"<p>We found {approved} new jobs that match your must-haves and auto-approved them. Visit your <a href='http://localhost:3000/apply'>apply queue</a> to start applying.</p>",
+            )
+        except Exception:
+            pass
+
+    return approved

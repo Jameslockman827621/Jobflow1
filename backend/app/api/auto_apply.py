@@ -984,3 +984,124 @@ async def inbound_email_webhook(
         "updated": updated,
         "detected_type": "offer" if is_offer else "interview" if is_interview else "rejection" if is_rejection else "viewed" if is_viewed else "unknown",
     }
+
+
+# ===== AUTONOMOUS APPLY SESSION =====
+
+@router.post("/auto-session/start")
+async def start_auto_session(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Start an autonomous apply session.
+
+    Returns the list of approved queue items that the extension should process.
+    The extension will open each job URL, fill the form, auto-submit (if enabled),
+    send a receipt, and move to the next — all without user interaction.
+
+    The user clicks this once, then walks away. The extension does the rest.
+    """
+    items = db.query(UserAutoApplyJob).filter(
+        UserAutoApplyJob.user_id == current_user.id,
+        UserAutoApplyJob.status == "approved",
+    ).order_by(UserAutoApplyJob.approved_at.asc()).all()
+
+    if not items:
+        return {"jobs": [], "total": 0, "message": "No approved jobs to apply to. Approve some jobs first."}
+
+    # Mark all as "in_session" so we can track progress
+    session_jobs = []
+    for item in items:
+        job = db.query(Job).filter(Job.id == item.job_id).first()
+        if not job:
+            continue
+        session_jobs.append({
+            "queue_id": item.id,
+            "job_id": job.id,
+            "job_title": job.title,
+            "company": job.company,
+            "external_url": job.external_url,
+            "ats_score": item.ats_score,
+            "tailored_cv_pdf_url": f"{DASHBOARD_URL}/api/v1/auto-apply/queue/{item.id}/tailored-cv.pdf"
+        if False else f"/api/v1/auto-apply/queue/{item.id}/tailored-cv.pdf",  # relative — extension prepends DASHBOARD_URL
+            "cover_letter": (item.tailored_cv_data or {}).get("cover_letter"),
+        })
+
+    return {
+        "jobs": session_jobs,
+        "total": len(session_jobs),
+        "message": f"Starting autonomous session with {len(session_jobs)} jobs. The extension will process them one by one.",
+    }
+
+
+@router.get("/auto-session/status")
+async def get_auto_session_status(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get the status of the current autonomous session — how many approved,
+    in_progress, applied, skipped."""
+    items = db.query(UserAutoApplyJob).filter(
+        UserAutoApplyJob.user_id == current_user.id,
+    ).all()
+
+    counts = {"approved": 0, "in_progress": 0, "applied": 0, "skipped": 0}
+    for item in items:
+        counts[item.status] = counts.get(item.status, 0) + 1
+
+    remaining = counts["approved"] + counts["in_progress"]
+    return {
+        "counts": counts,
+        "remaining": remaining,
+        "is_active": remaining > 0,
+        "message": f"{remaining} jobs remaining in session" if remaining > 0 else "Session complete",
+    }
+
+
+# ===== AUTO-APPROVE SETTINGS =====
+
+@router.get("/auto-approve")
+async def get_auto_approve_settings(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get auto-approve settings."""
+    from app.models.profile import UserProfile
+    profile = db.query(UserProfile).filter(UserProfile.user_id == current_user.id).first()
+    return {
+        "auto_approve_enabled": profile.auto_approve_enabled if profile else False,
+        "auto_approve_threshold": profile.auto_approve_threshold if profile else 60.0,
+    }
+
+
+@router.put("/auto-approve")
+async def set_auto_approve_settings(
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Enable/disable auto-approve and set the ATS score threshold.
+
+    Body: {"enabled": true, "threshold": 70}
+
+    When enabled, the background monitor will automatically approve jobs that:
+    1. Match the user's target roles and companies
+    2. Have an ATS score >= threshold
+    These go straight into the apply queue with tailored CVs — no manual selection needed.
+    """
+    from app.models.profile import UserProfile
+    profile = db.query(UserProfile).filter(UserProfile.user_id == current_user.id).first()
+    if not profile:
+        profile = UserProfile(user_id=current_user.id)
+        db.add(profile)
+
+    profile.auto_approve_enabled = body.get("enabled", False)
+    if body.get("threshold") is not None:
+        profile.auto_approve_threshold = float(body["threshold"])
+    db.commit()
+
+    return {
+        "auto_approve_enabled": profile.auto_approve_enabled,
+        "auto_approve_threshold": profile.auto_approve_threshold,
+        "message": "Auto-approve enabled — new matching jobs will be added to your queue automatically." if profile.auto_approve_enabled else "Auto-approve disabled.",
+    }

@@ -487,6 +487,17 @@
                     })
                   });
                   showToast('JobScale: ✓ Auto-submitted! Receipt saved.');
+
+                  // Notify the background script that this tab is done
+                  // (so the auto-session can close the tab and move to the next job)
+                  try {
+                    chrome.runtime.sendMessage({
+                      action: 'autoSubmitComplete',
+                      receipt: { queue_id: matching.id, ats_type: ats },
+                    });
+                  } catch (e) {
+                    // Background script may not be listening if not in a session
+                  }
                   return;
                 }
               }
