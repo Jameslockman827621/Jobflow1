@@ -27,6 +27,7 @@ from app.scrapers.greenhouse import GreenhouseScraper
 from app.scrapers.lever import LeverScraper
 from app.scrapers.workable import WorkableScraper
 from app.scrapers.ashby import AshbyScraper
+from app.scrapers.workday import WorkdayScraper
 from app.scrapers.google_jobs import GoogleJobsScraper
 from app.scrapers.remote_boards import (
     RemoteOKScraper,
@@ -94,6 +95,7 @@ class JobAggregator:
         self.lever = LeverScraper()
         self.workable = WorkableScraper()
         self.ashby = AshbyScraper()
+        self.workday = WorkdayScraper()
         # Job board scrapers (keyword search)
         self.google_jobs = GoogleJobsScraper()
         self.otta = OttaScraper()
@@ -254,6 +256,8 @@ class JobAggregator:
             return await self.ashby.scrape_company_jobs(slug)
         if ats == "workable":
             return await self.workable.scrape_company_jobs(slug)
+        if ats == "workday":
+            return await self.workday.scrape_company_jobs(slug)
         return []
 
     async def _search_linkedin(self, keywords: str, location: Optional[str], remote_only: bool, employment_types: Optional[List[str]], max_jobs: int) -> List[JobData]:
@@ -384,6 +388,7 @@ class JobAggregator:
             {"id": "lever", "name": "Lever", "type": "ats", "needs_api_key": False, "coverage": "10,000+ companies"},
             {"id": "ashby", "name": "Ashby", "type": "ats", "needs_api_key": False, "coverage": "2,000+ modern startups"},
             {"id": "workable", "name": "Workable", "type": "ats", "needs_api_key": False, "coverage": "100,000+ companies"},
+            {"id": "workday", "name": "Workday", "type": "ats", "needs_api_key": False, "coverage": "Fortune 500 + enterprise"},
             {"id": "linkedin", "name": "LinkedIn", "type": "board", "needs_api_key": True, "coverage": "Global professional network"},
             {"id": "indeed", "name": "Indeed", "type": "board", "needs_api_key": True, "coverage": "Largest job board globally"},
             {"id": "otta", "name": "Otta (now Welcome to the Jungle)", "type": "board", "needs_api_key": False, "requires_auth": True, "coverage": "Now requires login — disabled"},

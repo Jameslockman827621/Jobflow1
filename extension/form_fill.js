@@ -18,10 +18,12 @@
     if (host.includes('lever.co') || host.includes('jobs.lever.co')) return 'lever';
     if (host.includes('ashbyhq.com')) return 'ashby';
     if (host.includes('workable.com')) return 'workable';
+    if (host.includes('myworkdayjobs.com') || host.includes('wd1.') || host.includes('wd3.') || host.includes('wd5.')) return 'workday';
     // Greenhouse embeds on company career sites
     if (document.querySelector('iframe[src*="greenhouse.io"]')) return 'greenhouse_embed';
     if (document.querySelector('iframe[src*="lever.co"]')) return 'lever_embed';
     if (document.querySelector('iframe[src*="ashbyhq.com"]')) return 'ashby_embed';
+    if (document.querySelector('iframe[src*="myworkdayjobs.com"]')) return 'workday_embed';
     return null;
   }
 
@@ -265,6 +267,58 @@
     }
   }
 
+  async function fillWorkday(data) {
+    let formRoot = document;
+    const iframe = document.querySelector('iframe[src*="myworkdayjobs.com"]');
+    if (iframe && iframe.contentDocument) {
+      formRoot = iframe.contentDocument;
+    }
+    const form = formRoot.querySelector('form, [data-automation-id="applicationForm"]');
+    const root = form || formRoot;
+    await fillCommonFields(data, root);
+    if (data.tailored_cv_pdf_url) {
+      await attachResume(data.tailored_cv_pdf_url, 'tailored_cv.pdf', root);
+    }
+  }
+
+  // ===== TRUE AUTO-SUBMIT =====
+  async function clickSubmitButton(formRoot = document) {
+    // Find the submit button — try multiple selectors for different ATSes
+    const selectors = [
+      'button[type="submit"]',
+      'input[type="submit"]',
+      'button[data-automation-id="submit"]',  // Workday
+      'button[id="submit-btn"]',
+      'button[class*="submit"]',
+      'button[class*="Submit"]',
+      'a[class*="submit"]',
+      'button:has(svg) + button',  // Sometimes submit is after a back button
+    ];
+
+    for (const selector of selectors) {
+      const btn = formRoot.querySelector(selector);
+      if (btn && !btn.disabled) {
+        const text = (btn.textContent || '').toLowerCase();
+        // Make sure it's actually a submit/apply button, not a back/cancel button
+        if (text.includes('submit') || text.includes('apply') || text.includes('send') || text.includes('continue') || btn.type === 'submit') {
+          btn.click();
+          return true;
+        }
+      }
+    }
+
+    // Fallback: look for any button with "Submit" or "Apply" text
+    const buttons = formRoot.querySelectorAll('button, input[type="button"], a[role="button"]');
+    for (const btn of buttons) {
+      const text = (btn.textContent || btn.value || '').toLowerCase().trim();
+      if ((text === 'submit' || text === 'submit application' || text === 'apply' || text === 'send application') && !btn.disabled) {
+        btn.click();
+        return true;
+      }
+    }
+    return false;
+  }
+
   // ===== UI: floating "auto-fill" button =====
   function showAutoFillButton(onClick) {
     if (document.getElementById('jobscale-autofill-btn')) return;
@@ -384,16 +438,64 @@
       // 4. Run the ATS-specific fill logic and track how many fields were filled
       let fieldsFilled = 0;
       let cvAttached = false;
-      const trackFill = async (fillFn) => {
-        const before = (data._filledCount) || 0;
-        await fillFn();
-        // fillCommonFields returns the count; we approximate by re-reading
-      };
       if (ats === 'greenhouse' || ats === 'greenhouse_embed') await fillGreenhouse(data);
       else if (ats === 'lever' || ats === 'lever_embed') await fillLever(data);
       else if (ats === 'ashby' || ats === 'ashby_embed') await fillAshby(data);
       else if (ats === 'workable') await fillWorkable(data);
+      else if (ats === 'workday' || ats === 'workday_embed') await fillWorkday(data);
       else await fillCommonFields(data);
+
+      // 5. Check if auto-submit is enabled — if so, click Submit after filling
+      let autoSubmitted = false;
+      try {
+        const autoSubmitRes = await fetch(`${API_BASE}/auto-apply/auto-submit`, {
+          headers: { Authorization: `Bearer ${jobscale_token}` }
+        });
+        if (autoSubmitRes.ok) {
+          const autoSubmitData = await autoSubmitRes.json();
+          if (autoSubmitData.auto_submit_enabled) {
+            // Wait a moment for the form to settle, then click submit
+            await new Promise(r => setTimeout(r, 2000));
+            autoSubmitted = await clickSubmitButton();
+
+            // If we found a matching queue item, submit a receipt
+            if (autoSubmitted && tailoredCvPdfUrl) {
+              const queueRes = await fetch(`${API_BASE}/auto-apply/queue`, {
+                headers: { Authorization: `Bearer ${jobscale_token}` }
+              });
+              if (queueRes.ok) {
+                const queueData = await queueRes.json();
+                const currentUrl = window.location.href;
+                const matching = (queueData.queue || []).find(q => {
+                  if (!q.job || !q.job.external_url) return false;
+                  return q.job.external_url.split('?')[0] === currentUrl.split('?')[0]
+                    || currentUrl.includes(q.job.external_url.split('?')[0]);
+                });
+                if (matching) {
+                  // Submit receipt
+                  await fetch(`${API_BASE}/auto-apply/queue/${matching.id}/receipt`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      Authorization: `Bearer ${jobscale_token}`
+                    },
+                    body: JSON.stringify({
+                      fields_filled: data,
+                      ats_type: ats,
+                      ats_response: 'submitted',
+                      submitted_at: new Date().toISOString(),
+                    })
+                  });
+                  showToast('JobScale: ✓ Auto-submitted! Receipt saved.');
+                  return;
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.log('Auto-submit check failed:', e);
+      }
 
       // 5. Honest messaging — distinguish "filled + CV attached" from "nothing to fill"
       const hasProfileData = data.first_name || data.linkedin_url || (data.answers && Object.keys(data.answers).length > 0);

@@ -44,6 +44,10 @@ class UserProfile(Base, TimestampMixin):
     # Format: {"linkedin_url": "...", "github_url": "...", "website": "...", "cover_letter_default": "..."}
     application_profile = Column(JSON, default=dict)
 
+    # Auto-submit: when True, the Chrome extension will click Submit after filling the form.
+    # User must explicitly opt in — we never auto-submit without consent.
+    auto_submit_enabled = Column(Boolean, default=False)
+
     # Relationships
     user = relationship("User", back_populates="profile")
     skills = relationship("Skill", back_populates="profile", cascade="all, delete-orphan")

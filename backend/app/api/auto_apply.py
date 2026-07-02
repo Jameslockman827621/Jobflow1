@@ -122,16 +122,19 @@ async def approve_jobs(
             })
             continue
 
-        # Tailor the CV for this job
+        # Tailor the CV + generate a cover letter for this job
         try:
             tailored = tailor_cv_for_job(cv, job.description or "", job.title or "", job.company or "")
             score = score_cv_against_job(tailored, job.description or "")
             ats_score = score["overall"]
+            # Generate a cover letter tailored to this job
+            cover_letter = _generate_cover_letter(cv, job, tailored)
         except Exception as e:
             print(f"  approve: tailor error for job {job_id}: {e}")
             tailored = None
             score = None
             ats_score = 0
+            cover_letter = None
 
         item = UserAutoApplyJob(
             user_id=current_user.id,
@@ -141,6 +144,10 @@ async def approve_jobs(
             ats_score=ats_score,
             approved_at=datetime.utcnow(),
         )
+        # Store the cover letter in the tailored CV data so it's accessible
+        if tailored and cover_letter:
+            tailored["cover_letter"] = cover_letter
+            item.tailored_cv_data = tailored
         db.add(item)
         db.commit()
         db.refresh(item)
@@ -572,4 +579,408 @@ async def update_application_answers(
         "answers": profile.application_answers or {},
         "profile": profile.application_profile or {},
         "message": "Application answers saved",
+    }
+
+# ===== COVER LETTER GENERATOR =====
+
+def _generate_cover_letter(cv: CV, job: Job, tailored: dict) -> Optional[str]:
+    """Generate a cover letter tailored to this job using the user's real background.
+
+    Uses AI (OpenAI) when available, falls back to a keyword-based template
+    that mirrors the job description's keywords naturally.
+    """
+    from app.core.config import settings
+
+    if settings.OPENAI_API_KEY:
+        try:
+            from openai import OpenAI
+            client = OpenAI(api_key=settings.OPENAI_API_KEY)
+            cv_payload = {
+                "full_name": cv.full_name,
+                "skills": cv.skills or [],
+                "experience": cv.experience or [],
+                "summary": tailored.get("summary") or cv.summary or "",
+            }
+            prompt = f"""Write a compelling cover letter for this job application.
+
+CANDIDATE: {cv.full_name}
+JOB: {job.title} at {job.company}
+JOB DESCRIPTION: {(job.description or "")[:2000]}
+
+CANDIDATE BACKGROUND (JSON):
+{__import__('json').dumps(cv_payload, indent=2)}
+
+RULES:
+1. Keep it under 250 words — recruiters skim cover letters.
+2. Show genuine enthusiasm for the company and role.
+3. Highlight 2-3 most relevant achievements from the candidate's real experience.
+4. Mirror the job description's keywords naturally (don't stuff).
+5. Professional but personable tone — not generic, not robotic.
+6. Include a brief call to action at the end.
+7. Use only real facts from the candidate's background — never fabricate.
+8. Output only the cover letter text, no subject line or headers.
+
+Output:"""
+            response = client.chat.completions.create(
+                model=getattr(settings, "LLM_MODEL", "gpt-4o-mini"),
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=400,
+                temperature=0.5,
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            print(f"  cover letter AI error: {e}")
+
+    # Fallback: keyword-based template
+    from app.services.cv_tailor import _reorder_skills_by_relevance
+    top_skills = _reorder_skills_by_relevance(cv.skills or [], tailored.get("keywords_matched", []))[:4]
+    skills_str = ", ".join(top_skills) if top_skills else "software development"
+
+    years = ""
+    try:
+        from app.services.cv_tailor import _estimate_years_experience
+        y = _estimate_years_experience(cv.experience or [])
+        if y and y > 0:
+            years = f" with {int(y)}+ years of experience"
+    except Exception:
+        pass
+
+    return f"""Dear Hiring Team at {job.company},
+
+I am excited to apply for the {job.title} position at {job.company}. With my background{years} in {skills_str}, I am confident I can make a meaningful impact on your team.
+
+What draws me to {job.company} is the opportunity to work on challenging problems alongside a talented team. My experience building production systems has taught me how to ship reliably, collaborate cross-functionally, and iterate based on user feedback — skills that align closely with what this role requires.
+
+I would welcome the chance to discuss how my background can contribute to {job.company}'s goals. Thank you for your time and consideration.
+
+Best regards,
+{cv.full_name}"""
+
+
+# ===== RESUME DIFF ENDPOINT =====
+
+@router.get("/queue/{queue_id}/diff")
+async def get_resume_diff(
+    queue_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return a line-by-line diff between the user's original CV and the tailored version.
+
+    Shows the user exactly what changed before they approve/send — builds trust
+    and lets them catch anything they want to edit.
+    """
+    import difflib
+
+    item = db.query(UserAutoApplyJob).filter(
+        UserAutoApplyJob.id == queue_id,
+        UserAutoApplyJob.user_id == current_user.id,
+    ).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Queue item not found")
+    if not item.tailored_cv_data:
+        raise HTTPException(status_code=404, detail="No tailored CV for this item")
+
+    # Get the original CV
+    cv = db.query(CV).filter(CV.user_id == current_user.id, CV.is_primary == True).first()
+    if not cv:
+        cv = db.query(CV).filter(CV.user_id == current_user.id).order_by(CV.created_at.desc()).first()
+    if not cv:
+        raise HTTPException(status_code=404, detail="No original CV found")
+
+    tailored = item.tailored_cv_data
+
+    # Build text representations for diffing
+    def _cv_to_lines(cv_obj, data=None):
+        lines = []
+        d = data or {}
+        lines.append(f"Name: {d.get('full_name') or cv_obj.full_name}")
+        lines.append(f"Summary: {d.get('summary') or cv_obj.summary or ''}")
+        lines.append(f"Skills: {', '.join(d.get('skills') or cv_obj.skills or [])}")
+        lines.append("")
+        lines.append("Experience:")
+        for exp in (d.get("experience") or cv_obj.experience or []):
+            lines.append(f"  {exp.get('role', '')} at {exp.get('company', '')} ({exp.get('start_date', '')} - {exp.get('end_date', '')})")
+            if exp.get("description"):
+                lines.append(f"    {exp['description']}")
+        lines.append("")
+        lines.append("Education:")
+        for edu in (d.get("education") or cv_obj.education or []):
+            lines.append(f"  {edu.get('degree', '')} at {edu.get('institution', '')} ({edu.get('graduation_year', '')})")
+        return lines
+
+    original_lines = _cv_to_lines(cv)
+    tailored_lines = _cv_to_lines(cv, tailored)
+
+    # Generate unified diff
+    diff = list(difflib.unified_diff(
+        original_lines,
+        tailored_lines,
+        fromfile="original_cv.txt",
+        tofile="tailored_cv.txt",
+        lineterm="",
+    ))
+
+    # Parse into structured changes for the frontend
+    changes = []
+    for line in diff:
+        if line.startswith("+++") or line.startswith("---") or line.startswith("@@"):
+            continue
+        if line.startswith("+"):
+            changes.append({"type": "added", "text": line[1:]})
+        elif line.startswith("-"):
+            changes.append({"type": "removed", "text": line[1:]})
+        elif line.strip():
+            changes.append({"type": "context", "text": line})
+
+    return {
+        "queue_id": queue_id,
+        "changes": changes,
+        "raw_diff": "\n".join(diff),
+        "has_cover_letter": bool(tailored.get("cover_letter")),
+        "cover_letter": tailored.get("cover_letter"),
+    }
+
+
+# ===== APPLICATION RECEIPT ENDPOINT =====
+
+@router.post("/queue/{queue_id}/receipt")
+async def submit_receipt(
+    queue_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Store what was actually submitted to the ATS — called by the extension after auto-submit.
+
+    Body: {
+        "fields_filled": {"name": "James Lock", "email": "james@example.com", ...},
+        "answers": {"Why Stripe?": "Because...", ...},
+        "resume_file": "tailored_cv_james_lock_stripe.pdf",
+        "ats_response": "success",
+        "submitted_at": "2026-07-02T20:00:00Z"
+    }
+    """
+    item = db.query(UserAutoApplyJob).filter(
+        UserAutoApplyJob.id == queue_id,
+        UserAutoApplyJob.user_id == current_user.id,
+    ).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Queue item not found")
+
+    # Also update the Application record if one exists
+    from app.models.application import Application
+    app = db.query(Application).filter(
+        Application.user_id == current_user.id,
+        Application.job_id == item.job_id,
+    ).first()
+
+    receipt = {
+        "fields_filled": body.get("fields_filled", {}),
+        "answers": body.get("answers", {}),
+        "resume_file": body.get("resume_file", ""),
+        "ats_response": body.get("ats_response", ""),
+        "submitted_at": body.get("submitted_at") or datetime.utcnow().isoformat(),
+        "ats_type": body.get("ats_type", "unknown"),
+    }
+
+    if app:
+        app.submission_receipt = receipt
+        app.status = "submitted"
+        app.stage = "applied"
+        app.submitted_at = datetime.utcnow()
+    else:
+        # Create the application if it doesn't exist yet
+        cv = db.query(CV).filter(CV.user_id == current_user.id, CV.is_primary == True).first()
+        app = Application(
+            user_id=current_user.id,
+            job_id=item.job_id,
+            cv_id=cv.id if cv else None,
+            status="submitted",
+            stage="applied",
+            applied_via="auto_submit",
+            submitted_at=datetime.utcnow(),
+            submission_receipt=receipt,
+            tailored_cv_data=item.tailored_cv_data,
+            ats_score=item.ats_score,
+        )
+        db.add(app)
+
+    # Mark the queue item as applied
+    item.status = "applied"
+    item.applied_at = datetime.utcnow()
+
+    db.commit()
+
+    return {"message": "Receipt stored", "application_id": app.id if app else None}
+
+
+# ===== AUTO-SUBMIT TOGGLE =====
+
+@router.get("/auto-submit")
+async def get_auto_submit_setting(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Check if the user has enabled auto-submit (the extension clicks Submit for them)."""
+    from app.models.profile import UserProfile
+    profile = db.query(UserProfile).filter(UserProfile.user_id == current_user.id).first()
+    return {"auto_submit_enabled": profile.auto_submit_enabled if profile else False}
+
+
+@router.put("/auto-submit")
+async def set_auto_submit_setting(
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Enable or disable auto-submit. User must explicitly opt in.
+
+    Body: {"enabled": true}
+    When enabled, the Chrome extension will click Submit after filling the form.
+    When disabled (default), the user must click Submit themselves.
+    """
+    from app.models.profile import UserProfile
+    profile = db.query(UserProfile).filter(UserProfile.user_id == current_user.id).first()
+    if not profile:
+        profile = UserProfile(user_id=current_user.id)
+        db.add(profile)
+
+    profile.auto_submit_enabled = body.get("enabled", False)
+    db.commit()
+
+    return {
+        "auto_submit_enabled": profile.auto_submit_enabled,
+        "message": "Auto-submit enabled — the extension will click Submit for you." if profile.auto_submit_enabled else "Auto-submit disabled — you will click Submit yourself.",
+    }
+
+
+# ===== EMAIL WEBHOOK FOR AUTO-TRACKING =====
+
+@router.post("/emails/inbound")
+async def inbound_email_webhook(
+    body: dict,
+    db: Session = Depends(get_db),
+):
+    """Webhook for email parsing services (SendGrid Inbound Parse, Postmark, etc.)
+
+    When a recruiter replies to a user's application, the email forwarding
+    service POSTs the parsed email here. We match it to the right application
+    and auto-update the status.
+
+    Body (from SendGrid Inbound Parse):
+    {
+        "from": "recruiter@stripe.com",
+        "to": "user+apply@jobscale.com",
+        "subject": "Interview invitation - Senior Frontend Engineer",
+        "text": "Hi James, thanks for applying...",
+        "html": "..."
+    }
+
+    No auth required — the webhook URL should be kept secret. In production,
+    verify the signature from the email parsing service.
+    """
+    from app.models.application import Application
+    from app.models.user import User
+    from sqlalchemy import or_
+    import re
+
+    sender = (body.get("from") or "").lower()
+    subject = (body.get("subject") or "").lower()
+    text = (body.get("text") or body.get("html") or "").lower()
+
+    if not sender or not text:
+        return {"status": "ignored", "reason": "missing fields"}
+
+    # Detect the type of email based on keywords
+    is_interview = any(kw in subject + text for kw in [
+        "interview", "schedule a call", "phone screen", "technical interview",
+        "onsite", "invite you", "congratulations", "move forward",
+    ])
+    is_rejection = any(kw in subject + text for kw in [
+        "unfortunately", "not moving forward", "regret", "different direction",
+        "not selected", "position has been filled",
+    ])
+    is_offer = any(kw in subject + text for kw in [
+        "offer", "congratulations", "pleased to offer", "employment offer",
+    ])
+    is_viewed = any(kw in subject + text for kw in [
+        "thank you for applying", "received your application", "reviewing",
+    ])
+
+    # Try to match the email to a user + application
+    # Strategy: find applications where the company domain matches the sender domain
+    sender_domain = sender.split("@")[-1].split(">")[0] if "@" in sender else ""
+
+    matched_apps = []
+    if sender_domain:
+        # Search for applications where the job's company name might match the sender domain
+        apps = db.query(Application).filter(
+            Application.status == "submitted",
+        ).all()
+
+        for app in apps:
+            job = db.query(Job).filter(Job.id == app.job_id).first()
+            if not job:
+                continue
+            # Check if the company name appears in the sender domain or email
+            company_lower = (job.company or "").lower().replace(" ", "")
+            if company_lower and (company_lower in sender_domain or sender_domain in company_lower):
+                matched_apps.append(app)
+            # Also check if the job title appears in the subject
+            if job.title and job.title.lower() in subject:
+                if app not in matched_apps:
+                    matched_apps.append(app)
+
+    if not matched_apps:
+        return {"status": "no_match", "reason": "could not match email to any application"}
+
+    # Update the matched applications
+    updated = 0
+    for app in matched_apps:
+        old_stage = app.stage
+        if is_offer:
+            app.stage = "offer"
+        elif is_interview:
+            if app.stage not in ("phone_screen", "technical", "onsite", "offer"):
+                app.stage = "phone_screen"
+            app.interview_count = (app.interview_count or 0) + 1
+        elif is_rejection:
+            app.stage = "rejected"
+            app.outcome = "rejected"
+        elif is_viewed and app.stage == "applied":
+            app.stage = "applied"  # Keep as applied but mark as viewed
+            app.status = "viewed"
+
+        if app.stage != old_stage:
+            updated += 1
+            # Send notification email to the user
+            user = db.query(User).filter(User.id == app.user_id).first()
+            job = db.query(Job).filter(Job.id == app.job_id).first()
+            if user and job:
+                try:
+                    from app.services.email import email_service
+                    if is_interview:
+                        email_service.send_interview_notification(
+                            to=user.email,
+                            job_title=job.title,
+                            company=job.company,
+                            details=f"Auto-detected from recruiter email: {body.get('subject', '')}",
+                        )
+                    elif is_offer:
+                        email_service.send_email(
+                            to=user.email,
+                            subject=f"🎉 Offer Received: {job.title} at {job.company}",
+                            html_content=f"<p>Great news! We detected an offer email from {job.company} for {job.title}. Check your inbox for details.</p>",
+                        )
+                except Exception as e:
+                    print(f"  email webhook: notification error: {e}")
+
+    db.commit()
+
+    return {
+        "status": "processed",
+        "matched_applications": len(matched_apps),
+        "updated": updated,
+        "detected_type": "offer" if is_offer else "interview" if is_interview else "rejection" if is_rejection else "viewed" if is_viewed else "unknown",
     }

@@ -237,7 +237,7 @@ class OnDemandSearchService:
         
         # Get or create job sources — include every source the aggregator may emit
         source_names = [
-            "linkedin", "indeed", "greenhouse", "lever", "ashby", "workable",
+            "linkedin", "indeed", "greenhouse", "lever", "ashby", "workable", "workday",
             "otta", "wellfound", "builtin", "remoteok", "weworkremotely",
             "remotive", "himalayas", "google_jobs", "career_page", "curated",
         ]

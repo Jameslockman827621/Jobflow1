@@ -26,7 +26,7 @@ class Application(Base, TimestampMixin):
     tailored_cv_url = Column(String)
     tailored_cv_data = Column(JSON)  # Structured tailored CV (summary, experience, skills, etc.)
     tailored_summary = Column(Text)  # AI-generated summary tailored to this job
-    cover_letter = Column(Text)
+    cover_letter = Column(Text)  # AI-generated cover letter tailored to this job
     answers = Column(JSON, default=dict)  # Application-specific Q&A
 
     # ATS scoring (0-100)
@@ -34,6 +34,10 @@ class Application(Base, TimestampMixin):
     ats_keyword_score = Column(Float)  # Keyword coverage %
     ats_skills_score = Column(Float)  # Skills coverage %
     ats_experience_score = Column(Float)  # Experience relevance %
+
+    # Application receipt — captured by the extension after submitting to the ATS.
+    # Stores exactly what was sent: {fields_filled, answers, resume_file, submitted_at, ats_response}
+    submission_receipt = Column(JSON)
 
     # Tracking
     submitted_at = Column(DateTime)

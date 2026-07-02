@@ -120,6 +120,12 @@ ATS_DETECTION_PATTERNS = {
         ".ashbyhq.com/",
         "api.ashby.com/",
     ],
+    "workday": [
+        ".myworkdayjobs.com/",
+        ".wd1.myworkdayjobs.com/",
+        ".wd3.myworkdayjobs.com/",
+        ".wd5.myworkdayjobs.com/",
+    ],
     "greenhouse_jobboard": [
         "greenhouse.io/",
     ],
@@ -163,8 +169,10 @@ def extract_company_slug(url: str, ats: str) -> Optional[str]:
             if host.endswith(".workable.com"):
                 return host.split(".")[0]
         if ats == "ashby":
-            # {slug}.ashbyhq.com
             if host.endswith(".ashbyhq.com"):
+                return host.split(".")[0]
+        if ats == "workday":
+            if ".myworkdayjobs.com" in url:
                 return host.split(".")[0]
         return None
     except Exception:
