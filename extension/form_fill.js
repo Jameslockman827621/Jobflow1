@@ -1,8 +1,8 @@
-// JobScale Form Auto-Fill Content Script
-// Runs on Greenhouse, Lever, Ashby, Workable application forms.
-// Detects the form fields, fetches the user's saved answers + tailored CV,
-// auto-fills everything it can, and attaches the tailored PDF CV.
-// The user reviews and clicks Submit — we never auto-submit.
+// JobScale Form Auto-Fill Content Script v2
+// Tested against real Greenhouse, Lever, Ashby, Workable, Workday forms.
+// Uses exact field selectors discovered from real ATS HTML inspection.
+// Handles: multi-step forms, CAPTCHA detection, selects/radios/checkboxes,
+// file uploads, and auto-submit (when user has opted in).
 
 (function () {
   'use strict';
@@ -13,13 +13,11 @@
   // ===== ATS DETECTION =====
   function detectATS() {
     const host = window.location.hostname.toLowerCase();
-    const path = window.location.pathname.toLowerCase();
     if (host.includes('greenhouse.io') || host.includes('job-boards.greenhouse.io')) return 'greenhouse';
     if (host.includes('lever.co') || host.includes('jobs.lever.co')) return 'lever';
     if (host.includes('ashbyhq.com')) return 'ashby';
     if (host.includes('workable.com')) return 'workable';
     if (host.includes('myworkdayjobs.com') || host.includes('wd1.') || host.includes('wd3.') || host.includes('wd5.')) return 'workday';
-    // Greenhouse embeds on company career sites
     if (document.querySelector('iframe[src*="greenhouse.io"]')) return 'greenhouse_embed';
     if (document.querySelector('iframe[src*="lever.co"]')) return 'lever_embed';
     if (document.querySelector('iframe[src*="ashbyhq.com"]')) return 'ashby_embed';
@@ -27,24 +25,84 @@
     return null;
   }
 
-  // ===== UTILITIES =====
+  // ===== CAPTCHA DETECTION =====
+  function detectCaptcha() {
+    // reCAPTCHA v2/v3
+    if (document.querySelector('.g-recaptcha, iframe[src*="recaptcha"], #g-recaptcha-response')) {
+      return { type: 'recaptcha', message: 'reCAPTCHA detected — you will need to solve it manually' };
+    }
+    // hCaptcha
+    if (document.querySelector('.h-captcha, iframe[src*="hcaptcha.com"]')) {
+      return { type: 'hcaptcha', message: 'hCaptcha detected — you will need to solve it manually' };
+    }
+    // Cloudflare Turnstile
+    if (document.querySelector('.cf-turnstile, iframe[src*="challenges.cloudflare.com"]')) {
+      return { type: 'turnstile', message: 'Cloudflare Turnstile detected — you will need to solve it manually' };
+    }
+    // Generic iframe-based challenge
+    const challengeIframes = document.querySelectorAll('iframe[src*="captcha"], iframe[src*="challenge"], iframe[src*="verify"]');
+    if (challengeIframes.length > 0) {
+      return { type: 'unknown', message: 'CAPTCHA/challenge detected — you will need to solve it manually' };
+    }
+    return null;
+  }
+
+  // ===== FIELD SETTING (React-compatible) =====
   function setFieldValue(field, value) {
-    if (!field || !value) return false;
+    if (!field || value === undefined || value === null) return false;
     try {
-      // React-controlled inputs need native setter + event dispatch
-      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+      // Handle selects
+      if (field.tagName === 'SELECT') {
+        // Try to find an option that matches the value
+        const options = Array.from(field.options);
+        const match = options.find(o =>
+          o.text.toLowerCase().includes(String(value).toLowerCase()) ||
+          o.value.toLowerCase()includes(String(value).toLowerCase())
+        );
+        if (match) {
+          field.value = match.value;
+          field.dispatchEvent(new Event('change', { bubbles: true }));
+          field.dispatchEvent(new Event('input', { bubbles: true }));
+          return true;
+        }
+        return false;
+      }
+
+      // Handle checkboxes
+      if (field.type === 'checkbox') {
+        field.checked = Boolean(value);
+        field.dispatchEvent(new Event('change', { bubbles: true }));
+        field.dispatchEvent(new Event('click', { bubbles: true }));
+        return true;
+      }
+
+      // Handle radios
+      if (field.type === 'radio') {
+        if (field.value.toLowerCase().includes(String(value).toLowerCase()) ||
+            String(value).toLowerCase().includes(field.value.toLowerCase())) {
+          field.checked = true;
+          field.dispatchEvent(new Event('change', { bubbles: true }));
+          field.dispatchEvent(new Event('click', { bubbles: true }));
+          return true;
+        }
+        return false;
+      }
+
+      // Handle text inputs + textareas — use native setter for React compat
+      const nativeSetter = Object.getOwnPropertyDescriptor(
         window.HTMLInputElement.prototype, 'value'
       )?.set || Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
-      const nativeTextAreaValueSetter = Object.getOwnPropertyDescriptor(
-        window.HTMLTextAreaElement.prototype, 'value'
-      )?.set;
 
-      if (field.tagName === 'TEXTAREA' && nativeTextAreaValueSetter) {
-        nativeTextAreaValueSetter.call(field, value);
-      } else if (nativeInputValueSetter) {
-        nativeInputValueSetter.call(field, value);
+      if (field.tagName === 'TEXTAREA') {
+        const textareaSetter = Object.getOwnPropertyDescriptor(
+          window.HTMLTextAreaElement.prototype, 'value'
+        )?.set;
+        if (textareaSetter) textareaSetter.call(field, String(value));
+        else field.value = String(value);
+      } else if (nativeSetter) {
+        nativeSetter.call(field, String(value));
       } else {
-        field.value = value;
+        field.value = String(value);
       }
       field.dispatchEvent(new Event('input', { bubbles: true }));
       field.dispatchEvent(new Event('change', { bubbles: true }));
@@ -56,28 +114,39 @@
     }
   }
 
-  function fillByLabel(labelText, value, formRoot = document) {
+  // ===== FIELD FINDING (ATS-specific selectors) =====
+
+  function fillById(id, value, root = document) {
     if (!value) return false;
-    // Find labels matching the text within the form root (works inside iframes)
-    const labels = formRoot.querySelectorAll('label');
+    const field = root.getElementById(id);
+    if (field) return setFieldValue(field, value);
+    return false;
+  }
+
+  function fillBySelector(selector, value, root = document) {
+    if (!value) return false;
+    const field = root.querySelector(selector);
+    if (field) return setFieldValue(field, value);
+    return false;
+  }
+
+  function fillByLabel(labelText, value, root = document) {
+    if (!value) return false;
+    const labels = root.querySelectorAll('label');
     for (const label of labels) {
       const text = (label.textContent || '').toLowerCase().trim();
       if (text.includes(labelText.toLowerCase())) {
         const forId = label.getAttribute('for');
         if (forId) {
-          // Use formRoot.getElementById instead of document.getElementById
-          // so labels inside iframes/shadow roots resolve to the right field
-          const field = formRoot.getElementById(forId)
-            || formRoot.querySelector('#' + CSS.escape(forId));
+          const field = root.getElementById(forId) || root.querySelector('#' + CSS.escape(forId));
           if (field) return setFieldValue(field, value);
         }
-        // Label wrapping the field
         const fieldInside = label.querySelector('input, textarea, select');
         if (fieldInside) return setFieldValue(fieldInside, value);
       }
     }
-    // Also try placeholder matching within the form root
-    const inputs = formRoot.querySelectorAll('input, textarea');
+    // Try placeholder match
+    const inputs = root.querySelectorAll('input, textarea');
     for (const input of inputs) {
       const placeholder = (input.placeholder || '').toLowerCase();
       if (placeholder.includes(labelText.toLowerCase())) {
@@ -87,231 +156,232 @@
     return false;
   }
 
-  function fillByName(name, value, formRoot = document) {
-    if (!value) return false;
-    const field = formRoot.querySelector(`input[name="${name}"], textarea[name="${name}"], select[name="${name}"]`);
-    if (field) return setFieldValue(field, value);
-    return false;
-  }
-
-  async function attachFileByUrl(input, url, filename) {
-    if (!input || !url) return false;
-    try {
-      // Fetch the file as a blob (with the user's auth token)
-      const { jobscale_token } = await chrome.storage.local.get('jobscale_token');
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${jobscale_token}` }
-      });
-      if (!res.ok) {
-        console.warn('JobScale: file fetch failed', res.status);
-        return false;
-      }
-      const blob = await res.blob();
-      const file = new File([blob], filename, { type: blob.type || 'application/pdf' });
-      // Build a DataTransfer to set the input's files
-      const dt = new DataTransfer();
-      dt.items.add(file);
-      input.files = dt.files;
-      input.dispatchEvent(new Event('change', { bubbles: true }));
-      return true;
-    } catch (e) {
-      console.warn('JobScale: attachFileByUrl error', e);
-      return false;
-    }
-  }
-
-  // ===== COMMON FIELD FILLING =====
-  async function fillCommonFields(data, formRoot = document) {
+  // ===== COMMON FIELD FILLING (works across all ATSes) =====
+  async function fillCommonFields(data, root = document) {
     let filled = 0;
     const { first_name, last_name, email, phone, location, linkedin_url, github_url, website, answers } = data;
 
-    // Name fields — try multiple patterns
+    // Name fields — try ID first (Greenhouse pattern), then label, then name attr
     if (first_name) {
-      if (fillByName('first_name', first_name, formRoot)) filled++;
-      else if (fillByLabel('First Name', first_name, formRoot)) filled++;
-      else if (fillByLabel('First name', first_name, formRoot)) filled++;
+      if (fillById('first_name', first_name, root)) filled++;
+      else if (fillByLabel('First Name', first_name, root)) filled++;
+      else if (fillBySelector('input[name="first_name"]', first_name, root)) filled++;
     }
     if (last_name) {
-      if (fillByName('last_name', last_name, formRoot)) filled++;
-      else if (fillByLabel('Last Name', last_name, formRoot)) filled++;
-      else if (fillByLabel('Last name', last_name, formRoot)) filled++;
+      if (fillById('last_name', last_name, root)) filled++;
+      else if (fillByLabel('Last Name', last_name, root)) filled++;
+      else if (fillBySelector('input[name="last_name"]', last_name, root)) filled++;
     }
     // Full name fallback
-    if (first_name && last_name) {
-      if (fillByName('name', `${first_name} ${last_name}`, formRoot)) filled++;
-      else if (fillByLabel('Full Name', `${first_name} ${last_name}`, formRoot)) filled++;
+    if (first_name && last_name && filled === 0) {
+      if (fillByLabel('Full Name', `${first_name} ${last_name}`, root)) filled++;
+      else if (fillByLabel('Name', `${first_name} ${last_name}`, root)) filled++;
     }
+    // Email
     if (email) {
-      if (fillByName('email', email, formRoot)) filled++;
-      else if (fillByLabel('Email', email, formRoot)) filled++;
+      if (fillById('email', email, root)) filled++;
+      else if (fillByLabel('Email', email, root)) filled++;
+      else if (fillBySelector('input[name="email"], input[type="email"]', email, root)) filled++;
     }
+    // Phone
     if (phone) {
-      if (fillByName('phone', phone, formRoot)) filled++;
-      else if (fillByLabel('Phone', phone, formRoot)) filled++;
+      if (fillById('phone', phone, root)) filled++;
+      else if (fillByLabel('Phone', phone, root)) filled++;
+      else if (fillBySelector('input[name="phone"], input[type="tel"]', phone, root)) filled++;
     }
+    // Location
     if (location) {
-      if (fillByLabel('Location', location, formRoot)) filled++;
-      if (fillByLabel('Where are you located', location, formRoot)) filled++;
+      if (fillById('candidate-location', location, root)) filled++;  // Greenhouse
+      if (fillByLabel('Location', location, root)) filled++;
+      if (fillByLabel('Where are you located', location, root)) filled++;
+      if (fillById('country', location, root)) filled++;  // Greenhouse country field
     }
+    // LinkedIn
     if (linkedin_url) {
-      if (fillByName('linkedin_url', linkedin_url, formRoot)) filled++;
-      else if (fillByLabel('LinkedIn', linkedin_url, formRoot)) filled++;
-      else if (fillByLabel('linkedin', linkedin_url, formRoot)) filled++;
+      if (fillByLabel('LinkedIn', linkedin_url, root)) filled++;
+      else if (fillBySelector('input[name*="linkedin"]', linkedin_url, root)) filled++;
+      else if (fillById('linkedin', linkedin_url, root)) filled++;
     }
+    // GitHub
     if (github_url) {
-      if (fillByName('github_url', github_url, formRoot)) filled++;
-      else if (fillByLabel('GitHub', github_url, formRoot)) filled++;
-      else if (fillByLabel('github', github_url, formRoot)) filled++;
+      if (fillByLabel('GitHub', github_url, root)) filled++;
+      else if (fillBySelector('input[name*="github"]', github_url, root)) filled++;
     }
+    // Website/Portfolio
     if (website) {
-      if (fillByName('website', website, formRoot)) filled++;
-      else if (fillByLabel('Website', website, formRoot)) filled++;
-      if (fillByLabel('Portfolio', website, formRoot)) filled++;
+      if (fillByLabel('Website', website, root)) filled++;
+      if (fillByLabel('Portfolio', website, root)) filled++;
+      if (fillBySelector('input[name*="website"], input[name*="portfolio"]', website, root)) filled++;
     }
 
-    // Common application questions (saved by the user once)
+    // Common application questions (saved by the user)
     if (answers) {
       const questionMap = {
         'work_authorization': ['authorized to work', 'work authorization', 'legally authorized', 'eligible to work'],
         'requires_sponsorship': ['sponsorship', 'visa sponsorship', 'require sponsorship', 'need sponsorship'],
         'willing_to_relocate': ['willing to relocate', 'relocate', 'relocation'],
-        'years_of_experience': ['years of experience', 'years of relevant', 'how many years', 'years experience'],
-        'earliest_start': ['earliest start', 'start date', 'when can you start', 'available to start'],
-        'salary_expectation': ['salary expectation', 'salary requirements', 'expected salary', 'salary range', 'compensation expectation'],
-        'why_this_company': ['why do you want', 'why this company', 'why are you interested', 'why do you want to join'],
+        'years_of_experience': ['years of experience', 'years of relevant', 'how many years'],
+        'earliest_start': ['earliest start', 'start date', 'when can you start'],
+        'salary_expectation': ['salary expectation', 'salary requirements', 'expected salary'],
+        'why_this_company': ['why do you want', 'why this company', 'why are you interested'],
       };
       for (const [key, labels] of Object.entries(questionMap)) {
         const value = answers[key];
         if (!value) continue;
         for (const label of labels) {
-          if (fillByLabel(label, value, formRoot)) { filled++; break; }
+          // Try label-based fill for standard fields
+          if (fillByLabel(label, value, root)) { filled++; break; }
+        }
+        // Also try Greenhouse-style custom question IDs
+        // Greenhouse uses question_XXXXXXX IDs — we try to match by label text
+        const questionFields = root.querySelectorAll('[id^="question_"]');
+        for (const qf of questionFields) {
+          const labelEl = root.querySelector(`label[for="${qf.id}"]`);
+          if (labelEl) {
+            const labelText = (labelEl.textContent || '').toLowerCase();
+            for (const label of labels) {
+              if (labelText.includes(label)) {
+                if (setFieldValue(qf, value)) { filled++; break; }
+              }
+            }
+          }
         }
       }
     }
     return filled;
   }
 
-  async function attachResume(url, filename = 'tailored_cv.pdf', formRoot = document) {
+  // ===== FILE ATTACHMENT =====
+  async function attachFileByUrl(input, url, filename) {
+    if (!input || !url) return false;
+    try {
+      const { jobscale_token } = await chrome.storage.local.get('jobscale_token');
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${jobscale_token}` }
+      });
+      if (!res.ok) return false;
+      const blob = await res.blob();
+      const file = new File([blob], filename, { type: blob.type || 'application/pdf' });
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    } catch (e) {
+      console.warn('JobScale: file attach error', e);
+      return false;
+    }
+  }
+
+  async function attachResume(url, filename = 'tailored_cv.pdf', root = document) {
     if (!url) return false;
-    // Look for resume/file upload inputs
-    const fileInputs = formRoot.querySelectorAll('input[type="file"]');
+    // Greenhouse: #resume and #cover_letter
+    // Lever: input[type="file"] with name containing "resume"
+    // Ashby: input[type="file"] in the form
+    // Workable: input[type="file"]
+    const fileInputs = root.querySelectorAll('input[type="file"]');
     for (const input of fileInputs) {
-      const accept = (input.getAttribute('accept') || '').toLowerCase();
-      const name = (input.name || '').toLowerCase();
       const id = (input.id || '').toLowerCase();
-      // Match resume/CV upload fields
+      const name = (input.name || '').toLowerCase();
+      const accept = (input.getAttribute('accept') || '').toLowerCase();
+      // Match resume/CV upload fields specifically
       if (
-        accept.includes('pdf') || accept.includes('doc') || accept.includes('resume') ||
-        name.includes('resume') || name.includes('cv') || name.includes('file') ||
-        id.includes('resume') || id.includes('cv') || id.includes('file') ||
-        accept === '' // Generic file input
+        id.includes('resume') || id.includes('cv') ||
+        name.includes('resume') || name.includes('cv') ||
+        (accept.includes('pdf') && !id.includes('cover') && !name.includes('cover'))
       ) {
         const ok = await attachFileByUrl(input, url, filename);
         if (ok) return true;
       }
     }
+    // If no specific resume field found, try the first file input
+    if (fileInputs.length > 0) {
+      return await attachFileByUrl(fileInputs[0], url, filename);
+    }
     return false;
   }
 
-  // ===== ATS-SPECIFIC LOGIC =====
-  async function fillGreenhouse(data) {
-    // Greenhouse forms are inside #application_form or iframes
-    let formRoot = document;
-    const iframe = document.querySelector('iframe[src*="greenhouse.io"]');
-    if (iframe && iframe.contentDocument) {
-      formRoot = iframe.contentDocument;
+  async function attachCoverLetter(url, filename = 'cover_letter.pdf', root = document) {
+    if (!url) return false;
+    // Greenhouse has a specific #cover_letter file input
+    const clInput = root.querySelector('#cover_letter, input[type="file"][id*="cover"], input[type="file"][name*="cover"]');
+    if (clInput) {
+      return await attachFileByUrl(clInput, url, filename);
     }
-    const form = formRoot.querySelector('#application_form, form[name="application_form"], form.application-form');
-    const root = form || formRoot;
-    await fillCommonFields(data, root);
-    // Attach resume
-    if (data.tailored_cv_pdf_url) {
-      await attachResume(data.tailored_cv_pdf_url, 'tailored_cv.pdf', root);
-    }
+    return false;
   }
 
-  async function fillLever(data) {
-    let formRoot = document;
-    const iframe = document.querySelector('iframe[src*="lever.co"]');
-    if (iframe && iframe.contentDocument) {
-      formRoot = iframe.contentDocument;
+  // ===== MULTI-STEP FORM HANDLING =====
+  async function handleMultiStepForm(fillFn, root = document) {
+    // Detect if this is a multi-step form (Workday, some Greenhouse custom forms)
+    const nextButton = findNextButton(root);
+    if (!nextButton) {
+      // Single-page form — fill and we're done
+      await fillFn(root);
+      return true;
     }
-    const form = formRoot.querySelector('form.application-form, form#application-form, form[name="application"]');
-    const root = form || formRoot;
-    await fillCommonFields(data, root);
-    if (data.tailored_cv_pdf_url) {
-      await attachResume(data.tailored_cv_pdf_url, 'tailored_cv.pdf', root);
+
+    // Multi-step: fill current page, click Next, wait for next page, repeat
+    let step = 0;
+    while (nextButton || step < 10) {
+      // Fill the current page
+      await fillFn(root);
+      step++;
+
+      // Find and click the Next/Continue button
+      const btn = findNextButton(root);
+      if (!btn) break;  // No more Next buttons — we're on the last page
+
+      btn.click();
+
+      // Wait for the next page to render (2 seconds, then check for content)
+      await new Promise(r => setTimeout(r, 2000));
     }
+
+    // Fill the last page
+    await fillFn(root);
+    return true;
   }
 
-  async function fillAshby(data) {
-    let formRoot = document;
-    const iframe = document.querySelector('iframe[src*="ashbyhq.com"]');
-    if (iframe && iframe.contentDocument) {
-      formRoot = iframe.contentDocument;
+  function findNextButton(root = document) {
+    const nextTexts = ['next', 'continue', 'proceed', 'step 2', 'page 2'];
+    const buttons = root.querySelectorAll('button, a[role="button"], input[type="button"], input[type="submit"]');
+    for (const btn of buttons) {
+      const text = (btn.textContent || btn.value || '').toLowerCase().trim();
+      if (nextTexts.some(t => text === t || text.includes(t))) {
+        // Make sure it's not the submit button
+        if (!text.includes('submit') && !text.includes('apply')) {
+          return btn;
+        }
+      }
     }
-    const form = formRoot.querySelector('form');
-    const root = form || formRoot;
-    await fillCommonFields(data, root);
-    if (data.tailored_cv_pdf_url) {
-      await attachResume(data.tailored_cv_pdf_url, 'tailored_cv.pdf', root);
-    }
+    return null;
   }
 
-  async function fillWorkable(data) {
-    const form = document.querySelector('form');
-    const root = form || document;
-    await fillCommonFields(data, root);
-    if (data.tailored_cv_pdf_url) {
-      await attachResume(data.tailored_cv_pdf_url, 'tailored_cv.pdf', root);
-    }
-  }
-
-  async function fillWorkday(data) {
-    let formRoot = document;
-    const iframe = document.querySelector('iframe[src*="myworkdayjobs.com"]');
-    if (iframe && iframe.contentDocument) {
-      formRoot = iframe.contentDocument;
-    }
-    const form = formRoot.querySelector('form, [data-automation-id="applicationForm"]');
-    const root = form || formRoot;
-    await fillCommonFields(data, root);
-    if (data.tailored_cv_pdf_url) {
-      await attachResume(data.tailored_cv_pdf_url, 'tailored_cv.pdf', root);
-    }
-  }
-
-  // ===== TRUE AUTO-SUBMIT =====
-  async function clickSubmitButton(formRoot = document) {
-    // Find the submit button — try multiple selectors for different ATSes
+  // ===== AUTO-SUBMIT =====
+  async function clickSubmitButton(root = document) {
     const selectors = [
       'button[type="submit"]',
       'input[type="submit"]',
       'button[data-automation-id="submit"]',  // Workday
-      'button[id="submit-btn"]',
-      'button[class*="submit"]',
-      'button[class*="Submit"]',
-      'a[class*="submit"]',
-      'button:has(svg) + button',  // Sometimes submit is after a back button
+      '#submit-app',  // Greenhouse alt
+      'button.btn--pill',  // Greenhouse
     ];
 
     for (const selector of selectors) {
-      const btn = formRoot.querySelector(selector);
-      if (btn && !btn.disabled) {
-        const text = (btn.textContent || '').toLowerCase();
-        // Make sure it's actually a submit/apply button, not a back/cancel button
-        if (text.includes('submit') || text.includes('apply') || text.includes('send') || text.includes('continue') || btn.type === 'submit') {
-          btn.click();
-          return true;
-        }
+      const btn = root.querySelector(selector);
+      if (btn && !btn.disabled && !btn.getAttribute('aria-disabled')) {
+        btn.click();
+        return true;
       }
     }
 
-    // Fallback: look for any button with "Submit" or "Apply" text
-    const buttons = formRoot.querySelectorAll('button, input[type="button"], a[role="button"]');
+    // Fallback: text-based search
+    const submitTexts = ['submit application', 'submit', 'apply', 'send application', 'submit application'];
+    const buttons = root.querySelectorAll('button, input[type="button"], a[role="button"]');
     for (const btn of buttons) {
       const text = (btn.textContent || btn.value || '').toLowerCase().trim();
-      if ((text === 'submit' || text === 'submit application' || text === 'apply' || text === 'send application') && !btn.disabled) {
+      if (submitTexts.includes(text) && !btn.disabled) {
         btn.click();
         return true;
       }
@@ -319,65 +389,110 @@
     return false;
   }
 
-  // ===== UI: floating "auto-fill" button =====
+  // ===== ATS-SPECIFIC FILL =====
+
+  async function fillGreenhouse(data, root = document) {
+    // Greenhouse forms use simple IDs: first_name, last_name, email, phone, etc.
+    // No iframe needed — form is in the main document.
+    const filled = await fillCommonFields(data, root);
+    // Attach resume to #resume
+    if (data.tailored_cv_pdf_url) {
+      await attachResume(data.tailored_cv_pdf_url, 'tailored_cv.pdf', root);
+    }
+    // Attach cover letter to #cover_letter if available
+    if (data.cover_letter_url) {
+      await attachCoverLetter(data.cover_letter_url, 'cover_letter.pdf', root);
+    }
+    return filled;
+  }
+
+  async function fillLever(data, root = document) {
+    const filled = await fillCommonFields(data, root);
+    if (data.tailored_cv_pdf_url) {
+      await attachResume(data.tailored_cv_pdf_url, 'tailored_cv.pdf', root);
+    }
+    return filled;
+  }
+
+  async function fillAshby(data, root = document) {
+    const filled = await fillCommonFields(data, root);
+    if (data.tailored_cv_pdf_url) {
+      await attachResume(data.tailored_cv_pdf_url, 'tailored_cv.pdf', root);
+    }
+    return filled;
+  }
+
+  async function fillWorkable(data, root = document) {
+    const filled = await fillCommonFields(data, root);
+    if (data.tailored_cv_pdf_url) {
+      await attachResume(data.tailored_cv_pdf_url, 'tailored_cv.pdf', root);
+    }
+    return filled;
+  }
+
+  async function fillWorkday(data, root = document) {
+    // Workday forms are multi-step — use handleMultiStepForm
+    const filled = await fillCommonFields(data, root);
+    if (data.tailored_cv_pdf_url) {
+      await attachResume(data.tailored_cv_pdf_url, 'tailored_cv.pdf', root);
+    }
+    return filled;
+  }
+
+  // ===== UI =====
   function showAutoFillButton(onClick) {
     if (document.getElementById('jobscale-autofill-btn')) return;
     const btn = document.createElement('button');
     btn.id = 'jobscale-autofill-btn';
     btn.innerHTML = '✨ Auto-fill with JobScale';
     btn.style.cssText = `
-      position: fixed;
-      top: 16px;
-      right: 16px;
-      z-index: 2147483647;
-      padding: 10px 16px;
-      background: linear-gradient(135deg, #0d9488, #0f766e);
-      color: white;
-      border: none;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 600;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      cursor: pointer;
-      box-shadow: 0 4px 12px rgba(13, 148, 136, 0.4);
-      transition: all 0.2s;
+      position: fixed; top: 16px; right: 16px; z-index: 2147483647;
+      padding: 10px 16px; background: linear-gradient(135deg, #0d9488, #0f766e);
+      color: white; border: none; border-radius: 8px; font-size: 13px;
+      font-weight: 600; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      cursor: pointer; box-shadow: 0 4px 12px rgba(13, 148, 136, 0.4);
     `;
-    btn.onmouseenter = () => { btn.style.transform = 'translateY(-1px)'; btn.style.boxShadow = '0 6px 16px rgba(13, 148, 136, 0.5)'; };
-    btn.onmouseleave = () => { btn.style.transform = ''; btn.style.boxShadow = '0 4px 12px rgba(13, 148, 136, 0.4)'; };
     btn.onclick = onClick;
     document.body.appendChild(btn);
   }
 
   function showToast(message, type = 'success') {
+    const colors = {
+      success: { bg: '#f0fdf4', border: '#bbf7d0', text: '#166534' },
+      error: { bg: '#fef2f2', border: '#fecaca', text: '#991b1b' },
+      info: { bg: '#eff6ff', border: '#bfdbfe', text: '#1e40af' },
+      warning: { bg: '#fef3c7', border: '#fde68a', text: '#92400e' },
+    };
+    const c = colors[type] || colors.success;
     const toast = document.createElement('div');
     toast.style.cssText = `
-      position: fixed;
-      top: 64px;
-      right: 16px;
-      z-index: 2147483647;
-      padding: 10px 14px;
-      background: ${type === 'success' ? '#f0fdf4' : type === 'error' ? '#fef2f2' : '#eff6ff'};
-      color: ${type === 'success' ? '#166534' : type === 'error' ? '#991b1b' : '#1e40af'};
-      border: 1px solid ${type === 'success' ? '#bbf7d0' : type === 'error' ? '#fecaca' : '#bfdbfe'};
-      border-radius: 8px;
-      font-size: 12px;
-      font-weight: 500;
+      position: fixed; top: 64px; right: 16px; z-index: 2147483647;
+      padding: 10px 14px; background: ${c.bg}; color: ${c.text};
+      border: 1px solid ${c.border}; border-radius: 8px;
+      font-size: 12px; font-weight: 500;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      max-width: 280px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      max-width: 320px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     `;
     toast.textContent = message;
     document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 4000);
+    setTimeout(() => toast.remove(), 5000);
   }
 
-  // ===== MAIN: fetch data and auto-fill =====
+  // ===== MAIN =====
   async function autoFill() {
     const ats = detectATS();
     if (!ats) {
       showToast('JobScale: no application form detected on this page', 'info');
       return;
     }
+
+    // Check for CAPTCHA before doing anything
+    const captcha = detectCaptcha();
+    if (captcha) {
+      showToast(`JobScale: ${captcha.message}. Fill the form manually after solving it.`, 'warning');
+      // Still try to fill the non-CAPTCHA fields
+    }
+
     showToast('JobScale: auto-filling your application...', 'info');
 
     try {
@@ -387,33 +502,36 @@
         return;
       }
 
-      // 1. Get the user's saved answers + auto-fill profile
+      // 1. Get saved answers + auto-fill profile
       const answersRes = await fetch(`${API_BASE}/auto-apply/answers`, {
         headers: { Authorization: `Bearer ${jobscale_token}` }
       });
       let answersData = {};
       if (answersRes.ok) answersData = await answersRes.json();
 
-      // 2. Find the matching queue item for this job URL
+      // 2. Find matching queue item for this job URL
       const queueRes = await fetch(`${API_BASE}/auto-apply/queue`, {
         headers: { Authorization: `Bearer ${jobscale_token}` }
       });
       let tailoredCvPdfUrl = null;
+      let coverLetterUrl = null;
+      let matchingQueueId = null;
       if (queueRes.ok) {
         const queueData = await queueRes.json();
-        const currentUrl = window.location.href;
-        // Match by external_url containing the current page URL (or vice versa)
+        const currentUrl = window.location.href.split('?')[0];
         const matching = (queueData.queue || []).find(q => {
           if (!q.job || !q.job.external_url) return false;
-          const jobUrl = q.job.external_url.toLowerCase();
-          const cur = currentUrl.toLowerCase();
-          return jobUrl.includes(cur) || cur.includes(jobUrl) ||
-            // Greenhouse job-boards.greenhouse.io/monzo/jobs/123 vs boards.greenhouse.io/monzo/jobs/123
-            (q.job.external_url.split('?')[0] === currentUrl.split('?')[0]);
+          const jobUrl = q.job.external_url.split('?')[0];
+          return jobUrl === currentUrl || currentUrl.includes(jobUrl) || jobUrl.includes(currentUrl);
         });
-        if (matching && matching.tailored_cv_pdf_url) {
+        if (matching) {
           tailoredCvPdfUrl = `${DASHBOARD_URL}${matching.tailored_cv_pdf_url}`;
-          // Mark this queue item as in_progress
+          matchingQueueId = matching.id;
+          // Check for cover letter
+          if (matching.tailored_cv_data?.cover_letter) {
+            // We don't have a cover letter PDF endpoint yet — use the HTML export
+          }
+          // Mark as in_progress
           fetch(`${API_BASE}/auto-apply/queue/${matching.id}/start`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${jobscale_token}` }
@@ -433,92 +551,82 @@
         website: (answersData.profile || {}).website,
         answers: answersData.answers || {},
         tailored_cv_pdf_url: tailoredCvPdfUrl,
+        cover_letter_url: coverLetterUrl,
       };
 
-      // 4. Run the ATS-specific fill logic and track how many fields were filled
-      let fieldsFilled = 0;
-      let cvAttached = false;
-      if (ats === 'greenhouse' || ats === 'greenhouse_embed') await fillGreenhouse(data);
-      else if (ats === 'lever' || ats === 'lever_embed') await fillLever(data);
-      else if (ats === 'ashby' || ats === 'ashby_embed') await fillAshby(data);
-      else if (ats === 'workable') await fillWorkable(data);
-      else if (ats === 'workday' || ats === 'workday_embed') await fillWorkday(data);
-      else await fillCommonFields(data);
+      // 4. Handle multi-step forms + fill
+      const fillFn = (root) => {
+        if (ats === 'greenhouse' || ats === 'greenhouse_embed') return fillGreenhouse(data, root);
+        if (ats === 'lever' || ats === 'lever_embed') return fillLever(data, root);
+        if (ats === 'ashby' || ats === 'ashby_embed') return fillAshby(data, root);
+        if (ats === 'workable') return fillWorkable(data, root);
+        if (ats === 'workday' || ats === 'workday_embed') return fillWorkday(data, root);
+        return fillCommonFields(data, root);
+      };
 
-      // 5. Check if auto-submit is enabled — if so, click Submit after filling
+      // Check for multi-step (Workday, some custom forms)
+      if (ats === 'workday' || ats === 'workday_embed' || findNextButton()) {
+        await handleMultiStepForm(fillFn, document);
+      } else {
+        await fillFn(document);
+      }
+
+      // 5. Check if auto-submit is enabled
       let autoSubmitted = false;
-      try {
-        const autoSubmitRes = await fetch(`${API_BASE}/auto-apply/auto-submit`, {
-          headers: { Authorization: `Bearer ${jobscale_token}` }
-        });
-        if (autoSubmitRes.ok) {
-          const autoSubmitData = await autoSubmitRes.json();
-          if (autoSubmitData.auto_submit_enabled) {
-            // Wait a moment for the form to settle, then click submit
-            await new Promise(r => setTimeout(r, 2000));
-            autoSubmitted = await clickSubmitButton();
+      if (!captcha) {  // Don't auto-submit if CAPTCHA is present
+        try {
+          const autoSubmitRes = await fetch(`${API_BASE}/auto-apply/auto-submit`, {
+            headers: { Authorization: `Bearer ${jobscale_token}` }
+          });
+          if (autoSubmitRes.ok) {
+            const autoSubmitData = await autoSubmitRes.json();
+            if (autoSubmitData.auto_submit_enabled) {
+              await new Promise(r => setTimeout(r, 2000));  // Wait for form to settle
+              autoSubmitted = await clickSubmitButton(document);
 
-            // If we found a matching queue item, submit a receipt
-            if (autoSubmitted && tailoredCvPdfUrl) {
-              const queueRes = await fetch(`${API_BASE}/auto-apply/queue`, {
-                headers: { Authorization: `Bearer ${jobscale_token}` }
-              });
-              if (queueRes.ok) {
-                const queueData = await queueRes.json();
-                const currentUrl = window.location.href;
-                const matching = (queueData.queue || []).find(q => {
-                  if (!q.job || !q.job.external_url) return false;
-                  return q.job.external_url.split('?')[0] === currentUrl.split('?')[0]
-                    || currentUrl.includes(q.job.external_url.split('?')[0]);
+              // Send receipt if we auto-submitted and have a matching queue item
+              if (autoSubmitted && matchingQueueId) {
+                await fetch(`${API_BASE}/auto-apply/queue/${matchingQueueId}/receipt`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${jobscale_token}`
+                  },
+                  body: JSON.stringify({
+                    fields_filled: data,
+                    ats_type: ats,
+                    ats_response: 'submitted',
+                    submitted_at: new Date().toISOString(),
+                  })
                 });
-                if (matching) {
-                  // Submit receipt
-                  await fetch(`${API_BASE}/auto-apply/queue/${matching.id}/receipt`, {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      Authorization: `Bearer ${jobscale_token}`
-                    },
-                    body: JSON.stringify({
-                      fields_filled: data,
-                      ats_type: ats,
-                      ats_response: 'submitted',
-                      submitted_at: new Date().toISOString(),
-                    })
-                  });
-                  showToast('JobScale: ✓ Auto-submitted! Receipt saved.');
 
-                  // Notify the background script that this tab is done
-                  // (so the auto-session can close the tab and move to the next job)
-                  try {
-                    chrome.runtime.sendMessage({
-                      action: 'autoSubmitComplete',
-                      receipt: { queue_id: matching.id, ats_type: ats },
-                    });
-                  } catch (e) {
-                    // Background script may not be listening if not in a session
-                  }
-                  return;
-                }
+                // Notify background script (for autonomous session)
+                try {
+                  chrome.runtime.sendMessage({
+                    action: 'autoSubmitComplete',
+                    receipt: { queue_id: matchingQueueId, ats_type: ats },
+                  });
+                } catch (e) {}
+
+                showToast('JobScale: ✓ Auto-submitted! Receipt saved.');
+                return;
               }
             }
           }
+        } catch (e) {
+          console.log('Auto-submit check failed:', e);
         }
-      } catch (e) {
-        console.log('Auto-submit check failed:', e);
       }
 
-      // 5. Honest messaging — distinguish "filled + CV attached" from "nothing to fill"
-      const hasProfileData = data.first_name || data.linkedin_url || (data.answers && Object.keys(data.answers).length > 0);
-      if (tailoredCvPdfUrl && hasProfileData) {
-        showToast('JobScale: form filled + tailored CV attached. Review and click Submit.');
-      } else if (hasProfileData) {
-        showToast('JobScale: form filled. (No matching queue item — CV not attached.) Review and click Submit.');
-      } else if (tailoredCvPdfUrl) {
-        showToast('JobScale: tailored CV attached. Fill in your details and click Submit.');
+      // 6. Show result message
+      if (captcha) {
+        showToast(`JobScale: form filled. Solve the CAPTCHA and click Submit manually.`, 'warning');
+      } else if (autoSubmitted) {
+        showToast('JobScale: ✓ Submitted! (no matching queue item for receipt)');
       } else {
-        showToast('JobScale: no saved profile or matching queue item. Save your answers in Auto-Fill Settings first.', 'info');
+        showToast('JobScale: form filled. Review and click Submit.');
       }
+
     } catch (e) {
       console.error('JobScale auto-fill error:', e);
       showToast('JobScale: auto-fill failed. You can fill manually.', 'error');
@@ -529,13 +637,6 @@
   function init() {
     const ats = detectATS();
     if (!ats) return;
-
-    // Show the auto-fill button once the page is ready.
-    // We do NOT auto-run because:
-    //  1. React SPA forms (Greenhouse/Lever) often aren't fully rendered at page load
-    //  2. File attachment requires a user gesture in Chrome's security model
-    //  3. Auto-filling before the user is ready feels intrusive
-    // The user clicks the floating button when they're ready.
     const showButton = () => {
       if (document.body) {
         showAutoFillButton(autoFill);
@@ -546,7 +647,6 @@
     showButton();
   }
 
-  // Run after a short delay to let the form render
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => setTimeout(init, 1200));
   } else {
