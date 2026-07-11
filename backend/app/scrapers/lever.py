@@ -162,9 +162,18 @@ class LeverScraper(BaseScraper):
 
     @staticmethod
     def _parse_date(value: Optional[str]) -> Optional[datetime]:
-        if not value:
+        if value is None or value == "":
+            return None
+        # Lever sometimes returns createdAt as an epoch millis integer
+        if isinstance(value, (int, float)):
+            try:
+                return datetime.fromtimestamp(int(value) / 1000.0)
+            except (ValueError, OSError, OverflowError):
+                return None
+        s = str(value).strip()
+        if not s:
             return None
         try:
-            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+            return datetime.fromisoformat(s.replace("Z", "+00:00"))
         except (ValueError, TypeError):
             return None

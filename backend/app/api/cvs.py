@@ -332,7 +332,7 @@ async def upload_cv(
         phone=contact.get("phone") or "",
         location=contact.get("location") or "",
         linkedin_url=contact.get("linkedin") or "",
-        portfolio_url=contact.get("github") or "",
+        portfolio_url=contact.get("github") or contact.get("website") or "",
         summary=_build_summary_from_parsed(parsed, parsed_skills),
         experience=experience,
         education=parsed.get("education") or [],

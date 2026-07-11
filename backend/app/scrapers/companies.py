@@ -46,26 +46,17 @@ GREENHOUSE_COMPANIES = [
 ]
 
 # ===== LEVER =====
+# Verified against https://api.lever.co/v0/postings/{slug}?mode=json — every
+# slug here returned at least one live posting on 2026-07-11.
+# Run scripts/discover_lever_companies.py to re-verify and find more.
 LEVER_COMPANIES = [
-    # Modern startups & scaleups
-    "netflix", "yelp", "quora", "khan-academy", "coursera", "udacity",
-    "duolingo", "grammarly", "charity-water", "cashapp", "vector",
-    "docker", "hashicorp", "gitlab", "circleci", "fastly", "vercel",
-    "nextjs", "supabase", "planetscale", "fly-io", "render", "heroku",
-    "digitalocean", "linode", "vultr", "aws", "google", "microsoft",
-    # YC / startups
-    "ycombinator", " accelerator", "mixpanel", "amplitude", "heap",
-    "posthog", "linear", "height", "height-app", "dendron", "obsidian",
-    # Fintech
-    "mercury", "brex", "ramp", "divvy", "stripe", "plaid",
-    # Web3 / Crypto
-    " Filecoin", "filecoin", "protocol-labs", "coinbase-3",
-    # Health / Bio
-    "one Medical", "onemedical", "forward", "hinge-health",
-    "ginger", "headspace", "calm", "talkspace",
-    # Other modern companies
-    "lambda-school", "guild-education", "outschool", "preply",
-    "masterclass", "skillshare", "udemy",
+    # Verified high-volume (700+ jobs)
+    "veeva",
+    # Verified mid-volume (50-500 jobs)
+    "lyrahealth", "palantir", "binance", "crypto", "spotify",
+    # Verified lower-volume (1-50 jobs)
+    "ro", "swordhealth", "outreach", "toptal", "gettyimages",
+    "ledger", "anyscale",
 ]
 
 # ===== ASHBY =====
