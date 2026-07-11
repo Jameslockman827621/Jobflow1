@@ -327,7 +327,7 @@ function DashboardPage() {
                 <span className="font-bold text-base">1.</span> Check the jobs you like
               </div>
               <div className="bg-white/15 rounded-lg p-3">
-                <span className="font-bold text-base">2.</span> Click "Approve &amp; Tailor CVs"
+                <span className="font-bold text-base">2.</span> Click &quot;Approve &amp; Tailor CVs&quot;
               </div>
               <div className="bg-white/15 rounded-lg p-3">
                 <span className="font-bold text-base">3.</span> Apply from the queue — we auto-fill each form

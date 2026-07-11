@@ -403,7 +403,7 @@ export default function ApplyQueuePage() {
                     {busy ? (
                       <><div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white" /> Saving...</>
                     ) : (
-                      <>✓ I've submitted my application</>
+                      <>✓ I&apos;ve submitted my application</>
                     )}
                   </button>
                 </>
@@ -420,7 +420,7 @@ export default function ApplyQueuePage() {
               <>
                 <div className="text-5xl mb-3">🎉</div>
                 <h2 className="text-xl font-bold text-slate-900 mb-2">Queue complete!</h2>
-                <p className="text-slate-600 mb-4">You've applied to {counts.applied} job{counts.applied !== 1 ? 's' : ''} and skipped {counts.skipped}.</p>
+                <p className="text-slate-600 mb-4">You&apos;ve applied to {counts.applied} job{counts.applied !== 1 ? 's' : ''} and skipped {counts.skipped}.</p>
                 <button
                   onClick={() => router.push('/dashboard')}
                   className="px-6 py-2.5 bg-navy-900 text-white rounded-lg font-semibold hover:bg-navy-800 transition-colors"
@@ -432,7 +432,7 @@ export default function ApplyQueuePage() {
               <>
                 <div className="text-5xl mb-3">📋</div>
                 <h2 className="text-xl font-bold text-slate-900 mb-2">Your apply queue is empty</h2>
-                <p className="text-slate-600 mb-4">Go to your dashboard, select the jobs you like, and click "Approve &amp; Tailor CVs" to add them here.</p>
+                <p className="text-slate-600 mb-4">Go to your dashboard, select the jobs you like, and click &quot;Approve &amp; Tailor CVs&quot; to add them here.</p>
                 <button
                   onClick={() => router.push('/dashboard')}
                   className="px-6 py-2.5 bg-teal-500 text-white rounded-lg font-semibold hover:bg-teal-600 transition-colors"

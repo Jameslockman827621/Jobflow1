@@ -263,7 +263,7 @@ export default function ApplySettingsPage() {
         </div>
 
         <p className="text-xs text-slate-400 mt-4 text-center">
-          With both auto-approve and auto-submit enabled, JobScale is fully autonomous: it finds jobs, tailors your CV, fills the form, and submits — all you do is click "Start autonomous session" once.
+          With both auto-approve and auto-submit enabled, JobScale is fully autonomous: it finds jobs, tailors your CV, fills the form, and submits — all you do is click &quot;Start autonomous session&quot; once.
         </p>
       </div>
     </AppShell>

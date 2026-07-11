@@ -273,7 +273,7 @@ export default function PrioritiesPage() {
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-slate-900">What matters most to you?</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Pick up to 5 must-haves. We'll only show you jobs that meet <strong>all</strong> of them — no fluff, no guessing.
+            Pick up to 5 must-haves. We&apos;ll only show you jobs that meet <strong>all</strong> of them — no fluff, no guessing.
           </p>
         </div>
 
@@ -418,7 +418,7 @@ export default function PrioritiesPage() {
         {mustHaves.length === 0 && (
           <div className="bg-teal-50/50 rounded-xl border border-teal-100 p-6 text-center">
             <p className="text-sm text-slate-600 mb-1">👆 Pick what matters most to you above.</p>
-            <p className="text-xs text-slate-500">Salary, remote, skills, visa sponsorship, seniority, location — choose up to 5 and we'll only show jobs that match all of them.</p>
+            <p className="text-xs text-slate-500">Salary, remote, skills, visa sponsorship, seniority, location — choose up to 5 and we&apos;ll only show jobs that match all of them.</p>
           </div>
         )}
       </div>

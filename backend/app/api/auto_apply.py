@@ -32,8 +32,11 @@ from app.models.auto_apply import UserAutoApplyJob
 from app.models.application import Application
 from app.api.auth import get_current_user
 from app.services.cv_tailor import tailor_cv_for_job, score_cv_against_job
+from app.core.config import settings
 
 router = APIRouter(tags=["Auto-Apply"])
+
+DASHBOARD_URL = settings.APP_URL
 
 
 def _serialize_queue_item(item: UserAutoApplyJob, job: Job) -> Dict[str, Any]:
@@ -1022,8 +1025,7 @@ async def start_auto_session(
             "company": job.company,
             "external_url": job.external_url,
             "ats_score": item.ats_score,
-            "tailored_cv_pdf_url": f"{DASHBOARD_URL}/api/v1/auto-apply/queue/{item.id}/tailored-cv.pdf"
-        if False else f"/api/v1/auto-apply/queue/{item.id}/tailored-cv.pdf",  # relative — extension prepends DASHBOARD_URL
+            "tailored_cv_pdf_url": f"/api/v1/auto-apply/queue/{item.id}/tailored-cv.pdf",  # relative — extension prepends DASHBOARD_URL
             "cover_letter": (item.tailored_cv_data or {}).get("cover_letter"),
         })
 
