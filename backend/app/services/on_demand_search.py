@@ -280,10 +280,17 @@ class OnDemandSearchService:
                 elif isinstance(posted_raw, datetime):
                     posted_date = posted_raw
 
-            ext_id = job_data.get("external_id", "")
+            # Ensure external_id is non-empty — fall back to a hash of the URL
+            # so the (source_id, external_id) unique constraint is never violated.
+            # This happens for Workday jobs where `bulletin` is sometimes empty.
+            ext_id = job_data.get("external_id") or ""
+            if not ext_id:
+                import hashlib
+                ext_id = hashlib.sha1(job_data.get("external_url", "").encode()).hexdigest()[:16]
+                job_data["external_id"] = ext_id
             existing_job = self.db.query(Job).filter_by(
                 source_id=source_id, external_id=ext_id
-            ).first() if ext_id else None
+            ).first()
 
             if existing_job:
                 existing_job.title = job_data.get("title", existing_job.title)
@@ -306,9 +313,20 @@ class OnDemandSearchService:
                 existing_job.benefits_extracted = job_data.get("benefits_extracted") or existing_job.benefits_extracted
                 existing_job.scraped_at = datetime.utcnow()
                 existing_job.is_active = True
-                self.db.commit()
+                try:
+                    self.db.commit()
+                except Exception as e:
+                    self.db.rollback()
+                    print(f"  save: update commit error: {e}")
                 job_ids.append(existing_job.id)
             else:
+                # Also check by external_url as a cross-source dedup fallback
+                existing_by_url = self.db.query(Job).filter_by(
+                    external_url=job_data.get("external_url", "")
+                ).first()
+                if existing_by_url:
+                    job_ids.append(existing_by_url.id)
+                    continue
                 job = Job(
                     source_id=source_id,
                     external_id=ext_id,
@@ -336,9 +354,22 @@ class OnDemandSearchService:
                     is_active=True
                 )
                 self.db.add(job)
-                self.db.commit()
-                self.db.refresh(job)
-                job_ids.append(job.id)
+                try:
+                    self.db.commit()
+                    self.db.refresh(job)
+                    job_ids.append(job.id)
+                except Exception as e:
+                    self.db.rollback()
+                    # Likely a unique constraint violation — try to find the existing job
+                    existing = self.db.query(Job).filter_by(
+                        source_id=source_id, external_id=ext_id
+                    ).first() or self.db.query(Job).filter_by(
+                        external_url=job_data.get("external_url", "")
+                    ).first()
+                    if existing:
+                        job_ids.append(existing.id)
+                    else:
+                        print(f"  save: insert commit error: {e}")
 
         return job_ids
     
