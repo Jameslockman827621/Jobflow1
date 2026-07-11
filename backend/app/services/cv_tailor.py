@@ -25,6 +25,7 @@ import json
 import re
 from typing import List, Dict, Optional, Any
 from collections import Counter
+from types import SimpleNamespace
 
 from app.core.config import settings
 
@@ -626,6 +627,36 @@ def _empty_score() -> Dict:
     }
 
 
+def _normalize_cv(cv: Any) -> Any:
+    """Allow callers to pass either a dict or an object with attributes.
+
+    Missing fields are defaulted so downstream code can safely access them.
+    """
+    defaults = {
+        "full_name": None,
+        "email": None,
+        "phone": None,
+        "location": None,
+        "linkedin_url": None,
+        "portfolio_url": None,
+        "summary": None,
+        "experience": [],
+        "education": [],
+        "skills": [],
+        "certifications": [],
+        "projects": [],
+        "template_id": "modern",
+    }
+    if isinstance(cv, dict):
+        values = {**defaults, **cv}
+        return SimpleNamespace(**values)
+    # If it's an object, ensure missing attributes still exist
+    for key, value in defaults.items():
+        if not hasattr(cv, key):
+            setattr(cv, key, value)
+    return cv
+
+
 # ===== PUBLIC API =====
 
 def tailor_cv_for_job(
@@ -640,22 +671,24 @@ def tailor_cv_for_job(
     The returned dict can be passed directly to render_cv_html() or stored on
     an Application as tailored_cv_data.
     """
+    cv = _normalize_cv(cv)
+
     if not job_description:
         # No JD to tailor to — return original
         return {
-            "full_name": cv.full_name,
-            "email": cv.email,
-            "phone": cv.phone,
-            "location": cv.location,
-            "linkedin_url": cv.linkedin_url,
-            "portfolio_url": cv.portfolio_url,
-            "summary": cv.summary or "",
-            "experience": cv.experience or [],
-            "education": cv.education or [],
-            "skills": cv.skills or [],
-            "certifications": cv.certifications or [],
-            "projects": cv.projects or [],
-            "template_id": cv.template_id or "modern",
+            "full_name": getattr(cv, "full_name", None),
+            "email": getattr(cv, "email", None),
+            "phone": getattr(cv, "phone", None),
+            "location": getattr(cv, "location", None),
+            "linkedin_url": getattr(cv, "linkedin_url", None),
+            "portfolio_url": getattr(cv, "portfolio_url", None),
+            "summary": getattr(cv, "summary", "") or "",
+            "experience": getattr(cv, "experience", []) or [],
+            "education": getattr(cv, "education", []) or [],
+            "skills": getattr(cv, "skills", []) or [],
+            "certifications": getattr(cv, "certifications", []) or [],
+            "projects": getattr(cv, "projects", []) or [],
+            "template_id": getattr(cv, "template_id", "modern") or "modern",
             "tailoring_method": "none",
             "keywords_matched": [],
         }
