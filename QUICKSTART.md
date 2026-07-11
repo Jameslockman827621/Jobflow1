@@ -33,7 +33,8 @@ docker-compose up -d db redis
 cd backend
 
 # Create virtual environment
-python -m venv venv
+# On Ubuntu/Debian systems without python3-venv, use: pip install virtualenv && virtualenv venv
+python -m venv venv || (pip install virtualenv && virtualenv venv)
 source venv/bin/activate  # or `venv\Scripts\activate` on Windows
 
 # Install dependencies
@@ -58,7 +59,7 @@ Backend API: http://localhost:8000
 ```bash
 cd backend
 source venv/bin/activate
-celery -A app.tasks.celery_app worker --loglevel=info
+celery -A app.tasks worker --loglevel=info
 ```
 
 ### 4. Frontend Setup
