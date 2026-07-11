@@ -69,7 +69,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     ]);
 
     const jobs = jobsRes.ok ? (await jobsRes.json()).jobs || [] : [];
-    const autoApplyJobs = autoApplyRes.ok ? (await autoApplyRes.json()).jobs || [];
+    const autoApplyJobs = autoApplyRes.ok ? (await autoApplyRes.json()).jobs || [] : [];
     // auto-apply/jobs returns queue items with both `id` (queue id) and `job_id`.
     // We want job_id so checkboxes match the jobs list and approve targets the right jobs.
     const selectedIds = new Set(autoApplyJobs.map(j => j.job_id || j.job?.id || j.id));

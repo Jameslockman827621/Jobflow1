@@ -57,7 +57,7 @@
         const options = Array.from(field.options);
         const match = options.find(o =>
           o.text.toLowerCase().includes(String(value).toLowerCase()) ||
-          o.value.toLowerCase()includes(String(value).toLowerCase())
+          o.value.toLowerCase().includes(String(value).toLowerCase())
         );
         if (match) {
           field.value = match.value;
