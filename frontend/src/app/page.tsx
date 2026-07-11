@@ -95,7 +95,7 @@ export default function Home() {
               <a href="/pricing" className="text-sm text-slate-600 hover:text-navy-900 transition-colors">Pricing</a>
               <Link href="/login" className="text-sm font-medium text-navy-900 hover:text-navy-700 transition-colors">Sign in</Link>
               <Link
-                href="/login"
+                href="/login?mode=signup"
                 className="px-4 py-2 text-sm font-medium rounded-lg bg-navy-900 text-white hover:bg-navy-800 transition-colors"
               >
                 Get started
@@ -127,7 +127,7 @@ export default function Home() {
                 <Link href="/login" className="block w-full text-center py-2.5 text-sm font-medium text-navy-900" onClick={() => setMobileMenuOpen(false)}>
                   Sign in
                 </Link>
-                <Link href="/login" className="block w-full text-center py-2.5 text-sm font-medium rounded-lg bg-navy-900 text-white" onClick={() => setMobileMenuOpen(false)}>
+                <Link href="/login?mode=signup" className="block w-full text-center py-2.5 text-sm font-medium rounded-lg bg-navy-900 text-white" onClick={() => setMobileMenuOpen(false)}>
                   Get started
                 </Link>
               </div>
@@ -150,7 +150,7 @@ export default function Home() {
               </p>
               <div className="flex justify-center">
                 <Link
-                  href="/login"
+                  href="/login?mode=signup"
                   className="px-8 py-3 text-sm font-medium rounded-lg bg-navy-900 text-white hover:bg-navy-800 transition-colors"
                 >
                   Get started
@@ -213,7 +213,7 @@ export default function Home() {
                   Create a profile, set your preferences, and see matched roles in minutes.
                 </p>
                 <Link
-                  href="/login"
+                  href="/login?mode=signup"
                   className="inline-block px-8 py-3 text-sm font-medium rounded-lg bg-teal-500 text-white hover:bg-teal-400 transition-colors"
                 >
                   Get started

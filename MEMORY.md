@@ -237,18 +237,26 @@ _Curated memories for continuity across sessions._
 
 ## 🎉 Project Status
 
-**Production Readiness:** 100% ✅
+**Production Readiness:** NOT 100% — end-to-end audit on 2026-07-11 found critical bugs and gaps.
 
-**All Core Features Working:**
-- ✅ User authentication
-- ✅ 5-step onboarding
-- ✅ Precise job search (Indeed + LinkedIn)
-- ✅ Dashboard with job results
-- ✅ Application Kanban board
-- ✅ Error handling & notifications
-- ✅ Professional UI/UX
+**Fixed During Audit:**
+- ✅ Extension syntax errors (would have prevented loading entirely)
+- ✅ Frontend lint errors in new pages
+- ✅ Backend auto-apply `DASHBOARD_URL` undefined bug
+- ✅ Backend CV tailor dict/object API mismatch
+- ✅ `QUICKSTART.md` environment setup instructions
 
-**Next Priority:** Production deployment (Railway + Vercel)
+**Still Broken / High Risk:**
+- ❌ Database-dependent flows untested (PostgreSQL/Redis unavailable in audit env)
+- ❌ Lever scraper returns 0 jobs for all listed companies
+- ❌ Workday scraper returns 422 on all tested endpoints
+- ❌ Company directory has 138 companies, not 5,000+ target
+- ❌ Job aggregator falls back to demo jobs without Apify API keys
+- ❌ Resume parser fails to extract name and experience
+- ❌ Autonomous applier is brittle and untested against real multi-step ATS forms
+- ❌ Frontend build ignores lint/type errors and uses unsupported `output: 'export'` + `rewrites()`
+
+**Next Priority:** Fix scraper data sources (Lever company list, Workday API), improve resume parser, run full integration tests against a real PostgreSQL + Redis stack, and tighten frontend build config before claiming production readiness.
 
 ---
 

@@ -33,7 +33,27 @@ class UserProfile(Base, TimestampMixin):
     # Resume
     resume_text = Column(Text)  # Parsed resume content
     resume_url = Column(String)  # S3 or local path
-    
+
+    # Application answers — saved once, reused by the extension to auto-fill forms
+    # Common questions: work authorization, sponsorship, years of experience, etc.
+    # Format: {"work_authorization": "Yes, I am authorized", "requires_sponsorship": "No", ...}
+    application_answers = Column(JSON, default=dict)
+
+    # Personal details used for form auto-fill (separate from the CV so they can
+    # be edited without re-uploading the CV)
+    # Format: {"linkedin_url": "...", "github_url": "...", "website": "...", "cover_letter_default": "..."}
+    application_profile = Column(JSON, default=dict)
+
+    # Auto-submit: when True, the Chrome extension will click Submit after filling the form.
+    # User must explicitly opt in — we never auto-submit without consent.
+    auto_submit_enabled = Column(Boolean, default=False)
+
+    # Auto-approve: when True, the background monitor auto-approves jobs that meet
+    # ALL the user's must-haves + ATS score above the threshold. These go straight
+    # into the apply queue without the user manually selecting them.
+    auto_approve_enabled = Column(Boolean, default=False)
+    auto_approve_threshold = Column(Float, default=60.0)  # Min ATS score to auto-approve
+
     # Relationships
     user = relationship("User", back_populates="profile")
     skills = relationship("Skill", back_populates="profile", cascade="all, delete-orphan")

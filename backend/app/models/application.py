@@ -8,38 +8,50 @@ class Application(Base, TimestampMixin):
     __tablename__ = "applications"
 
     id = Column(Integer, primary_key=True, index=True)
-    
+
     # Relationships
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False)
     cv_id = Column(Integer, ForeignKey("cvs.id"), nullable=True)
-    
+
     user = relationship("User", back_populates="applications")
     job = relationship("Job", back_populates="applications")
     cv = relationship("CV", back_populates="applications")
-    
+
     # Application status
     status = Column(String, default="draft")  # draft, submitted, viewed, interviewing, offered, rejected, withdrawn
     stage = Column(String, default="not_started")  # not_started, applied, phone_screen, technical, onsite, offer
-    
+
     # AI-generated content
     tailored_cv_url = Column(String)
-    cover_letter = Column(Text)
+    tailored_cv_data = Column(JSON)  # Structured tailored CV (summary, experience, skills, etc.)
+    tailored_summary = Column(Text)  # AI-generated summary tailored to this job
+    cover_letter = Column(Text)  # AI-generated cover letter tailored to this job
     answers = Column(JSON, default=dict)  # Application-specific Q&A
-    
+
+    # ATS scoring (0-100)
+    ats_score = Column(Float)  # Overall match score
+    ats_keyword_score = Column(Float)  # Keyword coverage %
+    ats_skills_score = Column(Float)  # Skills coverage %
+    ats_experience_score = Column(Float)  # Experience relevance %
+
+    # Application receipt — captured by the extension after submitting to the ATS.
+    # Stores exactly what was sent: {fields_filled, answers, resume_file, submitted_at, ats_response}
+    submission_receipt = Column(JSON)
+
     # Tracking
     submitted_at = Column(DateTime)
     last_follow_up = Column(DateTime)
     next_action = Column(DateTime)
-    
+
     # Notes
     internal_notes = Column(Text)
     external_notes = Column(Text)  # From company/recruiter
-    
+
     # Success tracking
     interview_count = Column(Integer, default=0)
     outcome = Column(String)  # hired, rejected, ghosted, withdrawn
-    
+
     # Metadata
     applied_via = Column(String)  # "auto", "manual", "semi_auto"
     confidence_score = Column(Float)  # AI-predicted interview probability

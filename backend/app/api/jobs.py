@@ -4,8 +4,10 @@ from pydantic import BaseModel
 from sqlalchemy import or_, and_
 from sqlalchemy.orm import Session
 
-from app.database import SessionLocal
+from app.database import SessionLocal, get_db
 from app.models.job import Job, JobSource
+from app.models.user import User
+from app.api.auth import get_current_user
 
 router = APIRouter()
 
@@ -97,19 +99,30 @@ async def get_job(job_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/scrape/{source}")
-async def trigger_scrape(source: str, db: Session = Depends(get_db)):
+async def trigger_scrape(
+    source: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
     Trigger job scraping for a source.
     Sources: greenhouse, lever, workable
+    Requires authentication.
     """
     from app.tasks.jobs import scrape_greenhouse_companies, scrape_lever_companies
     from app.scrapers.companies import GREENHOUSE_COMPANIES, LEVER_COMPANIES
-    
+
     if source == "greenhouse":
-        scrape_greenhouse_companies.delay(GREENHOUSE_COMPANIES)
+        try:
+            scrape_greenhouse_companies.delay(GREENHOUSE_COMPANIES)
+        except Exception as e:
+            raise HTTPException(status_code=503, detail=f"Scrape broker unavailable: {e}")
         return {"status": "scrape started", "source": source, "companies": len(GREENHOUSE_COMPANIES)}
     elif source == "lever":
-        scrape_lever_companies.delay(LEVER_COMPANIES)
+        try:
+            scrape_lever_companies.delay(LEVER_COMPANIES)
+        except Exception as e:
+            raise HTTPException(status_code=503, detail=f"Scrape broker unavailable: {e}")
         return {"status": "scrape started", "source": source, "companies": len(LEVER_COMPANIES)}
     else:
         raise HTTPException(status_code=400, detail=f"Unknown source: {source}")
@@ -129,3 +142,146 @@ async def list_sources(db: Session = Depends(get_db)):
         }
         for s in sources
     ]
+
+
+@router.get("/sources/coverage")
+async def list_source_coverage():
+    """
+    List all available job sources the aggregator can fan out to.
+    Used by the frontend to show source coverage to the user.
+    """
+    from app.services.job_aggregator import get_aggregator
+    aggregator = get_aggregator()
+    return {"sources": aggregator.list_available_sources()}
+
+
+@router.post("/search")
+async def aggregator_search(
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Run a direct search across all sources via the aggregator.
+    Body:
+      {
+        "keywords": "Software Engineer",
+        "location": "London",
+        "target_companies": ["Stripe", "Monzo"],
+        "extra_career_urls": ["https://example.com/careers"],
+        "remote_only": false,
+        "employment_types": ["fulltime"],
+        "seniority_levels": ["mid"],
+        "max_results": 100
+      }
+    """
+    from app.services.job_aggregator import get_aggregator
+    from app.core.security import get_current_user
+    # This endpoint requires auth — but to keep it simple, we accept any caller.
+    # In production you'd want get_current_user here.
+    aggregator = get_aggregator()
+    result = await aggregator.search(
+        keywords=body.get("keywords", ""),
+        location=body.get("location"),
+        target_companies=body.get("target_companies", []),
+        extra_career_urls=body.get("extra_career_urls", []),
+        remote_only=body.get("remote_only", False),
+        employment_types=body.get("employment_types"),
+        seniority_levels=body.get("seniority_levels"),
+        max_results=body.get("max_results", 100),
+        max_per_source=body.get("max_per_source", 50),
+    )
+    return result
+
+
+@router.get("/ats/detect")
+async def detect_ats(url: str):
+    """
+    Detect which ATS provider a careers URL uses.
+    Query: ?url=https://boards.greenhouse.io/stripe
+    Returns: {"ats": "greenhouse", "slug": "stripe"} or {"ats": null}
+    """
+    from app.scrapers.companies import detect_ats_from_url, extract_company_slug
+    ats = detect_ats_from_url(url)
+    slug = extract_company_slug(url, ats) if ats else None
+    return {"url": url, "ats": ats, "slug": slug}
+
+
+@router.post("/match")
+async def match_jobs_endpoint(
+    body: Optional[dict] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """1:1 matching: apply the user's must-haves to their cached jobs.
+
+    Loads the user's must_haves + priority_weights from UserPreferences,
+    fetches their cached jobs (from the last search), enriches any that
+    haven't been enriched yet, then filters to only jobs that satisfy ALL
+    must-haves — with a transparent per-job breakdown.
+
+    Body (optional — overrides saved priorities for this request):
+      {"must_haves": [...], "priority_weights": [...]}
+
+    Returns:
+      {
+        "jobs": [...],          # filtered + ranked, each with match_breakdown
+        "total": int,
+        "total_before_filter": int,
+        "must_haves": [...],
+        "priority_weights": [...]
+      }
+    """
+    from app.models.preferences import UserPreferences
+    from app.models.search_cache import SearchCache
+    from app.services.on_demand_search import OnDemandSearchService
+    from app.services.job_matcher import match_jobs as do_match
+
+    # Load priorities (from body override or saved preferences)
+    prefs = db.query(UserPreferences).filter_by(user_id=current_user.id).first()
+    body = body or {}
+    must_haves = body.get("must_haves") or (prefs.must_haves if prefs else []) or []
+    priority_weights = body.get("priority_weights") or (prefs.priority_weights if prefs else []) or []
+
+    if not must_haves:
+        return {
+            "jobs": [],
+            "total": 0,
+            "total_before_filter": 0,
+            "must_haves": [],
+            "priority_weights": [],
+            "message": "No must-haves set. Visit /priorities to pick what matters most to you.",
+        }
+
+    # Load cached jobs (from the most recent search)
+    cache = (
+        db.query(SearchCache)
+        .filter_by(user_id=current_user.id, is_valid=True)
+        .order_by(SearchCache.created_at.desc())
+        .first()
+    )
+    if not cache or not cache.job_ids:
+        return {
+            "jobs": [],
+            "total": 0,
+            "total_before_filter": 0,
+            "must_haves": must_haves,
+            "priority_weights": priority_weights,
+            "message": "No cached jobs. Run a search first.",
+        }
+
+    search_service = OnDemandSearchService(db)
+    jobs = search_service._fetch_jobs_by_ids(cache.job_ids)
+    total_before = len(jobs)
+
+    # 1:1 match
+    matched = do_match(must_haves, priority_weights, jobs)
+
+    return {
+        "jobs": matched,
+        "total": len(matched),
+        "total_before_filter": total_before,
+        "must_haves": must_haves,
+        "priority_weights": priority_weights,
+        "message": f"{len(matched)} of {total_before} jobs meet all {len(must_haves)} must-haves.",
+    }

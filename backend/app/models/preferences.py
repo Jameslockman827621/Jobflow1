@@ -57,7 +57,16 @@ class UserPreferences(Base, TimestampMixin):
     # === SKILLS (Matching, not search) ===
     required_skills = Column(ARRAY(String), default=list)  # Must-have skills
     nice_to_have_skills = Column(ARRAY(String), default=list)  # Bonus skills
-    
+
+    # === 1:1 MATCHING PRIORITIES ===
+    # The user's top 5 ranked must-haves. Each entry: {field, value, weight}
+    # e.g. [{"field": "salary_min", "value": 80000, "weight": 5},
+    #       {"field": "remote", "value": true, "weight": 4},
+    #       {"field": "skills", "value": ["Python", "React"], "weight": 3}]
+    # Jobs must satisfy ALL must_haves to be shown; priority_weights rank them.
+    must_haves = Column(JSON, default=list)
+    priority_weights = Column(JSON, default=list)  # [{field, weight}] for ranking
+
     # === SEARCH METADATA ===
     is_active = Column(Boolean, default=True)
     last_search_run = Column(DateTime)

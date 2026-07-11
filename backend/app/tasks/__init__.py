@@ -6,7 +6,7 @@ celery_app = Celery(
     "jobscale",
     broker=settings.REDIS_URL,
     backend=settings.REDIS_URL,
-    include=["app.tasks.jobs", "app.tasks.applications", "app.tasks.notifications", "app.tasks.alerts"],
+    include=["app.tasks.jobs", "app.tasks.applications", "app.tasks.notifications", "app.tasks.alerts", "app.tasks.monitor"],
 )
 
 celery_app.conf.update(

@@ -16,6 +16,9 @@
     "https://*.greenhouse.io/*",
     "https://*.lever.co/*",
     "https://*.workable.com/*",
+    "https://*.ashbyhq.com/*",
+    "https://*.ashby.com/*",
+    "https://*.myworkdayjobs.com/*",
     "http://localhost:3000/*",
     "http://localhost:8000/*"
   ],
@@ -36,13 +39,29 @@
       "matches": [
         "https://*.linkedin.com/jobs/*",
         "https://*.indeed.com/*",
-        "https://*.glassdoor.com/*",
-        "https://jobs.ashbyhq.com/*",
-        "https://*.greenhouse.io/*",
-        "https://*.lever.co/*"
+        "https://*.glassdoor.com/*"
       ],
       "js": ["content.js"],
       "css": ["styles.css"]
+    },
+    {
+      "matches": [
+        "https://*.greenhouse.io/*",
+        "https://*.lever.co/*",
+        "https://*.workable.com/*",
+        "https://*.ashbyhq.com/*",
+        "https://*.ashby.com/*",
+        "https://*.myworkdayjobs.com/*",
+        "https://*.wd1.myworkdayjobs.com/*",
+        "https://*.wd3.myworkdayjobs.com/*",
+        "https://*.wd5.myworkdayjobs.com/*",
+        "https://job-boards.greenhouse.io/*",
+        "https://jobs.lever.co/*",
+        "https://jobs.ashbyhq.com/*"
+      ],
+      "js": ["form_fill.js"],
+      "all_frames": true,
+      "run_at": "document_idle"
     },
     {
       "matches": ["http://localhost:3000/*"],

@@ -70,7 +70,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const jobs = jobsRes.ok ? (await jobsRes.json()).jobs || [] : [];
     const autoApplyJobs = autoApplyRes.ok ? (await autoApplyRes.json()).jobs || [] : [];
-    const selectedIds = new Set(autoApplyJobs.map(j => j.id));
+    // auto-apply/jobs returns queue items with both `id` (queue id) and `job_id`.
+    // We want job_id so checkboxes match the jobs list and approve targets the right jobs.
+    const selectedIds = new Set(autoApplyJobs.map(j => j.job_id || j.job?.id || j.id));
 
     if (jobs.length === 0) {
       jobsListEl.innerHTML = '<div class="empty-state">No jobs yet. Open dashboard and run a search first.</div>';
@@ -126,50 +128,87 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   applyBtn.addEventListener('click', async () => {
     const { jobscale_token } = await chrome.storage.local.get('jobscale_token');
-    if (!jobscale_token) return;
+    if (!jobscale_token) {
+      alert('Please sign in to JobScale first.');
+      return;
+    }
 
-    const res = await fetch(`${API_BASE}/auto-apply/jobs`, {
-      headers: { Authorization: `Bearer ${jobscale_token}` }
-    });
-    if (!res.ok) return;
-
-    const { jobs } = await res.json();
-    if (!jobs || jobs.length === 0) {
+    // Use the new approve-and-go queue flow: approve the selected jobs (which
+    // tailors a CV per job), then walk through the queue opening each job URL.
+    const selectedJobIds = Array.from(jobsListEl.querySelectorAll('input:checked')).map(cb =>
+      parseInt(cb.id.replace('job-', ''), 10)
+    );
+    if (selectedJobIds.length === 0) {
       alert('Select at least one job first (check the boxes above).');
       return;
     }
 
     applyBtn.disabled = true;
-    applyBtn.textContent = `⏳ Opening ${jobs.length} job(s)...`;
+    applyBtn.textContent = `⏳ Tailoring ${selectedJobIds.length} CV(s)...`;
 
-    for (let i = 0; i < jobs.length; i++) {
-      const job = jobs[i];
-      try {
-        const startRes = await fetch(`${API_BASE}/applications/start`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${jobscale_token}`
-          },
-          body: JSON.stringify({ job_id: job.id })
-        });
-
-        if (startRes.ok) {
-          const data = await startRes.json();
-          if (data.job_url) {
-            chrome.tabs.create({ url: data.job_url });
-          }
-        }
-        if (i < jobs.length - 1) {
-          await new Promise(r => setTimeout(r, 500));
-        }
-      } catch (e) {
-        console.error('Apply error:', e);
+    try {
+      const approveRes = await fetch(`${API_BASE}/auto-apply/approve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${jobscale_token}`
+        },
+        body: JSON.stringify({ job_ids: selectedJobIds })
+      });
+      if (!approveRes.ok) {
+        const err = await approveRes.json().catch(() => ({}));
+        applyBtn.disabled = false;
+        applyBtn.textContent = '✨ Apply to Selected Jobs';
+        alert(err.detail || 'Failed to approve jobs. Please try again.');
+        return;
       }
-    }
 
-    applyBtn.disabled = false;
-    applyBtn.textContent = '✨ Apply to Selected Jobs';
+      // Now walk the queue: get next approved, start it, open the URL
+      const queueRes = await fetch(`${API_BASE}/auto-apply/queue?status=approved`, {
+        headers: { Authorization: `Bearer ${jobscale_token}` }
+      });
+      const queueData = queueRes.ok ? await queueRes.json() : { queue: [] };
+      const approvedQueue = queueData.queue || [];
+
+      let openedCount = 0;
+      for (let i = 0; i < approvedQueue.length && i < 5; i++) {
+        const item = approvedQueue[i];
+        try {
+          const startRes = await fetch(`${API_BASE}/auto-apply/queue/${item.id}/start`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${jobscale_token}` }
+          });
+          if (startRes.ok) {
+            const startData = await startRes.json();
+            const jobUrl = startData.queue_item?.job?.external_url;
+            if (jobUrl) {
+              chrome.tabs.create({ url: jobUrl });
+              openedCount++;
+            }
+          }
+          if (i < approvedQueue.length - 1 && i < 4) {
+            await new Promise(r => setTimeout(r, 500));
+          }
+        } catch (e) {
+          console.error('Apply error:', e);
+        }
+      }
+
+      applyBtn.disabled = false;
+      applyBtn.textContent = '✨ Apply to Selected Jobs';
+      const statsEl = document.getElementById('apply-stats');
+      if (statsEl && openedCount > 0) {
+        statsEl.innerHTML = `✅ ${openedCount} CV${openedCount !== 1 ? 's' : ''} tailored & application${openedCount !== 1 ? 's' : ''} opened. Click Submit on each.`;
+        statsEl.classList.remove('hidden');
+      } else {
+        alert('No approved jobs to apply to. Open the Apply Queue to manage them.');
+      }
+    } catch (e) {
+      console.error('Apply error:', e);
+      applyBtn.disabled = false;
+      applyBtn.textContent = '✨ Apply to Selected Jobs';
+      alert('Something went wrong. Please try again.');
+    }
   });
 
   loginBtn.addEventListener('click', () => {
@@ -179,6 +218,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   dashboardBtn.addEventListener('click', () => {
     chrome.tabs.create({ url: `${DASHBOARD_URL}/dashboard` });
   });
+
+  const applyQueueBtn = document.getElementById('apply-queue-btn');
+  if (applyQueueBtn) {
+    applyQueueBtn.addEventListener('click', () => {
+      chrome.tabs.create({ url: `${DASHBOARD_URL}/apply` });
+    });
+  }
 });
 
 function escapeHtml(str) {

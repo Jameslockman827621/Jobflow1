@@ -35,3 +35,7 @@ Thumbs.db
 # Database
 *.db
 *.sqlite3
+
+# User CV uploads (contain personal data)
+backend/uploads/
+frontend/tsconfig.tsbuildinfo

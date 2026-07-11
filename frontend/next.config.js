@@ -1,48 +1,45 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {
-  // Dev-only: proxies /api/v1/* to NEXT_PUBLIC_BACKEND_URL. Static export (Cloudflare Pages)
-  // does not use rewrites — set NEXT_PUBLIC_BACKEND_URL or NEXT_PUBLIC_API_URL at build time.
-  async rewrites() {
-    return [
-      {
-        source: '/api/v1/:path*',
-        destination: `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/v1/:path*`,
-      },
-    ];
-  },
+const isProd = process.env.NODE_ENV === 'production';
 
-  // Environment variables
+const nextConfig = {
+  // Environment variables exposed to the browser
   env: {
     NEXT_PUBLIC_BACKEND_URL: process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000',
     NEXT_PUBLIC_APP_NAME: process.env.NEXT_PUBLIC_APP_NAME || 'JobScale',
   },
 
-  // Image optimization
+  // Image optimization — domains we may load company logos from
   images: {
     domains: ['media.licdn.com', 'logos-world.net', 'images.crunchbase.com'],
+    // Static export doesn't support the default loader — disable optimization
+    unoptimized: true,
   },
 
-  // TypeScript
+  // TypeScript — fail the build on type errors in production.
+  // In dev we let it slide so the dev server stays fast.
   typescript: {
-    ignoreBuildErrors: true, // Allow build even with TS errors during development
+    ignoreBuildErrors: !isProd,
   },
 
-  // ESLint
+  // ESLint — fail the build on lint errors in production.
   eslint: {
-    ignoreDuringBuilds: true, // Allow build even with ESLint errors during development
+    ignoreDuringBuilds: !isProd,
   },
 
-  // React strict mode (disable in production for performance)
-  reactStrictMode: process.env.NODE_ENV !== 'production',
+  // React strict mode in dev only (perf in prod)
+  reactStrictMode: !isProd,
 
-  // Output configuration
-  output: 'export', // Static export for Cloudflare Pages
-  distDir: 'out', // Output directory for static files
+  // Output: static export for Cloudflare Pages. With this enabled, rewrites()
+  // are NOT supported (Next.js warns about this). The frontend uses getApiBase()
+  // (lib/apiBase.ts) which reads NEXT_PUBLIC_BACKEND_URL at build time to point
+  // directly at the API — no proxy needed.
+  output: 'export',
+  distDir: 'out',
 
-  // Compression
+  // Compression (handled by the CDN in prod, but fine to enable)
   compress: true,
 
-  // Power header
+  // Don't expose the Next.js brand
   poweredByHeader: false,
 };
 

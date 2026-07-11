@@ -71,6 +71,12 @@ beat_schedule = {
         "schedule": crontab(minute=0, hour="*/6"),
     },
     
+    # Background career page monitor — every 2 hours
+    "monitor-career-pages": {
+        "task": "app.tasks.monitor.monitor_career_pages",
+        "schedule": crontab(minute=0, hour="*/2"),  # Every 2 hours
+    },
+
     # Clean expired cache (daily at 3 AM)
     "clean-expired-cache": {
         "task": "app.tasks.on_demand_search.clean_expired_cache",

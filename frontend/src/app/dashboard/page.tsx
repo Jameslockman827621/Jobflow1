@@ -12,11 +12,21 @@ interface Job {
   company: string;
   location: string;
   remote: boolean;
+  hybrid?: boolean;
   min_salary?: number;
   max_salary?: number;
   posted_date: string;
   external_url: string;
   source?: string;
+  seniority?: string;
+  employment_type?: string;
+  visa_sponsorship?: boolean | null;
+  industry?: string;
+  company_size?: string;
+  skills_required?: string[];
+  benefits_extracted?: string[];
+  match_score?: number;
+  match_breakdown?: Array<{ field: string; label: string; required: boolean; met: boolean; job_value: string }>;
 }
 
 interface OnboardingStatus {
@@ -24,16 +34,6 @@ interface OnboardingStatus {
   has_preferences: boolean;
   has_cached_jobs: boolean;
   cache?: { is_expired: boolean; expires_at: string };
-}
-
-interface ApplicationPackage {
-  application_id: number;
-  cv_download_url: string;
-  job_url: string;
-  job_title: string;
-  company: string;
-  application_tips: string[];
-  status: string;
 }
 
 function SkeletonCard() {
@@ -124,12 +124,10 @@ function CheckCircleIcon({ className = 'w-5 h-5' }: { className?: string }) {
 function DashboardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, loading: authLoading, logout, authFetch } = useAuth();
+  const { user, loading: authLoading, authFetch } = useAuth();
   const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState(false);
-  const [showModal, setShowModal] = useState(false);
-  const [batchResults, setBatchResults] = useState<any[]>([]);
   const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStatus | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selectedJobs, setSelectedJobs] = useState<Set<number>>(new Set());
@@ -160,7 +158,7 @@ function DashboardPage() {
         const status = await statusRes.json();
         setOnboardingStatus(status);
         if (!status.onboarding_complete) {
-          router.push('/onboarding');
+          router.push('/quick-start');
           return;
         }
         if (status.has_cached_jobs) {
@@ -173,7 +171,9 @@ function DashboardPage() {
         const autoApplyRes = await authFetch('/api/v1/auto-apply/jobs');
         if (autoApplyRes.ok) {
           const autoApplyData = await autoApplyRes.json();
-          setSelectedJobs(new Set((autoApplyData.jobs || []).map((j: { id: number }) => j.id)));
+          // auto-apply/jobs returns queue items with both `id` (queue id) and `job_id` (the actual job).
+          // We want job_id so checkboxes match the jobs list and approve targets the right jobs.
+          setSelectedJobs(new Set((autoApplyData.jobs || []).map((j: { id: number; job_id?: number; job?: { id?: number } }) => j.job_id ?? j.job?.id ?? j.id)));
         }
       }
       const statsRes = await authFetch('/api/v1/applications/stats/summary');
@@ -236,12 +236,13 @@ function DashboardPage() {
 
   async function handleApplySelected() {
     if (selectedJobs.size === 0) {
-      toast.error('Select at least one job to apply to');
+      toast.error('Select at least one job to approve');
       return;
     }
     setApplying(true);
     try {
-      const res = await authFetch('/api/v1/applications/batch-start', {
+      // Use the approve-and-go queue endpoint — tailors a CV per job + adds to queue
+      const res = await authFetch('/api/v1/auto-apply/approve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ job_ids: Array.from(selectedJobs) })
@@ -249,20 +250,27 @@ function DashboardPage() {
       if (!res.ok) {
         const err = await res.json();
         if (err.detail?.includes('No CV found')) {
-          toast.error('Please create a CV first');
-          router.push('/cv-builder');
+          toast.error('Please upload a CV first');
+          router.push('/quick-start');
           return;
         }
-        throw new Error(err.detail || 'Failed to start applications');
+        throw new Error(err.detail || 'Failed to approve jobs');
       }
       const data = await res.json();
-      setBatchResults(data.applications || []);
-      setShowModal(true);
+      const approvedCount = (data.results || []).filter((r: any) => r.status === 'approved' || r.status === 'already_in_queue').length;
+      const tailoredCount = (data.results || []).filter((r: any) => r.status === 'approved').length;
       setSelectedJobs(new Set());
-      toast.success(`${data.total} applications started!`);
-      loadDashboard();
+      if (tailoredCount > 0) {
+        toast.success(`${tailoredCount} CV${tailoredCount !== 1 ? 's' : ''} tailored — taking you to the apply queue...`);
+      } else if (approvedCount > 0) {
+        toast.success(`${approvedCount} job${approvedCount !== 1 ? 's' : ''} in your queue — taking you there...`);
+      } else {
+        toast.info('No new jobs to approve');
+      }
+      // Send the user to the apply queue to walk through the approved jobs
+      setTimeout(() => router.push('/apply'), 1000);
     } catch (err: any) {
-      toast.error(err.message || 'Failed to apply');
+      toast.error(err.message || 'Failed to approve jobs');
     } finally {
       setApplying(false);
     }
@@ -307,6 +315,27 @@ function DashboardPage() {
           <p className="text-sm text-slate-500 mt-1">Your job search at a glance</p>
         </div>
 
+        {/* First-time user guidance banner — shows when user has jobs but no applications */}
+        {jobs.length > 0 && appCount === 0 && (
+          <div className="bg-gradient-to-r from-teal-500 to-emerald-500 rounded-xl p-5 mb-6 text-white shadow-md">
+            <h2 className="text-sm font-semibold mb-2 flex items-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+              How to apply in 3 steps
+            </h2>
+            <div className="grid grid-cols-3 gap-3 text-xs">
+              <div className="bg-white/15 rounded-lg p-3">
+                <span className="font-bold text-base">1.</span> Check the jobs you like
+              </div>
+              <div className="bg-white/15 rounded-lg p-3">
+                <span className="font-bold text-base">2.</span> Click &quot;Approve &amp; Tailor CVs&quot;
+              </div>
+              <div className="bg-white/15 rounded-lg p-3">
+                <span className="font-bold text-base">3.</span> Apply from the queue — we auto-fill each form
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Stat cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           <div className="bg-white rounded-lg border border-slate-200 p-5">
@@ -348,6 +377,39 @@ function DashboardPage() {
                   {selectedJobs.size === jobs.length ? 'Deselect all' : 'Select all'}
                 </button>
               )}
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await authFetch('/api/v1/jobs/match', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({}),
+                    });
+                    if (res.ok) {
+                      const data = await res.json();
+                      if (data.jobs && data.jobs.length > 0) {
+                        setJobs(data.jobs);
+                        toast.success(data.message);
+                      } else {
+                        toast.info(data.message || 'No jobs match all your must-haves. Set them in My Must-Haves.');
+                      }
+                    }
+                  } catch {
+                    toast.error('Failed to filter by must-haves');
+                  }
+                }}
+                className="text-xs px-3 py-1.5 rounded-md bg-navy-900 text-white hover:bg-navy-800 font-medium flex items-center gap-1.5 transition-colors"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9 9 0 100-18 9 9 0 000 18zm0-5a4 4 0 100-8 4 4 0 000 8z" /></svg>
+                1:1 match filter
+              </button>
+              <a
+                href="/priorities"
+                onClick={(e) => { e.preventDefault(); router.push('/priorities'); }}
+                className="text-xs text-slate-500 hover:text-teal-600 font-medium"
+              >
+                Set must-haves →
+              </a>
             </div>
             <button onClick={loadDashboard} className="p-1.5 text-slate-400 hover:text-teal-600 hover:bg-slate-50 rounded-md transition-colors" aria-label="Refresh">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" /></svg>
@@ -403,18 +465,40 @@ function DashboardPage() {
                             <div className="flex flex-wrap items-center gap-2 mt-2">
                               <span className="inline-flex items-center gap-1 text-xs text-slate-500">
                                 <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
-                                {job.location}
+                                {job.location || (job.remote ? 'Remote' : '—')}
                               </span>
                               {job.remote && (
                                 <span className="inline-flex items-center px-1.5 py-0.5 bg-teal-50 text-teal-700 rounded text-[11px] font-medium">Remote</span>
                               )}
+                              {job.hybrid && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 bg-violet-50 text-violet-700 rounded text-[11px] font-medium">Hybrid</span>
+                              )}
                               {job.max_salary && (
-                                <span className="inline-flex items-center px-1.5 py-0.5 bg-slate-50 text-slate-600 rounded text-[11px] font-medium">{'\u00A3'}{job.max_salary.toLocaleString()}</span>
+                                <span className="inline-flex items-center px-1.5 py-0.5 bg-slate-50 text-slate-600 rounded text-[11px] font-medium">
+                                  {'\u00A3'}{job.min_salary ? `${job.min_salary.toLocaleString()}-${job.max_salary.toLocaleString()}` : `${job.max_salary.toLocaleString()}+`}
+                                </span>
+                              )}
+                              {job.seniority && job.seniority !== 'mid' && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded text-[11px] font-medium capitalize">{job.seniority}</span>
+                              )}
+                              {job.visa_sponsorship === true && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded text-[11px] font-medium">Visa ✓</span>
                               )}
                               {job.source && (
                                 <span className="inline-flex items-center px-1.5 py-0.5 bg-slate-50 text-slate-400 rounded text-[11px]">{job.source}</span>
                               )}
                             </div>
+                            {/* Skills chips — show up to 4 from the enriched skills_required */}
+                            {(job as any).skills_required && (job as any).skills_required.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1.5">
+                                {(job as any).skills_required.slice(0, 4).map((skill: string) => (
+                                  <span key={skill} className="inline-flex items-center px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded text-[10px] font-medium">{skill}</span>
+                                ))}
+                                {(job as any).skills_required.length > 4 && (
+                                  <span className="text-[10px] text-slate-400">+{(job as any).skills_required.length - 4} more</span>
+                                )}
+                              </div>
+                            )}
                           </div>
                           {job.external_url && (
                             <a
@@ -461,61 +545,14 @@ function DashboardPage() {
                 {applying ? (
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white" />
-                    <span>Applying...</span>
+                    <span>Tailoring CVs...</span>
                   </>
                 ) : (
                   <>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>
-                    <span>Apply to Selected</span>
+                    <span>Approve &amp; Tailor CVs</span>
                   </>
                 )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Batch Apply Results Modal */}
-      {showModal && batchResults.length > 0 && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-5 border-b border-slate-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-base font-semibold text-navy-900">Applications Ready</h3>
-                  <p className="text-sm text-slate-500 mt-0.5">{batchResults.length} application{batchResults.length !== 1 ? 's' : ''} prepared</p>
-                </div>
-                <button onClick={() => setShowModal(false)} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-md hover:bg-slate-100 transition-colors">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-              </div>
-            </div>
-            <div className="px-6 py-4">
-              <p className="text-sm text-slate-600 mb-4">Your applications have been prepared. The Chrome extension will auto-apply to these jobs, or you can apply manually using the links below.</p>
-              <div className="space-y-2">
-                {batchResults.map((result, i) => (
-                  <div key={i} className={`p-3.5 rounded-lg border ${result.status === 'already_applied' ? 'border-amber-200 bg-amber-50/50' : 'border-slate-200 bg-slate-50/50'}`}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <h4 className="text-sm font-medium text-slate-900">{result.job_title}</h4>
-                        <p className="text-xs text-slate-500 mt-0.5">{result.company}</p>
-                      </div>
-                      {result.status === 'already_applied' ? (
-                        <span className="flex-shrink-0 text-xs font-medium text-amber-700 bg-amber-100 px-2 py-1 rounded">Already Applied</span>
-                      ) : (
-                        <a href={result.job_url} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 text-xs font-medium text-teal-600 hover:text-teal-700 flex items-center gap-1">
-                          Apply
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" /></svg>
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="px-6 py-4 border-t border-slate-200">
-              <button onClick={() => setShowModal(false)} className="w-full px-4 py-2.5 bg-navy-900 text-white text-sm font-medium rounded-lg hover:bg-navy-800 transition-colors">
-                Done
               </button>
             </div>
           </div>

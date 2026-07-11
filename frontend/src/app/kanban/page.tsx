@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { useToast } from '@/components/ui/Toast';
 import AppShell from '@/components/AppShell';
 
 interface Application {
@@ -106,6 +107,7 @@ const STAGE_COLORS: Record<string, string> = {
 export default function KanbanPage() {
   const router = useRouter();
   const { user, loading: authLoading, authFetch } = useAuth();
+  const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [applications, setApplications] = useState<Application[]>([]);
 
@@ -213,7 +215,7 @@ export default function KanbanPage() {
                   {stageApps.map((app) => (
                     <div
                       key={app.id}
-                      className="bg-white rounded-lg p-3.5 shadow-sm hover:shadow-md transition-shadow cursor-pointer border border-slate-100"
+                      className="bg-white rounded-lg p-3.5 shadow-sm hover:shadow-md transition-shadow border border-slate-100"
                     >
                       <h3 className="font-semibold text-slate-900 text-sm leading-snug">{app.job?.title || 'Untitled'}</h3>
                       <p className="text-sm text-slate-500 mt-1">{app.job?.company || 'Unknown'}</p>
@@ -221,6 +223,29 @@ export default function KanbanPage() {
                         <LocationIcon className="w-3 h-3" />
                         <span>{app.job?.location || ''}</span>
                       </p>
+                      {/* Quick stage mover — lets users update pipeline status without drag-and-drop */}
+                      <div className="mt-2.5 flex items-center gap-2">
+                        <select
+                          value={app.stage || app.status}
+                          onChange={async (e) => {
+                            try {
+                              await authFetch(`/api/v1/applications/${app.id}?stage=${e.target.value}`, { method: 'PUT' });
+                              toast.success(`Moved to ${e.target.value.replace('_', ' ')}`);
+                              loadApplications();
+                            } catch {
+                              toast.error('Failed to update status');
+                            }
+                          }}
+                          className="text-xs px-2 py-1 rounded border border-slate-200 bg-white text-slate-600 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                        >
+                          {STAGES.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                        {app.job?.external_url && (
+                          <a href={app.job.external_url} target="_blank" rel="noopener noreferrer" className="text-xs text-teal-600 hover:text-teal-700 ml-auto">
+                            View job →
+                          </a>
+                        )}
+                      </div>
                     </div>
                   ))}
 
