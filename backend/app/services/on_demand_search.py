@@ -17,7 +17,6 @@ from app.models.job import Job, JobSource
 from app.models.preferences import UserPreferences
 from app.models.search_cache import SearchCache
 from app.core.config import settings
-from app.services.demo_jobs_seed import ensure_demo_jobs
 from app.services.job_aggregator import JobAggregator, get_aggregator
 
 
@@ -90,26 +89,24 @@ class OnDemandSearchService:
         jobs, sources_used, sources_failed = await self._run_searches(preferences)
         search_duration_ms = int((time.time() - search_start) * 1000)
 
-        # When external scrapers return nothing (no Apify key, no target companies, etc.),
-        # fall back to curated/demo rows already in the database.
+        # When the aggregator returns no jobs, be honest — don't seed fake demo jobs.
+        # The aggregator already runs runtime ATS discovery for any target companies,
+        # so an empty result means the user hasn't configured target companies/roles
+        # that match any current openings. Prompt them to broaden their search.
         if not jobs:
-            job_ids = self._fallback_job_ids_from_db(preferences)
-            cache = self._update_cache(
-                user_id=user_id,
-                preferences=preferences,
-                job_ids=job_ids,
-                search_duration_ms=search_duration_ms,
-            )
-            job_objects = self._fetch_jobs_by_ids(job_ids)
             total_duration_ms = int((time.time() - start_time) * 1000)
             return {
-                "status": "fallback",
-                "message": "No live scraper results; showing curated matches from the job database.",
-                "jobs": job_objects,
-                "total": len(job_objects),
-                "cache": cache.to_dict(),
+                "status": "no_results",
+                "message": (
+                    "No live jobs found for your search. Try adding target companies "
+                    "(Settings → Preferences) or broadening your roles/locations. "
+                    "We can apply to any company on Greenhouse, Lever, Ashby, Workable, "
+                    "or Workday — even ones not in our curated list."
+                ),
+                "jobs": [],
+                "total": 0,
                 "search_duration_ms": search_duration_ms,
-                "sources_used": {"curated": len(job_objects)},
+                "sources_used": sources_used or {},
                 "sources_failed": sources_failed,
             }
 
@@ -207,9 +204,8 @@ class OnDemandSearchService:
         return result["jobs"], result.get("sources_used", {}), result.get("sources_failed", [])
 
     def _fallback_job_ids_from_db(self, preferences: UserPreferences) -> List[int]:
-        """Prefer DB jobs matching roles; seed demo jobs if the table is empty."""
-        ensure_demo_jobs(self.db)
-
+        """Return DB jobs matching roles. No longer seeds fake demo jobs —
+        the search must return real results or honestly report no matches."""
         q = self.db.query(Job).filter(Job.is_active == True)
         roles = [r.strip() for r in (preferences.target_roles or []) if r.strip()]
         if roles:

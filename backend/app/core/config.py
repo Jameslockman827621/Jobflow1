@@ -53,8 +53,10 @@ class Settings(BaseSettings):
     # CORS — comma-separated origins in env, e.g. "https://app.example.com,http://localhost:3000"
     CORS_ORIGINS: Union[str, List[str]] = "http://localhost:3000"
 
-    # When no scrapers return jobs, seed curated demo rows once (disable in real production)
-    AUTO_SEED_DEMO_JOBS: bool = True
+    # When no scrapers return jobs, return an honest empty result (disabled by default).
+    # The aggregator now runs runtime ATS discovery for any company name, so users
+    # can search any company on a supported ATS without needing demo data.
+    AUTO_SEED_DEMO_JOBS: bool = False
     
     class Config:
         env_file = ".env"

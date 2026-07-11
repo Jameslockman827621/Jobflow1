@@ -151,6 +151,7 @@ class JobAggregator:
         tasks: List[Tuple[str, asyncio.Task]] = []
 
         # 1. ATS scrapers for each target company (per-company)
+        # For unknown companies, use the ATS discovery service to probe each ATS at runtime.
         for company in target_companies[:20]:
             ats_info = get_company_atss(company)
             if ats_info:
@@ -159,12 +160,19 @@ class JobAggregator:
                     asyncio.ensure_future(self._scrape_ats_company(ats_info["ats"], ats_info["slug"])),
                 ))
             else:
-                # Try all four ATS providers by slug
-                slug = company.lower().replace(" ", "-").replace(".", "")
-                tasks.append(("ats:greenhouse:" + slug, asyncio.ensure_future(self._safe(self.greenhouse.scrape_company_jobs, slug))))
-                tasks.append(("ats:lever:" + slug, asyncio.ensure_future(self._safe(self.lever.scrape_company_jobs, slug))))
-                tasks.append(("ats:ashby:" + slug, asyncio.ensure_future(self._safe(self.ashby.scrape_company_jobs, slug))))
-                tasks.append(("ats:workable:" + slug, asyncio.ensure_future(self._safe(self.workable.scrape_company_jobs, slug))))
+                # Not in curated directory — use the ATS discovery service to find which ATS
+                # this company uses at runtime. This works for any company on a supported ATS.
+                async def _discover_and_scrape(name: str) -> List[JobData]:
+                    try:
+                        from app.services.ats_discovery import discover_company_ats
+                        info = await discover_company_ats(name)
+                        if not info:
+                            return []
+                        return await self._scrape_ats_company(info["ats"], info["slug"])
+                    except Exception as e:
+                        print(f"  Aggregator: discovery error for {name}: {e}")
+                        return []
+                tasks.append((f"discover:{company}", asyncio.ensure_future(_discover_and_scrape(company))))
 
         # 2. Keyword-search job boards (run in parallel)
         if keywords:
@@ -247,7 +255,12 @@ class JobAggregator:
         }
 
     async def _scrape_ats_company(self, ats: str, slug: str) -> List[JobData]:
-        """Scrape a specific ATS for a specific company slug."""
+        """Scrape a specific ATS for a specific company slug.
+
+        For Workday, the slug may be a bare tenant name — we look up the
+        (tenant, wd_server, site) tuple in WORKDAY_COMPANIES, or fall back
+        to a runtime probe.
+        """
         if ats == "greenhouse":
             return await self.greenhouse.scrape_company_jobs(slug)
         if ats == "lever":
@@ -257,6 +270,12 @@ class JobAggregator:
         if ats == "workable":
             return await self.workable.scrape_company_jobs(slug)
         if ats == "workday":
+            # Look up the verified (tenant, wd, site) tuple
+            from app.scrapers.workday import WORKDAY_COMPANIES, _parse_url_or_slug
+            for tenant, wd, site in WORKDAY_COMPANIES:
+                if tenant == slug:
+                    return await self.workday.scrape_company_jobs((tenant, wd, site))
+            # Fall back to URL/slug parsing — tries common patterns
             return await self.workday.scrape_company_jobs(slug)
         return []
 
@@ -314,6 +333,10 @@ class JobAggregator:
     def _extract_source_name(source_key: str) -> str:
         if source_key.startswith("ats:"):
             return source_key.split(":")[1]
+        if source_key.startswith("discover:"):
+            # The actual ATS is discovered at runtime — extract from the results
+            # For source counting purposes, we'll bucket these as "discovered"
+            return "discovered"
         if source_key.startswith("career_page:"):
             return "career_page"
         return source_key
