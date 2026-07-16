@@ -20,8 +20,8 @@ router = APIRouter()
 
 class CheckoutRequest(BaseModel):
     plan: str  # "pro_monthly", "pro_yearly", "premium_monthly", "premium_yearly"
-    success_url: str = "http://localhost:3000/billing/success"
-    cancel_url: str = "http://localhost:3000/billing/cancel"
+    success_url: Optional[str] = None
+    cancel_url: Optional[str] = None
 
 
 class CheckoutResponse(BaseModel):
@@ -63,14 +63,17 @@ async def create_checkout_session(
         )
 
     stripe.api_key = settings.STRIPE_SECRET_KEY
+    app_base = settings.APP_URL.rstrip("/")
+    success_url = (request.success_url or f"{app_base}/billing/success").strip()
+    cancel_url = (request.cancel_url or f"{app_base}/billing/cancel").strip()
 
     try:
         session = stripe.checkout.Session.create(
             payment_method_types=["card"],
             line_items=[{"price": price_id, "quantity": 1}],
             mode="subscription",
-            success_url=f"{request.success_url}?session_id={{CHECKOUT_SESSION_ID}}",
-            cancel_url=request.cancel_url,
+            success_url=f"{success_url}?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=cancel_url,
             metadata={
                 "user_id": str(current_user.id),
                 "plan": request.plan,

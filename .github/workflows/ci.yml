@@ -73,7 +73,10 @@ jobs:
             tests/test_wave5_monitor.py \
             tests/test_google_oauth.py \
             tests/test_workday_ashby_fixtures.py \
+            tests/test_billing_webhooks.py \
             tests/test_world_class_saas_honesty.py \
+            tests/test_auth_career_wave.py \
+            tests/test_connect_boards_e2e.py \
             -q --tb=line
 
   frontend:

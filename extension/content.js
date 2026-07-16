@@ -35,7 +35,14 @@
     dashBtn.textContent = 'JobScale';
     dashBtn.title = 'Open JobScale dashboard';
     dashBtn.style.cssText = btnStyle('#0d9488');
-    dashBtn.onclick = () => window.open('http://localhost:3000/dashboard', '_blank');
+    dashBtn.onclick = async () => {
+      let dash = 'http://localhost:3000';
+      try {
+        const data = await chrome.storage.local.get('dashboard_url');
+        dash = (data.dashboard_url || dash).replace(/\/$/, '');
+      } catch (e) { /* use default */ }
+      window.open(`${dash}/dashboard`, '_blank');
+    };
 
     wrap.appendChild(fillBtn);
     wrap.appendChild(dashBtn);

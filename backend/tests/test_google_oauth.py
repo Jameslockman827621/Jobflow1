@@ -109,3 +109,43 @@ def test_google_id_token_login_creates_user(client):
     )
     assert bad.status_code == 401
     assert "Google" in bad.json()["detail"]
+
+
+def test_google_callback_redirects_with_token(client):
+    sub = f"google-sub-{uuid.uuid4().hex[:12]}"
+    email = f"cb_{uuid.uuid4().hex[:8]}@gmail.com"
+    claims = {
+        "sub": sub,
+        "email": email,
+        "email_verified": True,
+        "given_name": "Ada",
+        "family_name": "Lovelace",
+    }
+
+    with patch(
+        "app.services.google_oauth.exchange_code",
+        new=AsyncMock(return_value={"access_token": "ya29.fake"}),
+    ), patch(
+        "app.services.google_oauth.fetch_userinfo",
+        new=AsyncMock(return_value=claims),
+    ):
+        r = client.get(
+            "/api/v1/auth/google/callback",
+            params={"code": "fake-auth-code"},
+            follow_redirects=False,
+        )
+
+    assert r.status_code in (302, 307), r.text
+    loc = r.headers.get("location") or ""
+    assert "oauth_token=" in loc
+    assert "/login" in loc
+
+
+def test_google_callback_error_redirect(client):
+    r = client.get(
+        "/api/v1/auth/google/callback",
+        params={"error": "access_denied"},
+        follow_redirects=False,
+    )
+    assert r.status_code in (302, 307)
+    assert "oauth_error=access_denied" in (r.headers.get("location") or "")

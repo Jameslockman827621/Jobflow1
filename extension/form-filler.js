@@ -7,7 +7,19 @@
 (function () {
   'use strict';
 
-  const API_BASE = 'http://localhost:8000/api/v1';
+  const DEFAULT_API_BASE = 'http://localhost:8000/api/v1';
+  let _apiBaseCache = null;
+
+  async function getApiBase() {
+    if (_apiBaseCache) return _apiBaseCache;
+    try {
+      const data = await chrome.storage.local.get('api_base');
+      _apiBaseCache = (data.api_base || DEFAULT_API_BASE).replace(/\/$/, '');
+    } catch (e) {
+      _apiBaseCache = DEFAULT_API_BASE;
+    }
+    return _apiBaseCache;
+  }
 
   function detectATS(url) {
     const u = (url || location.href).toLowerCase();
@@ -100,7 +112,8 @@
   async function fetchResumeBlob(token, cvId) {
     if (!token || !cvId) return null;
     try {
-      const res = await fetch(`${API_BASE}/cvs/${cvId}/pdf`, {
+      const apiBase = await getApiBase();
+      const res = await fetch(`${apiBase}/cvs/${cvId}/pdf`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) return null;
@@ -148,7 +161,8 @@
 
   async function answerOpenEnded(token, question, jobId) {
     try {
-      const res = await fetch(`${API_BASE}/apply-engine/answer`, {
+      const apiBase = await getApiBase();
+      const res = await fetch(`${apiBase}/apply-engine/answer`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -166,7 +180,8 @@
 
   async function solveCaptcha(token, siteKey, pageUrl, captchaType) {
     try {
-      const res = await fetch(`${API_BASE}/apply-engine/captcha/solve`, {
+      const apiBase = await getApiBase();
+      const res = await fetch(`${apiBase}/apply-engine/captcha/solve`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -546,7 +561,8 @@
       else if ((result.captcha && result.captcha.ok === false) || result.needs_user) status = 'needs_user';
       else if (result.uncertain) status = 'needs_user';
 
-      const res = await fetch(`${API_BASE}/apply-engine/report`, {
+      const apiBase = await getApiBase();
+      const res = await fetch(`${apiBase}/apply-engine/report`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -735,8 +751,9 @@
       showToast('JobScale: sign in via dashboard first');
       return { ok: false, error: 'not_authenticated' };
     }
+    const apiBase = await getApiBase();
     const url = applicationId
-      ? `${API_BASE}/apply-engine/package/application/${applicationId}`
+      ? `${apiBase}/apply-engine/package/application/${applicationId}`
       : null;
     if (!url) {
       showToast('JobScale: missing application id');

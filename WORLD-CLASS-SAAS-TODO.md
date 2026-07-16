@@ -87,7 +87,7 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 
 - [x] Global HTTP rate limit middleware (per IP + per user)
 - [x] Alembic migrations for **all** tables (stop relying on `create_all` for board_sessions, answer_bank, flags)
-- [x] Sentry soft-init via `SENTRY_DSN` (+ `sentry-sdk` dependency); OpenTelemetry still open
+- [x] Sentry soft-init via `SENTRY_DSN` (+ `sentry-sdk` dependency); OpenTelemetry soft-init via `OTEL_EXPORTER_OTLP_ENDPOINT`
 - [x] Structured logging JSON
 - [x] Health check reports: DB, Redis, Celery workers, Playwright package
 - [x] Secrets scanning (gitleaks CI + log redaction); never log board cookies
@@ -138,3 +138,4 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 | Wave 4 | Real referral Pro trial + Stripe credit; unsubscribe tokens; interview coach UI; Kanban DnD; prod CORS/email honesty; structlog JSON; ops metrics; extension host_permissions |
 | Wave 5 | Monitor auto-queue opt-in; fingerprint concurrency test; cookie/token log redaction; optional SENTRY_DSN hook |
 | Wave 6 | Google OAuth (authorize/callback/id_token + login UI); Workday/Ashby multi-step fixtures + submit selectors; real extension icons; gitleaks CI; sentry-sdk in requirements |
+| Wave 7 | Extension content/form-filler use chrome.storage bases; OTEL soft-init; billing success polls subscription; checkout URLs use APP_URL; Stripe webhook + Google callback tests; wider CI |

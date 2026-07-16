@@ -82,6 +82,9 @@ class Settings(BaseSettings):
 
     # Optional observability
     SENTRY_DSN: Optional[str] = None
+    # OpenTelemetry OTLP HTTP endpoint, e.g. http://localhost:4318 (empty = disabled)
+    OTEL_EXPORTER_OTLP_ENDPOINT: Optional[str] = None
+    OTEL_SERVICE_NAME: str = "jobscale-api"
 
     # Google OAuth (optional — endpoints return 503 when unset)
     GOOGLE_CLIENT_ID: Optional[str] = None

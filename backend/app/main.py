@@ -62,8 +62,39 @@ def _configure_sentry() -> None:
         logging.getLogger("jobscale").warning("Sentry init skipped: %s", exc)
 
 
+def _configure_otel_provider() -> bool:
+    """Soft-init OpenTelemetry tracer when OTEL_EXPORTER_OTLP_ENDPOINT is set."""
+    endpoint = (getattr(settings, "OTEL_EXPORTER_OTLP_ENDPOINT", None) or "").strip()
+    if not endpoint:
+        return False
+    try:
+        from opentelemetry import trace
+        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+        from opentelemetry.sdk.resources import Resource
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+        resource = Resource.create(
+            {
+                "service.name": getattr(settings, "OTEL_SERVICE_NAME", None) or "jobscale-api",
+                "deployment.environment": settings.ENVIRONMENT,
+            }
+        )
+        provider = TracerProvider(resource=resource)
+        exporter_url = endpoint.rstrip("/")
+        if not exporter_url.endswith("/v1/traces"):
+            exporter_url = f"{exporter_url}/v1/traces"
+        provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=exporter_url)))
+        trace.set_tracer_provider(provider)
+        return True
+    except Exception as exc:
+        logging.getLogger("jobscale").warning("OpenTelemetry init skipped: %s", exc)
+        return False
+
+
 _configure_logging()
 _configure_sentry()
+_otel_ready = _configure_otel_provider()
 
 
 @asynccontextmanager
@@ -77,6 +108,14 @@ app = FastAPI(
     debug=settings.DEBUG,
     lifespan=lifespan,
 )
+
+if _otel_ready:
+    try:
+        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
+        FastAPIInstrumentor.instrument_app(app)
+    except Exception as exc:
+        logging.getLogger("jobscale").warning("OpenTelemetry FastAPI instrument skipped: %s", exc)
 
 # CORS
 _cors_methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
