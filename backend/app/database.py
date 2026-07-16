@@ -42,11 +42,33 @@ async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 def init_db():
-    """Create all tables (use Alembic for migrations in production).
+    """Create / migrate schema.
 
-    Also ensures critical additive columns exist when create_all is a no-op
-    on already-populated databases (common in local/dev).
+    Empty databases prefer Alembic (`upgrade head`) so production bootstrap
+    matches CI. Databases that already have tables use create_all(checkfirst)
+    plus additive ALTERs for speed (tests) and safety.
     """
+    from sqlalchemy import inspect as sa_inspect
+
+    try:
+        existing = set(sa_inspect(sync_engine).get_table_names())
+    except Exception:
+        existing = set()
+
+    if not existing:
+        try:
+            import os
+            from alembic.config import Config
+            from alembic import command
+
+            root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+            cfg = Config(os.path.join(root, "alembic.ini"))
+            cfg.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+            command.upgrade(cfg, "head")
+            return
+        except Exception:
+            pass
+
     Base.metadata.create_all(bind=sync_engine)
     # Additive columns that create_all will not alter onto existing tables
     stmts = [

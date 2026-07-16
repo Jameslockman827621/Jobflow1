@@ -86,10 +86,10 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 ## P2 — Production hardening
 
 - [x] Global HTTP rate limit middleware (per IP + per user)
-- [x] Alembic migrations for **all** tables (stop relying on `create_all` for board_sessions, answer_bank, flags)
+- [x] Alembic migrations for **all** tables — core baseline + additive revisions; empty DB `alembic upgrade head` works (see `test_alembic_baseline.py`)
 - [x] Sentry soft-init via `SENTRY_DSN` (+ `sentry-sdk` dependency); OpenTelemetry soft-init via `OTEL_EXPORTER_OTLP_ENDPOINT`
 - [x] Structured logging JSON
-- [x] Health check reports: DB, Redis, Celery workers, Playwright package
+- [x] Health check reports: DB, Redis, Celery workers, Playwright package (+ beat required hint for stale-run sweeper)
 - [x] Secrets scanning (gitleaks CI + log redaction); never log board cookies
 - [x] Extension icons (real 16/48/128 PNG assets, not 1×1)
 - [x] CSRF for cookie-based flows if any; tighten CORS in production
@@ -98,7 +98,7 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 
 ## P3 — Scale & quality of apply engine
 
-- [x] Workday/Ashby multi-step fixture coverage (genuine submit path); live boards still open
+- [x] Workday/Ashby/Greenhouse multi-step fixture coverage (genuine submit path); live boards still open
 - [x] Answer bank UX in dashboard (CRUD)
 - [x] Per-company sticky fingerprint already exists — document + test under concurrency
 - [x] Stale run sweeper metrics endpoint for ops
@@ -139,3 +139,4 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 | Wave 5 | Monitor auto-queue opt-in; fingerprint concurrency test; cookie/token log redaction; optional SENTRY_DSN hook |
 | Wave 6 | Google OAuth (authorize/callback/id_token + login UI); Workday/Ashby multi-step fixtures + submit selectors; real extension icons; gitleaks CI; sentry-sdk in requirements |
 | Wave 7 | Extension content/form-filler use chrome.storage bases; OTEL soft-init; billing success polls subscription; checkout URLs use APP_URL; Stripe webhook + Google callback tests; wider CI |
+| Wave 8 | Pricing quotas honest (no unlimited / money-back fiction); Greenhouse EEO multi-step fixture; Alembic core baseline for empty DB; extension README + DEPLOYMENT/QUICKSTART; health beat hint; CI + alembic/sweeper tests |

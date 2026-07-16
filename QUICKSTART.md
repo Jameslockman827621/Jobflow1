@@ -42,10 +42,9 @@ pip install -r requirements.txt
 # Copy environment file
 cp .env.example .env
 
-# Initialize database
-cd scripts
-python init_db.py
-cd ..
+# Initialize database (Alembic — creates core tables on empty Postgres)
+alembic upgrade head
+# equivalent: python -c "from app.database import init_db; init_db()"
 
 # Start backend
 uvicorn app.main:app --reload
@@ -53,13 +52,15 @@ uvicorn app.main:app --reload
 
 Backend API: http://localhost:8000
 
-### 3. Start Celery Worker (required for genuine headless apply)
+### 3. Start Celery Worker + Beat (required for genuine headless apply)
 
 ```bash
 cd backend
 source venv/bin/activate
 # Dedicated apply queue — keep concurrency=1 for Playwright stability
 celery -A app.tasks.celery_app worker -Q apply,celery --concurrency=1 --loglevel=info
+# Separate terminal: stale ApplyRun sweeper + scheduled jobs
+celery -A app.tasks.celery_app beat --loglevel=info
 ```
 
 Readiness (DB / Redis / Celery / Playwright package):

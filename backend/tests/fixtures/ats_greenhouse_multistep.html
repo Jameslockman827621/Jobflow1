@@ -2,41 +2,86 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Multi-step Job Application — JobScaleTest</title>
+  <title>Greenhouse Multi-step Application — JobScaleTest</title>
   <style>
     .step { display: none; }
     .step.active { display: block; }
     .error { color: #b91c1c; font-size: 12px; }
+    label { display: block; margin-top: 10px; }
   </style>
 </head>
 <body>
+  <!-- Greenhouse-like apply form: multi-step + EEO selects -->
   <h1>Apply for Fixture Engineer</h1>
+  <p data-source="greenhouse">JobScaleTest · Greenhouse fixture</p>
 
   <form id="application_form" onsubmit="return handleSubmit(event)">
     <div id="step1" class="step active">
       <h2>Step 1 — Contact</h2>
       <label for="first_name">First Name*</label>
-      <input id="first_name" autocomplete="given-name" aria-label="First Name" type="text" required />
+      <input id="first_name" name="first_name" autocomplete="given-name" aria-label="First Name" type="text" required />
       <div id="err_first" class="error" style="display:none">First name required</div>
 
       <label for="last_name">Last Name*</label>
-      <input id="last_name" autocomplete="family-name" aria-label="Last Name" type="text" required />
+      <input id="last_name" name="last_name" autocomplete="family-name" aria-label="Last Name" type="text" required />
 
       <label for="email">Email*</label>
-      <input id="email" autocomplete="email" aria-label="Email" type="email" required />
+      <input id="email" name="email" autocomplete="email" aria-label="Email" type="email" required />
 
-      <button type="button" id="next_btn" onclick="goNext()">Next</button>
+      <label for="phone">Phone</label>
+      <input id="phone" name="phone" type="tel" aria-label="Phone" />
+
+      <button type="button" id="next_btn" onclick="goNext(1)">Next</button>
     </div>
 
     <div id="step2" class="step">
       <h2>Step 2 — Questions</h2>
-      <label for="phone">Phone</label>
-      <input id="phone" type="tel" aria-label="Phone" />
-
       <label for="question_sponsor">Will you now or in the future require sponsorship for a visa?*</label>
-      <input id="question_sponsor" aria-label="Will you now or in the future require sponsorship for a visa?*" type="text" required />
+      <input id="question_sponsor" name="question_sponsor" aria-label="Will you now or in the future require sponsorship for a visa?*" type="text" required />
 
-      <button type="button" onclick="goBack()">Back</button>
+      <label for="linkedin">LinkedIn Profile</label>
+      <input id="linkedin" name="linkedin" aria-label="LinkedIn Profile" type="url" />
+
+      <button type="button" onclick="goBack(2)">Back</button>
+      <button type="button" id="next_btn_2" onclick="goNext(2)">Next</button>
+    </div>
+
+    <div id="step3" class="step">
+      <h2>Step 3 — Voluntary self-identification (EEO)</h2>
+      <label for="gender">Gender</label>
+      <select id="gender" name="gender" aria-label="Gender">
+        <option value="">Select…</option>
+        <option value="female">Female</option>
+        <option value="male">Male</option>
+        <option value="decline">Prefer not to say</option>
+      </select>
+
+      <label for="race">Race / Ethnicity</label>
+      <select id="race" name="race" aria-label="Race / Ethnicity">
+        <option value="">Select…</option>
+        <option value="asian">Asian</option>
+        <option value="black">Black or African American</option>
+        <option value="white">White</option>
+        <option value="decline">Prefer not to answer</option>
+      </select>
+
+      <label for="veteran">Veteran status</label>
+      <select id="veteran" name="veteran" aria-label="Veteran status">
+        <option value="">Select…</option>
+        <option value="yes">I am a veteran</option>
+        <option value="no">I am not a veteran</option>
+        <option value="decline">Prefer not to say</option>
+      </select>
+
+      <label for="disability">Disability status</label>
+      <select id="disability" name="disability" aria-label="Disability status">
+        <option value="">Select…</option>
+        <option value="yes">Yes</option>
+        <option value="no">No</option>
+        <option value="decline">Prefer not to say</option>
+      </select>
+
+      <button type="button" onclick="goBack(3)">Back</button>
       <button type="submit" id="submit_app">Submit application</button>
     </div>
   </form>
@@ -47,31 +92,44 @@
   </div>
 
   <script>
-    function goNext() {
-      const first = document.getElementById('first_name');
-      const last = document.getElementById('last_name');
-      const email = document.getElementById('email');
-      if (!first.value || !last.value || !email.value) {
-        document.getElementById('err_first').style.display = 'block';
-        first.setAttribute('aria-invalid', 'true');
+    function goNext(from) {
+      if (from === 1) {
+        const first = document.getElementById('first_name');
+        const last = document.getElementById('last_name');
+        const email = document.getElementById('email');
+        if (!first.value || !last.value || !email.value) {
+          document.getElementById('err_first').style.display = 'block';
+          first.setAttribute('aria-invalid', 'true');
+          return;
+        }
+        first.removeAttribute('aria-invalid');
+        document.getElementById('err_first').style.display = 'none';
+        document.getElementById('step1').classList.remove('active');
+        document.getElementById('step2').classList.add('active');
         return;
       }
-      first.removeAttribute('aria-invalid');
-      document.getElementById('err_first').style.display = 'none';
-      document.getElementById('step1').classList.remove('active');
-      document.getElementById('step2').classList.add('active');
+      if (from === 2) {
+        const sponsor = document.getElementById('question_sponsor');
+        if (!sponsor.value) {
+          sponsor.setAttribute('aria-invalid', 'true');
+          return;
+        }
+        sponsor.removeAttribute('aria-invalid');
+        document.getElementById('step2').classList.remove('active');
+        document.getElementById('step3').classList.add('active');
+      }
     }
-    function goBack() {
-      document.getElementById('step2').classList.remove('active');
-      document.getElementById('step1').classList.add('active');
+    function goBack(from) {
+      if (from === 2) {
+        document.getElementById('step2').classList.remove('active');
+        document.getElementById('step1').classList.add('active');
+      } else if (from === 3) {
+        document.getElementById('step3').classList.remove('active');
+        document.getElementById('step2').classList.add('active');
+      }
     }
     function handleSubmit(e) {
       e.preventDefault();
-      const sponsor = document.getElementById('question_sponsor');
-      if (!sponsor.value) {
-        sponsor.setAttribute('aria-invalid', 'true');
-        return false;
-      }
       document.getElementById('application_form').style.display = 'none';
       document.getElementById('confirmation').style.display = 'block';
       history.pushState({}, '', location.pathname + '?submitted=true');

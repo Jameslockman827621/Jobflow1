@@ -137,3 +137,18 @@ def test_ashby_multistep_genuine_submit(client, fixture_server):
     assert body.get("ok") is True, body
     assert body.get("submitted") is True, body
     assert body.get("ats") == "ashby" or body.get("adapter") == "ashby"
+
+
+def test_greenhouse_multistep_eeo_genuine_submit(client, fixture_server):
+    """3-step Greenhouse-like fixture including Prefer-not-to-say EEO selects."""
+    headers, email = _auth(client, "gh")
+    url = f"{fixture_server}/ats_greenhouse_multistep.html"
+    app_id = _start_app(client, headers, email, url, "greenhouse")
+    body = client.post(
+        "/api/v1/apply-engine/headless",
+        headers=headers,
+        json={"application_id": app_id, "dry_run": False, "auto_submit": True},
+    ).json()
+    assert body.get("ok") is True, body
+    assert body.get("submitted") is True, body
+    assert body.get("ats") == "greenhouse" or body.get("adapter") == "greenhouse"

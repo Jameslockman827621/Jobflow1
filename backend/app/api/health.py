@@ -153,7 +153,11 @@ async def readiness_check():
             "headless_apply_enabled": headless_enabled,
         },
         "ops_hint": (
-            "For genuine auto-apply at scale run: "
-            "celery -A app.tasks.celery_app worker -Q apply,celery --loglevel=info"
+            "For genuine auto-apply at scale run worker + beat: "
+            "celery -A app.tasks.celery_app worker -Q apply,celery --loglevel=info && "
+            "celery -A app.tasks.celery_app beat --loglevel=info "
+            "(beat runs fail-stale-apply-runs so ApplyRuns do not stay 'running' forever)"
         ),
+        "celery_beat_required": True,
+        "celery_beat_schedule": "fail-stale-apply-runs every ~300s (see app.tasks.scheduler)",
     }

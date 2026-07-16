@@ -14,7 +14,7 @@ Complete guide to deploying JobScale to production.
 ### 1. Clone & Configure
 
 ```bash
-cd /home/admin/.openclaw/workspace
+cd /path/to/Jobflow1
 cp backend/.env.example backend/.env
 ```
 
@@ -22,13 +22,16 @@ Edit `backend/.env`:
 
 ```env
 # Production settings
+ENVIRONMENT=production
 DEBUG=false
-SECRET_KEY=your-super-secret-key-here
+SECRET_KEY=your-super-secret-key-at-least-32-chars
+APP_URL=https://app.yourdomain.com
 DATABASE_URL=postgresql://user:pass@db:5432/jobscale
 REDIS_URL=redis://redis:6379/0
 
-# Email (SendGrid)
+# Email (SendGrid — already wired in app/services/email.py)
 SENDGRID_API_KEY=sg.xxx
+FROM_EMAIL=noreply@yourdomain.com
 
 # AI (OpenAI)
 OPENAI_API_KEY=sk-xxx
@@ -37,9 +40,23 @@ LLM_MODEL=gpt-4-turbo-preview
 # Stripe
 STRIPE_SECRET_KEY=sk_live_xxx
 STRIPE_WEBHOOK_SECRET=whsec_xxx
+STRIPE_PRICE_PRO_MONTHLY=price_xxx
+STRIPE_PRICE_PRO_YEARLY=price_xxx
+STRIPE_PRICE_PREMIUM_MONTHLY=price_xxx
+STRIPE_PRICE_PREMIUM_YEARLY=price_xxx
 
-# CORS
-CORS_ORIGINS=["https://jobscale.com"]
+# Optional Google OAuth
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_REDIRECT_URI=https://api.yourdomain.com/api/v1/auth/google/callback
+
+# Observability (optional)
+SENTRY_DSN=
+OTEL_EXPORTER_OTLP_ENDPOINT=
+ADMIN_EMAILS=you@yourdomain.com
+
+# CORS — HTTPS origins required in production
+CORS_ORIGINS=https://app.yourdomain.com
 ```
 
 ### 2. Start Services
@@ -52,8 +69,11 @@ docker-compose up -d
 ### 3. Initialize Database
 
 ```bash
-docker-compose exec backend python scripts/init_db.py
+docker-compose exec backend alembic upgrade head
+# or: docker-compose exec backend python -c "from app.database import init_db; init_db()"
 ```
+
+`init_db()` prefers Alembic. A core baseline revision creates all ORM tables on an empty database; later revisions add board sessions, answer bank, Google OAuth columns, etc.
 
 ### 4. Verify
 
@@ -230,15 +250,15 @@ prometheus-fastapi-instrumentator==6.1.0
 
 ## 💾 Database Migrations
 
-Using Alembic:
+Alembic is already initialized under `backend/alembic/`. Do **not** run `alembic init`.
 
 ```bash
 cd backend
-alembic init alembic
-# Edit alembic.ini with DATABASE_URL
-alembic revision --autogenerate -m "Initial"
+source venv/bin/activate
 alembic upgrade head
 ```
+
+Fresh empty Postgres: `upgrade head` alone creates core tables (baseline) plus additive migrations. Existing DBs that used `create_all` previously: run `upgrade head` (idempotent) or `alembic stamp head` only if the schema already matches and you need to mark revisions applied.
 
 ---
 
@@ -249,7 +269,7 @@ alembic upgrade head
 1. Sign up at sendgrid.com
 2. Create API key
 3. Add to `.env`: `SENDGRID_API_KEY=sg.xxx`
-4. Update `backend/app/services/email.py` to use SendGrid SDK
+4. Restart the API — `app/services/email.py` already sends via SendGrid when the key is set (no code change needed)
 
 ### SMTP (Gmail)
 
@@ -271,7 +291,8 @@ SMTP_PASSWORD=your-app-password
    - Pro Yearly: `price_pro_yearly`
    - Premium Monthly: `price_premium_monthly`
 4. Add webhook endpoint: `https://yourdomain.com/api/v1/billing/webhook`
-5. Subscribe to events: `checkout.session.completed`, `customer.subscription.deleted`
+5. Subscribe to events: `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`
+6. Set `STRIPE_PRICE_*` env vars to the real Price API IDs (checkout rejects missing prices)
 
 ---
 
