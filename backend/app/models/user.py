@@ -15,6 +15,7 @@ class User(Base, TimestampMixin):
     hashed_password = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
+    is_admin = Column(Boolean, default=False)
     
     stripe_customer_id = Column(String, nullable=True)
     subscription_plan = Column(String, default="free")

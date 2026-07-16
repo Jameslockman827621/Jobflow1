@@ -10,12 +10,53 @@ interface Application {
   job_id: number;
   status: string;
   stage: string;
+  apply_run?: {
+    id: number;
+    status: string;
+    mode?: string;
+    error?: string | null;
+    meta?: {
+      blocked_reason?: string;
+      connect_hint?: string;
+      board?: string;
+    } | null;
+  } | null;
   job?: {
     title: string;
     company: string;
     location: string;
     external_url?: string;
   } | null;
+}
+
+function applyRunBadge(run?: Application['apply_run']) {
+  if (!run?.status) return null;
+  const status = run.status;
+  const loginRequired =
+    run.meta?.blocked_reason === 'login_required' || !!run.meta?.connect_hint;
+  let label = status;
+  let className = 'bg-slate-100 text-slate-600';
+  if (status === 'submitted') {
+    label = 'Submitted';
+    className = 'bg-emerald-50 text-emerald-700';
+  } else if (status === 'filled') {
+    label = 'Filled';
+    className = 'bg-sky-50 text-sky-700';
+  } else if (status === 'needs_user' || loginRequired) {
+    label = loginRequired ? 'Reconnect' : 'Needs you';
+    className = 'bg-amber-50 text-amber-800';
+  } else if (status === 'failed' || status === 'stale') {
+    label = status === 'stale' ? 'Stale' : 'Failed';
+    className = 'bg-red-50 text-red-700';
+  } else if (status === 'queued' || status === 'running') {
+    label = status === 'running' ? 'Running' : 'Queued';
+    className = 'bg-slate-100 text-slate-600';
+  }
+  return (
+    <span className={`inline-flex mt-2 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${className}`}>
+      {label}
+    </span>
+  );
 }
 
 function ClipboardIcon({ className }: { className?: string }) {
@@ -232,6 +273,7 @@ export default function KanbanPage() {
                     >
                       <h3 className="font-semibold text-slate-900 text-sm leading-snug">{app.job?.title || 'Untitled'}</h3>
                       <p className="text-sm text-slate-500 mt-1">{app.job?.company || 'Unknown'}</p>
+                      {applyRunBadge(app.apply_run)}
                       <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
                         <LocationIcon className="w-3 h-3" />
                         <span>{app.job?.location || ''}</span>
@@ -305,6 +347,7 @@ export default function KanbanPage() {
                   >
                     <h3 className="font-semibold text-slate-900 text-base">{app.job?.title || 'Untitled'}</h3>
                     <p className="text-sm text-slate-500 mt-1">{app.job?.company || 'Unknown'}</p>
+                    {applyRunBadge(app.apply_run)}
                     <div className="mt-2 flex items-center text-xs text-slate-400 gap-1">
                       <LocationIcon className="w-3 h-3" />
                       <span>{app.job?.location || ''}</span>

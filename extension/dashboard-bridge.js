@@ -3,12 +3,45 @@
 (function () {
   'use strict';
 
-  function syncToken() {
+  let lastSynced = null;
+  let refreshing = false;
+
+  function apiBaseFromPage() {
+    try {
+      // Prefer same origin proxy used by the Next app
+      return '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  async function refreshExtensionToken(sessionToken) {
+    if (!sessionToken || refreshing) return sessionToken;
+    refreshing = true;
+    try {
+      const res = await fetch(`${apiBaseFromPage()}/api/v1/auth/extension-token`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${sessionToken}` },
+      });
+      if (!res.ok) return sessionToken;
+      const data = await res.json();
+      return data.access_token || sessionToken;
+    } catch (e) {
+      return sessionToken;
+    } finally {
+      refreshing = false;
+    }
+  }
+
+  async function syncToken() {
     try {
       const token = localStorage.getItem('jobscale_token');
-      if (token) {
-        chrome.runtime.sendMessage({ action: 'syncToken', token }, () => {});
-      }
+      if (!token) return;
+      // Upgrade short session JWT to a longer-lived extension JWT when possible
+      const longLived = await refreshExtensionToken(token);
+      if (longLived === lastSynced) return;
+      lastSynced = longLived;
+      chrome.runtime.sendMessage({ action: 'syncToken', token: longLived }, () => {});
     } catch (e) {
       // Extension not loaded
     }
@@ -18,23 +51,25 @@
 
   window.addEventListener('storage', (e) => {
     if (e.key === 'jobscale_token' && e.newValue) {
-      chrome.runtime.sendMessage({ action: 'syncToken', token: e.newValue }, () => {});
+      lastSynced = null;
+      syncToken();
     }
   });
 
-  setInterval(syncToken, 2000);
+  setInterval(syncToken, 30000);
 
   // Dashboard → extension: Connect board
   window.addEventListener('jobscale-connect-board', (ev) => {
     const board = ev.detail && ev.detail.board;
     if (!board) return;
-    syncToken();
-    chrome.runtime.sendMessage({ action: 'connectBoard', board }, (resp) => {
-      window.dispatchEvent(
-        new CustomEvent('jobscale-connect-result', {
-          detail: resp || { ok: false, error: 'Extension did not respond — is it installed?' },
-        })
-      );
+    syncToken().then(() => {
+      chrome.runtime.sendMessage({ action: 'connectBoard', board }, (resp) => {
+        window.dispatchEvent(
+          new CustomEvent('jobscale-connect-result', {
+            detail: resp || { ok: false, error: 'Extension did not respond — is it installed?' },
+          })
+        );
+      });
     });
   });
 

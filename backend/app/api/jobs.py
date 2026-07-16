@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models.job import Job, JobSource
 from app.models.user import User
-from app.core.security import get_current_user
+from app.core.security import get_current_admin
 
 router = APIRouter()
 
@@ -102,23 +102,35 @@ async def get_job(job_id: int, db: Session = Depends(get_db)):
 async def trigger_scrape(
     source: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin),
 ):
     """
-    Trigger job scraping for a source (authenticated).
-    Sources: greenhouse, lever, workable
+    Admin-only: trigger job scraping for a source.
+
+    Sources: greenhouse, lever
+    Requires ``User.is_admin`` or an email listed in ``ADMIN_EMAILS``.
     """
     from app.tasks.jobs import scrape_greenhouse_companies, scrape_lever_companies
     from app.scrapers.companies import GREENHOUSE_COMPANIES, LEVER_COMPANIES
 
-    _ = current_user  # auth required — admin role gate can tighten later
-    
+    _ = db
+
     if source == "greenhouse":
         scrape_greenhouse_companies.delay(GREENHOUSE_COMPANIES)
-        return {"status": "scrape started", "source": source, "companies": len(GREENHOUSE_COMPANIES)}
+        return {
+            "status": "scrape started",
+            "source": source,
+            "companies": len(GREENHOUSE_COMPANIES),
+            "requested_by": current_user.email,
+        }
     elif source == "lever":
         scrape_lever_companies.delay(LEVER_COMPANIES)
-        return {"status": "scrape started", "source": source, "companies": len(LEVER_COMPANIES)}
+        return {
+            "status": "scrape started",
+            "source": source,
+            "companies": len(LEVER_COMPANIES),
+            "requested_by": current_user.email,
+        }
     else:
         raise HTTPException(status_code=400, detail=f"Unknown source: {source}")
 

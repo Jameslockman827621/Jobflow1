@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 from datetime import timedelta
+from typing import Optional
 
 from app.core.config import settings
 from app.core.security import create_access_token, get_current_user
@@ -38,6 +39,7 @@ class UserResponse(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    expires_in_days: Optional[int] = None
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -159,6 +161,26 @@ async def get_me(current_user: User = Depends(get_current_user)):
         )
     finally:
         db.close()
+
+
+@router.post("/extension-token", response_model=Token)
+async def extension_token(current_user: User = Depends(get_current_user)):
+    """
+    Issue a longer-lived JWT for the Chrome extension (cookie sync / Easy Apply).
+
+    Lifetime: ``EXTENSION_TOKEN_EXPIRE_DAYS`` (default 30). Same claims as login;
+    not a purpose-scoped token.
+    """
+    days = max(1, int(getattr(settings, "EXTENSION_TOKEN_EXPIRE_DAYS", 30) or 30))
+    access_token = create_access_token(
+        data={"sub": current_user.email, "client": "extension"},
+        expires_delta=timedelta(days=days),
+    )
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "expires_in_days": days,
+    }
 
 
 @router.post("/forgot-password")

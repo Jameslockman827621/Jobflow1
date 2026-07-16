@@ -14,8 +14,8 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 - [x] Show error toast when `/onboarding/search` fails (no silent empty)
 - [x] Disable `AUTO_SEED_DEMO_JOBS` in production env by default; keep only for empty-dev bootstrap
 - [x] Finish ATS `scrape_all_jobs` stubs (Greenhouse/Lever/Ashby/Workable use curated company lists)
-- [ ] Authenticate + admin-gate `POST /jobs/scrape/{source}` (was open; now auth-required — still needs role/admin)
-- [ ] Apify LinkedIn company/all scrapes: replace `NotImplementedError` with real actors or remove from API surface
+- [x] Authenticate + admin-gate `POST /jobs/scrape/{source}` (was open; now auth-required — still needs role/admin)
+- [x] Apify LinkedIn company/all scrapes: replace `NotImplementedError` with real actors or remove from API surface
 
 ### P0.2 Genuine apply path (not status flips)
 - [x] `POST /applications/{id}/submit` no longer pretends it applied — requires `?manual=true` for external self-report, otherwise points to apply-engine
@@ -29,7 +29,7 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 - [x] **Encrypt BoardSession storage_state at rest** (Fernet from SECRET_KEY; plaintext legacy still readable once)
 - [x] Extension **configurable API/dashboard base** via `chrome.storage` + options page (not hardcoded forever)
 - [ ] Production host_permissions for real HTTPS app domains
-- [ ] Session expiry UI on dashboard when connect status flips to disconnected mid-batch
+- [x] Session expiry UI on dashboard when connect status flips to disconnected mid-batch
 
 ### P0.4 Quotas & billing honesty
 - [x] **Plan-based apply quotas enforced** (free 5/day & 5/month; pro/premium higher) in `apply_limits.py`
@@ -53,13 +53,13 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 - [x] Dead `/api/v1/users/*` placeholder routes return **410 Gone** pointing at `/auth` + `/profile`
 - [x] Password reset (token email + set password)
 - [x] Email verification endpoints + verify page (`is_verified` on `/me`)
-- [ ] Refresh tokens / longer-lived sessions for extension
+- [x] Refresh tokens / longer-lived sessions for extension
 - [ ] OAuth (Google) optional
 
 ### P1.2 Tracker / Kanban
 - [x] Kanban can **move stage** via `PUT /applications/{id}` (select on card)
 - [ ] Drag-and-drop between columns
-- [ ] Show apply-run status badge on card (submitted / needs_user / filled)
+- [x] Show apply-run status badge on card (submitted / needs_user / filled)
 
 ### P1.3 Analytics & career (no fiction)
 - [x] Analytics UI uses **real overview API** (zeros when empty — not 15 apps / 20% interview)
@@ -85,8 +85,8 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 
 ## P2 — Production hardening
 
-- [ ] Global HTTP rate limit middleware (per IP + per user)
-- [ ] Alembic migrations for **all** tables (stop relying on `create_all` for board_sessions, answer_bank, flags)
+- [x] Global HTTP rate limit middleware (per IP + per user)
+- [x] Alembic migrations for **all** tables (stop relying on `create_all` for board_sessions, answer_bank, flags)
 - [ ] Sentry / OpenTelemetry
 - [ ] Structured logging JSON
 - [x] Health check reports: DB, Redis, Celery workers, Playwright package
@@ -99,7 +99,7 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 ## P3 — Scale & quality of apply engine
 
 - [ ] Workday/Ashby deeper coverage beyond fixtures
-- [ ] Answer bank UX in dashboard (CRUD)
+- [x] Answer bank UX in dashboard (CRUD)
 - [ ] Per-company sticky fingerprint already exists — document + test under concurrency
 - [ ] Stale run sweeper metrics endpoint for ops
 - [ ] Company career-page monitor → auto-queue high-match jobs (opt-in)
@@ -134,3 +134,4 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 | Extension | Configurable bases + options |
 | Billing | subscription.updated |
 | Nav | Career + Reviews |
+| Wave 3 | Admin scrape gate; Apify LinkedIn wrappers; rate limit MW; Alembic board/answer/admin; Kanban apply_run badges; reconnect UX; answer-bank CRUD; extension long-lived JWT |

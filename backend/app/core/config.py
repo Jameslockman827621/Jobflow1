@@ -21,6 +21,13 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "change-me-in-production-please"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    EXTENSION_TOKEN_EXPIRE_DAYS: int = 30
+    # Comma-separated emails that may trigger scrapes / admin ops
+    ADMIN_EMAILS: Union[str, List[str]] = ""
+
+    # Rate limiting (requests per window per IP; 0 disables)
+    RATE_LIMIT_PER_MINUTE: int = 120
+    RATE_LIMIT_AUTH_PER_MINUTE: int = 30
     
     # AI/LLM
     OPENAI_API_KEY: Optional[str] = None
@@ -113,6 +120,13 @@ class Settings(BaseSettings):
         if isinstance(self.CORS_ORIGINS, list):
             return self.CORS_ORIGINS
         return [self.CORS_ORIGINS]
+
+    def admin_emails(self) -> List[str]:
+        if isinstance(self.ADMIN_EMAILS, list):
+            return [e.lower().strip() for e in self.ADMIN_EMAILS if e]
+        if isinstance(self.ADMIN_EMAILS, str):
+            return [e.lower().strip() for e in self.ADMIN_EMAILS.split(",") if e.strip()]
+        return []
 
     def stripe_checkout_price_ids(self) -> dict:
         m = {}

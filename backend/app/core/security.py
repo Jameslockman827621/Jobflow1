@@ -62,3 +62,16 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         raise credentials_exception
     
     return user
+
+
+def user_is_admin(user: User) -> bool:
+    if getattr(user, "is_admin", False):
+        return True
+    emails = settings.admin_emails()
+    return bool(user.email and user.email.lower() in emails)
+
+
+async def get_current_admin(user: User = Depends(get_current_user)) -> User:
+    if not user_is_admin(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return user

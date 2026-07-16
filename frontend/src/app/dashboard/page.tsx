@@ -174,6 +174,10 @@ function DashboardPage() {
     by_status?: Record<string, number>;
     runs?: Array<{ status?: string; error?: string; meta?: any }>;
   } | null>(null);
+  const [reconnectNeeded, setReconnectNeeded] = useState<{
+    boards: Array<'linkedin' | 'indeed'>;
+    hint?: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -218,6 +222,7 @@ function DashboardPage() {
         const result = await ext.connectBoard(board);
         if (result?.ok) {
           toast.success(`${board === 'linkedin' ? 'LinkedIn' : 'Indeed'} connected for Easy Apply`);
+          setReconnectNeeded(null);
           await loadConnectStatus();
           return;
         }
@@ -455,6 +460,38 @@ function DashboardPage() {
                   const st = await stRes.json();
                   setApplyBatchStatus(st);
                   const by = st.by_status || {};
+                  const runs = st.runs || [];
+                  const needsReconnect = runs.filter(
+                    (r: any) =>
+                      r?.meta?.blocked_reason === 'login_required' ||
+                      r?.meta?.connect_hint ||
+                      (r?.status === 'needs_user' && String(r?.error || '').toLowerCase().includes('login'))
+                  );
+                  if (needsReconnect.length > 0) {
+                    const boards = Array.from(
+                      new Set(
+                        needsReconnect
+                          .map((r: any) => (r?.meta?.board === 'indeed' ? 'indeed' : 'linkedin'))
+                          .filter(Boolean)
+                      )
+                    ) as Array<'linkedin' | 'indeed'>;
+                    setReconnectNeeded({
+                      boards: boards.length ? boards : ['linkedin', 'indeed'],
+                      hint:
+                        needsReconnect[0]?.meta?.connect_hint ||
+                        'Session expired or missing — reconnect LinkedIn/Indeed to continue Easy Apply.',
+                    });
+                    // Bring board connections into view
+                    try {
+                      document.getElementById('board-connections')?.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'center',
+                      });
+                    } catch {
+                      /* ignore */
+                    }
+                    await loadConnectStatus();
+                  }
                   const done =
                     (by.submitted || 0) +
                     (by.filled || 0) +
@@ -610,14 +647,48 @@ function DashboardPage() {
               (r) => r.status === 'needs_user' || (r.meta && (r.meta.blocked_reason === 'login_required' || r.meta.connect_hint))
             ) && (
               <p className="text-xs text-amber-700 mt-2">
-                Some applies need you — Connect LinkedIn/Indeed above, or complete CAPTCHA/profile gaps.
+                Some applies need you — Connect LinkedIn/Indeed below, or complete CAPTCHA/profile gaps.
               </p>
             )}
           </div>
         )}
 
+        {reconnectNeeded && (
+          <div className="mb-6 px-4 py-3 border border-amber-300 rounded-lg bg-amber-50">
+            <p className="text-xs font-semibold text-amber-900 uppercase tracking-wide">Reconnect required</p>
+            <p className="text-sm text-amber-900 mt-1">{reconnectNeeded.hint}</p>
+            <div className="flex flex-wrap gap-2 mt-3">
+              {reconnectNeeded.boards.map((board) => (
+                <button
+                  key={board}
+                  type="button"
+                  disabled={connectingBoard === board}
+                  onClick={() => connectBoard(board)}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-md bg-navy-900 text-white hover:bg-navy-800 disabled:opacity-50"
+                >
+                  {connectingBoard === board
+                    ? 'Connecting…'
+                    : `Reconnect ${board === 'linkedin' ? 'LinkedIn' : 'Indeed'}`}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setReconnectNeeded(null)}
+                className="px-3 py-1.5 text-xs text-amber-800 hover:text-amber-950"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Connect LinkedIn / Indeed */}
-        <div className="mb-8 px-4 py-4 border border-slate-200 rounded-lg bg-white">
+        <div
+          id="board-connections"
+          className={`mb-8 px-4 py-4 border rounded-lg bg-white ${
+            reconnectNeeded ? 'border-amber-300 ring-2 ring-amber-100' : 'border-slate-200'
+          }`}
+        >
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
             <div>
               <p className="text-xs font-semibold text-slate-900 uppercase tracking-wide">Board connections</p>

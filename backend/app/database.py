@@ -42,5 +42,24 @@ async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 def init_db():
-    """Create all tables (use Alembic for migrations in production)"""
+    """Create all tables (use Alembic for migrations in production).
+
+    Also ensures critical additive columns exist when create_all is a no-op
+    on already-populated databases (common in local/dev).
+    """
     Base.metadata.create_all(bind=sync_engine)
+    # Additive columns that create_all will not alter onto existing tables
+    stmts = [
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS auto_apply_submit BOOLEAN DEFAULT FALSE",
+    ]
+    try:
+        with sync_engine.begin() as conn:
+            for sql in stmts:
+                try:
+                    conn.exec_driver_sql(sql)
+                except Exception:
+                    # SQLite older / non-Postgres dialects may not support IF NOT EXISTS
+                    pass
+    except Exception:
+        pass
