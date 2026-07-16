@@ -248,6 +248,21 @@
         setNativeValue(el, 'Yes'); n += 1;
       }
     });
+    // EEO selects: Prefer not to say / Decline
+    document.querySelectorAll('select').forEach((el) => {
+      if (el.value) return;
+      const label = normalize(labelFor(el) + ' ' + (el.getAttribute('aria-label') || '') + ' ' + (el.name || ''));
+      if (!/(gender|sex|veteran|disability|race|ethnicity)/.test(label)) return;
+      const opt = Array.from(el.options).find((o) => {
+        const t = normalize(o.text);
+        return t.includes('prefer not') || t.includes('decline') || t.includes('do not wish');
+      });
+      if (opt) {
+        el.value = opt.value;
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        n += 1;
+      }
+    });
     return n;
   }
 
@@ -292,6 +307,110 @@
     return n;
   }
 
+  function fillByLabelContains(needle, value) {
+    if (value == null || value === '') return false;
+    const n = normalize(needle);
+    const inputs = Array.from(document.querySelectorAll('input, textarea, select'));
+    for (const el of inputs) {
+      if (el.type === 'hidden' || el.disabled) continue;
+      const label = normalize(labelFor(el) + ' ' + (el.getAttribute('aria-label') || '') + ' ' + (el.placeholder || '') + ' ' + (el.name || ''));
+      if (!label.includes(n)) continue;
+      if (el.tagName === 'SELECT') return fillSelect(el, value);
+      if (el.value && String(el.value).trim()) return false;
+      return fillInput(el, value);
+    }
+    return false;
+  }
+
+  function fillAshby(applicant) {
+    let n = 0;
+    const pairs = [
+      ["input[name*='first' i]", applicant.first_name],
+      ["input[autocomplete='given-name']", applicant.first_name],
+      ["input[placeholder*='First' i]", applicant.first_name],
+      ["input[aria-label*='First' i]", applicant.first_name],
+      ["input[name*='last' i]", applicant.last_name],
+      ["input[autocomplete='family-name']", applicant.last_name],
+      ["input[placeholder*='Last' i]", applicant.last_name],
+      ["input[aria-label*='Last' i]", applicant.last_name],
+      ["input[type='email']", applicant.email],
+      ["input[name*='email' i]", applicant.email],
+      ["input[aria-label*='Email' i]", applicant.email],
+      ["input[type='tel']", applicant.phone],
+      ["input[name*='phone' i]", applicant.phone],
+      ["input[aria-label*='Phone' i]", applicant.phone],
+      ["input[name*='linkedin' i]", applicant.linkedin],
+      ["input[aria-label*='LinkedIn' i]", applicant.linkedin],
+      ["input[aria-label='Name']", applicant.full_name],
+      ["input[placeholder='Name']", applicant.full_name],
+    ];
+    const seen = new Set();
+    for (const [sel, val] of pairs) {
+      try {
+        const el = document.querySelector(sel);
+        if (!el || seen.has(el)) continue;
+        if (fillByIdOrSel(sel, val)) {
+          seen.add(el);
+          n += 1;
+        }
+      } catch (e) { /* ignore */ }
+    }
+    // Label-text contains fallback (similar to Greenhouse label heuristics)
+    const labelPairs = [
+      ['first name', applicant.first_name],
+      ['last name', applicant.last_name],
+      ['email', applicant.email],
+      ['phone', applicant.phone],
+      ['linkedin', applicant.linkedin],
+      ['location', applicant.location],
+      ['company', applicant.current_company],
+    ];
+    for (const [needle, val] of labelPairs) {
+      if (fillByLabelContains(needle, val)) n += 1;
+    }
+    // EEO-ish selects: Prefer not to say
+    document.querySelectorAll('select').forEach((el) => {
+      if (el.value) return;
+      const label = normalize(labelFor(el) + ' ' + (el.getAttribute('aria-label') || '') + ' ' + (el.name || ''));
+      if (!/(gender|sex|veteran|disability|race|ethnicity)/.test(label)) return;
+      const opt = Array.from(el.options).find((o) => {
+        const t = normalize(o.text);
+        return t.includes('prefer not') || t.includes('decline') || t.includes('do not wish');
+      });
+      if (opt) {
+        el.value = opt.value;
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        n += 1;
+      }
+    });
+    return n;
+  }
+
+  async function reportApply(token, applicationId, result) {
+    if (!token || !applicationId) return null;
+    try {
+      const res = await fetch(`${API_BASE}/apply-engine/report`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          application_id: applicationId,
+          fields_filled: result.fields || 0,
+          steps_completed: result.steps || 0,
+          status: (result.captcha && result.captcha.ok === false) ? 'needs_user' : 'filled',
+          ats: result.ats || detectATS(),
+          error: (result.captcha && result.captcha.error) || null,
+        }),
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (e) {
+      return null;
+    }
+  }
+
   async function fillPage(packageData, token) {
     const applicant = packageData.applicant || {};
     const plan = packageData.fill_plan || {};
@@ -300,6 +419,7 @@
 
     if (ats === 'greenhouse') filled += fillGreenhouse(applicant);
     else if (ats === 'lever') filled += fillLever(applicant);
+    else if (ats === 'ashby') filled += fillAshby(applicant);
     else if (ats === 'workday') filled += fillWorkday(applicant);
 
     // Map planned fields first
@@ -443,21 +563,26 @@
     }
     const packageData = await res.json();
     const result = await runMultiStep(packageData, token);
+    const report = await reportApply(token, applicationId, result);
     showToast(`JobScale: done — ${result.fields} fields across ${result.steps} step(s). Review & submit.`);
     chrome.runtime.sendMessage({
       action: 'applyFillComplete',
       applicationId,
       result,
+      report,
     });
-    return { ok: true, ...result };
+    return { ok: true, report, ...result };
   }
 
   // Expose for content script / popup
   window.JobScaleFormFiller = {
     detectATS,
     fillPage,
+    fillAshby,
+    fillGreenhouse,
     runMultiStep,
     autoFillFromJobScale,
+    reportApply,
     showToast,
   };
 

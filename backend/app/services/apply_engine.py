@@ -319,7 +319,10 @@ def build_apply_package(
             "file": True,
             "multi_step": True,
             "open_ended": True,
-            "captcha": bool(getattr(settings, "TWOCAPTCHA_API_KEY", None)),
+            "captcha": bool(
+                getattr(settings, "CAPTCHA_MOCK", False)
+                or getattr(settings, "TWOCAPTCHA_API_KEY", None)
+            ),
             "headless": True,
         },
     }

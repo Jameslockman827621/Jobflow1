@@ -1,8 +1,9 @@
 """Apply engine API: packages, captcha, headless apply, messaging bots."""
 
+from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -59,6 +60,15 @@ class MessagingInboundRequest(BaseModel):
     channel: str
     from_number: str
     body: str
+
+
+class ApplyReportRequest(BaseModel):
+    application_id: int
+    fields_filled: int = 0
+    steps_completed: int = 0
+    status: str = "filled"
+    ats: Optional[str] = None
+    error: Optional[str] = None
 
 
 @router.get("/package/{job_id}")
@@ -130,7 +140,11 @@ async def solve_captcha(
 
 @router.get("/captcha/status")
 async def captcha_status(current_user: User = Depends(get_current_user)):
-    return {"available": captcha_service.available, "provider": "2captcha"}
+    return {
+        "available": captcha_service.available,
+        "provider": "mock" if captcha_service.mock_mode else "2captcha",
+        "mock": captcha_service.mock_mode,
+    }
 
 
 @router.post("/headless")
@@ -233,6 +247,57 @@ async def list_apply_runs(
     }
 
 
+@router.post("/report")
+async def report_extension_apply(
+    body: ApplyReportRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Extension reports a fill attempt → create ApplyRun(mode=extension)."""
+    application = (
+        db.query(Application)
+        .filter(Application.id == body.application_id, Application.user_id == current_user.id)
+        .first()
+    )
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    now = datetime.utcnow()
+    run = ApplyRun(
+        user_id=current_user.id,
+        application_id=application.id,
+        job_id=application.job_id,
+        mode="extension",
+        ats_type=body.ats,
+        status=body.status or "filled",
+        steps_completed=body.steps_completed or 0,
+        fields_filled=body.fields_filled or 0,
+        error=(body.error[:2000] if body.error else None),
+        started_at=now,
+        finished_at=now,
+    )
+    db.add(run)
+    if body.status == "submitted":
+        application.status = "submitted"
+        application.stage = "applied"
+        application.submitted_at = application.submitted_at or now
+        application.applied_via = "extension"
+    elif body.status in ("filled", "needs_user", "captcha"):
+        if application.status in ("draft", "ready_to_apply"):
+            application.status = "in_progress"
+        application.applied_via = application.applied_via or "extension"
+    db.commit()
+    db.refresh(run)
+    return {
+        "ok": True,
+        "apply_run_id": run.id,
+        "mode": "extension",
+        "status": run.status,
+        "fields_filled": run.fields_filled,
+        "steps_completed": run.steps_completed,
+    }
+
+
 @router.get("/messaging/status")
 async def messaging_status(current_user: User = Depends(get_current_user)):
     return messaging_service.status()
@@ -266,4 +331,90 @@ async def messaging_inbound(
         "interviews": len([a for a in apps if a.stage in ("phone_screen", "technical", "onsite")]),
         "jobs": jobs,
     }
-    return await messaging_service.handle_inbound(body.channel, body.from_number, body.body, ctx)
+    return await messaging_service.handle_inbound(
+        body.channel,
+        body.from_number,
+        body.body,
+        ctx,
+        db=db,
+        user_id=current_user.id,
+    )
+
+
+@router.post("/messaging/twilio")
+async def messaging_twilio_webhook(
+    request: Request,
+    db: Session = Depends(get_db),
+    Body: Optional[str] = Form(None),
+    From: Optional[str] = Form(None),
+):
+    """
+    Twilio WhatsApp/SMS webhook (no auth).
+    form-urlencoded Body / From → look up user by CV.phone digits.
+    """
+    # Also accept raw form if Form() binding missed
+    if Body is None or From is None:
+        try:
+            form = await request.form()
+            Body = Body or form.get("Body")
+            From = From or form.get("From")
+        except Exception:
+            pass
+
+    from_number = From or ""
+    body_text = Body or ""
+
+    user = messaging_service.lookup_user_by_phone(db, from_number)
+    if not user:
+        help_msg = (
+            "JobScale: phone not linked. Add your phone on your CV, then text HELP.\n"
+            "Commands: APPLY <job_id>, STATUS, JOBS, HELP"
+        )
+        # Twilio expects TwiML or empty 200; return plain help body for visibility
+        return Response(
+            content=(
+                '<?xml version="1.0" encoding="UTF-8"?>'
+                f"<Response><Message>{help_msg}</Message></Response>"
+            ),
+            media_type="application/xml",
+        )
+
+    apps = db.query(Application).filter(Application.user_id == user.id).all()
+    ready = [a for a in apps if a.status == "ready_to_apply"]
+    jobs = []
+    for a in ready[:10]:
+        job = db.query(Job).filter(Job.id == a.job_id).first()
+        if job:
+            jobs.append({"id": job.id, "title": job.title, "company": job.company})
+    ctx = {
+        "email": user.email,
+        "submitted": len([a for a in apps if a.status == "submitted"]),
+        "ready": len(ready),
+        "interviews": len([a for a in apps if a.stage in ("phone_screen", "technical", "onsite")]),
+        "jobs": jobs,
+    }
+
+    # Prefer WhatsApp channel when From is whatsapp:
+    channel = "whatsapp" if str(from_number).startswith("whatsapp:") else "whatsapp"
+    result = await messaging_service.handle_inbound(
+        channel,
+        from_number,
+        body_text,
+        ctx,
+        db=db,
+        user_id=user.id,
+    )
+    reply = result.get("reply") or "OK"
+    # Escape minimal XML
+    safe = (
+        reply.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+    return Response(
+        content=(
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            f"<Response><Message>{safe}</Message></Response>"
+        ),
+        media_type="application/xml",
+    )

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, List, Tuple
 
 from app.services.apply_engine import answer_open_ended
 from .base import AdapterResult, BaseATSAdapter
@@ -12,20 +12,97 @@ class AshbyAdapter(BaseATSAdapter):
     name = "ashby"
     max_steps = 4
 
+    async def _click_apply(self, page) -> None:
+        for sel in [
+            "a:has-text('Apply')",
+            "button:has-text('Apply')",
+            "a:has-text('Apply for this Job')",
+            "button:has-text('Apply for this Job')",
+            "a:has-text('Apply Now')",
+            "button:has-text('Apply Now')",
+            "[data-testid*='apply' i]",
+        ]:
+            try:
+                loc = page.locator(sel).first
+                if await loc.count() and await loc.is_visible():
+                    await loc.click(timeout=3000)
+                    await page.wait_for_timeout(1200)
+                    return
+            except Exception:
+                continue
+
+    async def _fill_by_label_contains(
+        self,
+        page,
+        pairs: List[Tuple[str, Any]],
+    ) -> Tuple[int, List[str]]:
+        """Fill inputs whose associated label text contains a substring."""
+        filled = 0
+        keys: List[str] = []
+        for key, value in pairs:
+            if value in (None, ""):
+                continue
+            try:
+                handle = await page.evaluate_handle(
+                    """(needle) => {
+                      const all = Array.from(document.querySelectorAll('input, textarea, select'));
+                      const n = (needle || '').toLowerCase();
+                      for (const el of all) {
+                        if (el.type === 'hidden' || el.disabled) continue;
+                        let label = '';
+                        if (el.labels && el.labels[0]) label = el.labels[0].innerText || '';
+                        else if (el.id) {
+                          const lab = document.querySelector(`label[for="${el.id}"]`);
+                          if (lab) label = lab.innerText || '';
+                        }
+                        label = (label + ' ' + (el.getAttribute('aria-label') || '')
+                          + ' ' + (el.placeholder || '') + ' ' + (el.name || '')).toLowerCase();
+                        if (label.includes(n)) return el;
+                      }
+                      return null;
+                    }""",
+                    key.replace("_", " "),
+                )
+                el = handle.as_element()
+                if not el:
+                    continue
+                tag = await el.evaluate("el => el.tagName")
+                if tag == "SELECT":
+                    try:
+                        await el.select_option(label=str(value))
+                    except Exception:
+                        await el.select_option(value=str(value))
+                else:
+                    await el.fill(str(value))
+                filled += 1
+                keys.append(f"label_{key}")
+            except Exception:
+                continue
+        return filled, keys
+
     async def fill(self, page, applicant: Dict[str, Any], *, auto_submit: bool = False) -> AdapterResult:
         result = AdapterResult(ats=self.name, page_url=page.url)
+
+        # Try clicking Apply on the job posting first
+        await self._click_apply(page)
+
         # Navigate to /application if needed
         if "ashbyhq.com" in page.url and "/application" not in page.url:
             try:
                 await page.goto(page.url.rstrip("/") + "/application", wait_until="domcontentloaded", timeout=45000)
             except Exception:
                 await self.ensure_application_form(page)
+                await self._click_apply(page)
 
-        # Ashby is SPA — wait for inputs
+        # Ashby is SPA — wait up to 20s for inputs
         try:
-            await page.wait_for_selector("input, textarea, select", timeout=15000)
+            await page.wait_for_selector("input, textarea, select", timeout=20000)
         except Exception:
-            await page.wait_for_timeout(3000)
+            await self._click_apply(page)
+            try:
+                await page.wait_for_selector("input, textarea, select", timeout=10000)
+            except Exception:
+                await page.wait_for_timeout(3000)
 
         mapping = {
             "first_name": {
@@ -92,6 +169,24 @@ class AshbyAdapter(BaseATSAdapter):
         result.fields_filled = filled
         result.filled_keys = keys
 
+        # Fallback: fill by label text contains
+        label_pairs = [
+            ("first name", applicant.get("first_name")),
+            ("last name", applicant.get("last_name")),
+            ("email", applicant.get("email")),
+            ("phone", applicant.get("phone")),
+            ("linkedin", applicant.get("linkedin")),
+            ("name", applicant.get("full_name")),
+            ("location", applicant.get("location")),
+            ("company", applicant.get("current_company")),
+        ]
+        more, more_keys = await self._fill_by_label_contains(page, label_pairs)
+        # Avoid double-counting keys already filled via selectors
+        for k in more_keys:
+            if k not in result.filled_keys:
+                result.filled_keys.append(k)
+                result.fields_filled += 1
+
         # Multi-step Ashby: keep Next until no progress
         for step in range(self.max_steps - 1):
             action = await self.click_submit_or_next(page, ["next", "continue", "submit application", "submit"])
@@ -102,6 +197,9 @@ class AshbyAdapter(BaseATSAdapter):
             more, more_keys = await self.fill_by_selectors(page, mapping)
             result.fields_filled += more
             result.filled_keys.extend(more_keys)
+            label_more, label_keys = await self._fill_by_label_contains(page, label_pairs)
+            result.fields_filled += label_more
+            result.filled_keys.extend(label_keys)
             if action == "submitted":
                 result.submitted = True
                 break
@@ -117,6 +215,8 @@ class AshbyAdapter(BaseATSAdapter):
             action = await self.click_submit_or_next(page, ["submit application", "submit"])
             result.submitted = action == "submitted"
         result.needs_user = not result.submitted
+        if result.captcha_present and not result.captcha_solved:
+            result.needs_user = True
         result.page_url = page.url
-        result.meta["core_ok"] = bool(set(result.filled_keys) & {"email", "first_name", "full_name"})
+        result.meta["core_ok"] = bool(set(result.filled_keys) & {"email", "first_name", "full_name", "label_email", "label_first name"})
         return result

@@ -3,6 +3,9 @@ CAPTCHA solving via 2Captcha (and compatible providers).
 
 Set TWOCAPTCHA_API_KEY in the environment. When unset, solve calls return
 a structured "unavailable" response so apply flows can fall back to the user.
+
+Mock mode: TWOCAPTCHA_API_KEY == "mock" or settings.CAPTCHA_MOCK=True returns
+token "mock-captcha-token" without calling the provider.
 """
 
 from __future__ import annotations
@@ -19,15 +22,21 @@ logger = logging.getLogger(__name__)
 
 TWOCAPTCHA_IN = "https://2captcha.com/in.php"
 TWOCAPTCHA_RES = "https://2captcha.com/res.php"
+MOCK_TOKEN = "mock-captcha-token"
 
 
 class CaptchaService:
     def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or getattr(settings, "TWOCAPTCHA_API_KEY", None)
+        self.api_key = api_key if api_key is not None else getattr(settings, "TWOCAPTCHA_API_KEY", None)
+
+    @property
+    def mock_mode(self) -> bool:
+        key = (self.api_key or "").strip().lower()
+        return key == "mock" or bool(getattr(settings, "CAPTCHA_MOCK", False))
 
     @property
     def available(self) -> bool:
-        return bool(self.api_key)
+        return self.mock_mode or bool(self.api_key)
 
     async def solve_recaptcha_v2(
         self,
@@ -35,7 +44,9 @@ class CaptchaService:
         page_url: str,
         timeout_s: int = 120,
     ) -> Dict[str, Any]:
-        if not self.available:
+        if self.mock_mode:
+            return {"ok": True, "token": MOCK_TOKEN, "provider": "mock"}
+        if not self.api_key:
             return {"ok": False, "error": "TWOCAPTCHA_API_KEY not configured", "token": None}
         return await self._poll_solve(
             {
@@ -54,7 +65,9 @@ class CaptchaService:
         page_url: str,
         timeout_s: int = 120,
     ) -> Dict[str, Any]:
-        if not self.available:
+        if self.mock_mode:
+            return {"ok": True, "token": MOCK_TOKEN, "provider": "mock"}
+        if not self.api_key:
             return {"ok": False, "error": "TWOCAPTCHA_API_KEY not configured", "token": None}
         return await self._poll_solve(
             {

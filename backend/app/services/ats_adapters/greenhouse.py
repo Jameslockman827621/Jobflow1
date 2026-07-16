@@ -8,10 +8,96 @@ from app.services.apply_engine import answer_open_ended
 from app.services.captcha import captcha_service
 from .base import AdapterResult, BaseATSAdapter
 
+# Prefer-not-to-say / decline labels for EEO voluntary fields
+_DECLINE_LABELS = (
+    "prefer not to say",
+    "prefer not to answer",
+    "decline to self identify",
+    "decline to self-identify",
+    "i don't wish to answer",
+    "i do not wish to answer",
+    "don't wish to answer",
+    "choose not to disclose",
+    "decline",
+)
+
 
 class GreenhouseAdapter(BaseATSAdapter):
     name = "greenhouse"
     max_steps = 3
+
+    async def _fill_eeo_selects(self, page, result: AdapterResult) -> None:
+        """Fill gender / veteran / disability selects with Prefer not to say / Decline."""
+        selects = page.locator("select")
+        count = await selects.count()
+        for i in range(min(count, 30)):
+            sel = selects.nth(i)
+            try:
+                meta = await sel.evaluate(
+                    """el => {
+                      const label = (el.getAttribute('aria-label')
+                        || (el.labels && el.labels[0] && el.labels[0].innerText)
+                        || el.name || el.id || '').toLowerCase();
+                      const options = Array.from(el.options).map(o => ({
+                        v: o.value, t: (o.text || '').trim()
+                      }));
+                      return { label, options, value: el.value };
+                    }"""
+                )
+                label = meta.get("label") or ""
+                if not any(
+                    k in label
+                    for k in ("gender", "sex", "veteran", "disability", "disabled", "race", "ethnicity")
+                ):
+                    continue
+                if meta.get("value"):
+                    continue
+                pick = None
+                for o in meta.get("options") or []:
+                    t = (o.get("t") or "").lower()
+                    if any(d in t for d in _DECLINE_LABELS):
+                        pick = o["v"] if o.get("v") is not None else o["t"]
+                        break
+                if pick is None:
+                    continue
+                try:
+                    await sel.select_option(value=str(pick))
+                except Exception:
+                    await sel.select_option(label=str(pick))
+                result.fields_filled += 1
+                result.filled_keys.append(f"eeo_{i}")
+            except Exception as exc:
+                result.errors.append(f"eeo_select:{exc}")
+
+    async def _detect_sitekey(self, page) -> str | None:
+        """Wait for reCAPTCHA iframe hydration, then extract sitekey."""
+        try:
+            await page.wait_for_selector(
+                'iframe[src*="recaptcha"], iframe[src*="hcaptcha"], [data-sitekey], .g-recaptcha',
+                timeout=8000,
+            )
+        except Exception:
+            pass
+        await page.wait_for_timeout(500)
+        return await page.evaluate(
+            """() => {
+              const el = document.querySelector('[data-sitekey]');
+              if (el) return el.getAttribute('data-sitekey');
+              const iframes = document.querySelectorAll(
+                'iframe[src*="recaptcha"], iframe[src*="hcaptcha"]'
+              );
+              for (const iframe of iframes) {
+                const src = iframe.getAttribute('src') || '';
+                const m = src.match(/[?&]k=([^&]+)/);
+                if (m) return decodeURIComponent(m[1]);
+              }
+              const grecaptcha = document.querySelector('.g-recaptcha');
+              if (grecaptcha && grecaptcha.getAttribute('data-sitekey')) {
+                return grecaptcha.getAttribute('data-sitekey');
+              }
+              return null;
+            }"""
+        )
 
     async def fill(self, page, applicant: Dict[str, Any], *, auto_submit: bool = False) -> AdapterResult:
         result = AdapterResult(ats=self.name, page_url=page.url)
@@ -68,6 +154,8 @@ class GreenhouseAdapter(BaseATSAdapter):
         result.fields_filled += filled
         result.filled_keys.extend(keys)
 
+        await self._fill_eeo_selects(page, result)
+
         # Custom Greenhouse questions (id^=question_)
         question_inputs = page.locator("input[id^='question_'], textarea[id^='question_']")
         qcount = await question_inputs.count()
@@ -105,23 +193,22 @@ class GreenhouseAdapter(BaseATSAdapter):
             except Exception as exc:
                 result.errors.append(str(exc)[:200])
 
-        # Yes/No custom dropdowns rendered as text inputs with listboxes — best-effort skip
-
-        # reCAPTCHA iframes often hydrate after fields
-        await page.wait_for_timeout(1500)
+        # reCAPTCHA iframes often hydrate after fields — wait then extract sitekey
         result.captcha_present = await self.detect_captcha(page)
+        if not result.captcha_present:
+            # Give iframe a chance to appear
+            try:
+                await page.wait_for_selector(
+                    'iframe[src*="recaptcha"], iframe[src*="hcaptcha"], [data-sitekey]',
+                    timeout=5000,
+                )
+                result.captcha_present = True
+            except Exception:
+                result.captcha_present = await self.detect_captcha(page)
+
         if result.captcha_present and captcha_service.available:
             try:
-                sitekey = await page.evaluate(
-                    """() => {
-                      const el = document.querySelector('[data-sitekey]');
-                      if (el) return el.getAttribute('data-sitekey');
-                      const iframe = document.querySelector('iframe[src*="recaptcha"]');
-                      if (!iframe) return null;
-                      const m = (iframe.getAttribute('src')||'').match(/[?&]k=([^&]+)/);
-                      return m ? m[1] : null;
-                    }"""
-                )
+                sitekey = await self._detect_sitekey(page)
                 if sitekey:
                     solved = await captcha_service.solve_recaptcha_v2(sitekey, page.url)
                     if solved.get("ok") and solved.get("token"):
@@ -145,7 +232,6 @@ class GreenhouseAdapter(BaseATSAdapter):
             result.submitted = action == "submitted"
             result.needs_user = not result.submitted
         else:
-            # Never auto-submit by default — world-class still needs user/CAPTCHA confirm
             result.needs_user = True
             if result.captcha_present and not result.captcha_solved:
                 result.needs_user = True

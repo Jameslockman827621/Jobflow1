@@ -22,6 +22,14 @@ class LeverAdapter(BaseATSAdapter):
             except Exception:
                 await self.ensure_application_form(page)
 
+        try:
+            await page.wait_for_selector(
+                "input[name='name'], input[name='email'], input[type='email'], #resume-upload-input",
+                timeout=15000,
+            )
+        except Exception:
+            await page.wait_for_timeout(1500)
+
         mapping = {
             "full_name": {
                 "value": applicant.get("full_name"),
@@ -56,7 +64,12 @@ class LeverAdapter(BaseATSAdapter):
             mapping["resume"] = {
                 "value": applicant["resume_local_path"],
                 "type": "file",
-                "selectors": ["#resume-upload-input", "input[name='resume']", "input[type='file']"],
+                "selectors": [
+                    "#resume-upload-input",
+                    "input[name='resume']",
+                    "input[type='file'][name*='resume' i]",
+                    "input[type='file']",
+                ],
             }
 
         result.fields_attempted = len([k for k, v in mapping.items() if v.get("value")])
@@ -64,19 +77,18 @@ class LeverAdapter(BaseATSAdapter):
         result.fields_filled = filled
         result.filled_keys = keys
 
-        # Custom card fields: selects + radios + textareas
+        # Custom card fields: selects
         selects = page.locator("select:visible")
-        for i in range(min(await selects.count(), 8)):
+        for i in range(min(await selects.count(), 12)):
             sel = selects.nth(i)
             try:
-                # Prefer a non-empty option that looks like Yes/No or first real option
                 options = await sel.evaluate(
                     """el => Array.from(el.options).map(o => ({v:o.value, t:o.text.trim()}))"""
                 )
                 pick = None
                 for o in options:
                     t = (o.get("t") or "").lower()
-                    if t in ("yes", "no", "prefer not to say"):
+                    if t in ("yes", "no", "prefer not to say", "prefer not to answer"):
                         pick = o["v"]
                         break
                 if not pick:
@@ -91,7 +103,7 @@ class LeverAdapter(BaseATSAdapter):
             except Exception:
                 continue
 
-        # Radios: pick first option in each group if unanswered
+        # Radios: pick best option in each unanswered group
         radio_names = await page.evaluate(
             """() => {
               const names = new Set();
@@ -99,15 +111,15 @@ class LeverAdapter(BaseATSAdapter):
               return Array.from(names);
             }"""
         )
-        for name in (radio_names or [])[:12]:
+        for name in (radio_names or [])[:16]:
             try:
                 group = page.locator(f"input[type='radio'][name=\"{name}\"]")
                 checked = page.locator(f"input[type='radio'][name=\"{name}\"]:checked")
                 if await checked.count():
                     continue
-                # Prefer "Yes"/"No" heuristics for auth questions via label text
                 preferred = None
                 count = await group.count()
+                name_l = (name or "").lower()
                 for i in range(count):
                     r = group.nth(i)
                     label = await r.evaluate(
@@ -116,12 +128,19 @@ class LeverAdapter(BaseATSAdapter):
                           return (lab && lab.innerText || el.value || '').trim();
                         }"""
                     )
-                    if (label or "").lower() in ("yes", "no", "indeed", "linkedin", "other"):
-                        preferred = r
-                        if (label or "").lower() == "yes" and "sponsor" not in (name or "").lower():
-                            break
-                        if (label or "").lower() == "no":
+                    label_l = (label or "").lower()
+                    if "sponsor" in name_l or "visa" in name_l:
+                        if label_l == "no":
                             preferred = r
+                            break
+                    elif "authorized" in name_l or "legally" in name_l:
+                        if label_l == "yes":
+                            preferred = r
+                            break
+                    elif label_l in ("yes", "no", "indeed", "linkedin", "other", "prefer not to say"):
+                        preferred = r
+                        if label_l == "yes":
+                            break
                 if preferred is None and count:
                     preferred = group.first
                 if preferred is not None:
@@ -134,7 +153,37 @@ class LeverAdapter(BaseATSAdapter):
         async def _ans(q):
             return await answer_open_ended(q, applicant, None)
 
-        result.fields_filled += await self.answer_unlabeled_textareas(page, applicant, _ans)
+        # Answer empty textareas (cover letter / custom questions)
+        ta_filled = await self.answer_unlabeled_textareas(page, applicant, _ans)
+        result.fields_filled += ta_filled
+        if ta_filled:
+            result.filled_keys.append(f"textarea_x{ta_filled}")
+
+        # Also fill named additional-information / comments textareas
+        for sel in [
+            "textarea[name='comments']",
+            "textarea[name='additionalInformation']",
+            "textarea[name*='additional' i]",
+            "textarea[name*='cover' i]",
+        ]:
+            try:
+                loc = page.locator(sel).first
+                if await loc.count() == 0:
+                    continue
+                existing = await loc.input_value()
+                if existing and existing.strip():
+                    continue
+                label = await loc.evaluate(
+                    """el => (el.getAttribute('aria-label') || el.name || 'additional information')"""
+                )
+                ans = await _ans(label)
+                if ans:
+                    await loc.fill(ans[:800])
+                    result.fields_filled += 1
+                    result.filled_keys.append("textarea_named")
+            except Exception:
+                continue
+
         result.captcha_present = await self.detect_captcha(page)
         result.steps_completed = 1
         if auto_submit:
@@ -145,4 +194,5 @@ class LeverAdapter(BaseATSAdapter):
             result.needs_user = True
         result.page_url = page.url
         result.meta["core_ok"] = all(k in result.filled_keys for k in ("full_name", "email"))
+        result.meta["resume_uploaded"] = "resume" in result.filled_keys
         return result

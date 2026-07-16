@@ -23,6 +23,42 @@ class WorkdayAdapter(BaseATSAdapter):
     name = "workday"
     max_steps = 6
 
+    async def _navigate_adventure_button(self, page, result: AdapterResult) -> None:
+        """Follow adventureButton href via page.goto when present."""
+        try:
+            href = await page.evaluate(
+                """() => {
+                  const el = document.querySelector(
+                    "a[data-automation-id='adventureButton'], button[data-automation-id='adventureButton']"
+                  );
+                  if (!el) return null;
+                  if (el.tagName === 'A' && el.href) return el.href;
+                  const nested = el.querySelector('a[href]');
+                  return nested ? nested.href : null;
+                }"""
+            )
+            if href:
+                await page.goto(href, wait_until="domcontentloaded", timeout=60000)
+                await page.wait_for_timeout(2000)
+                result.meta["adventure_goto"] = href
+                return
+        except Exception as exc:
+            result.errors.append(f"adventure_goto:{exc}")
+
+        # Fallback: click the button
+        for sel in [
+            "a[data-automation-id='adventureButton']",
+            "button[data-automation-id='adventureButton']",
+        ]:
+            try:
+                loc = page.locator(sel).first
+                if await loc.count() and await loc.is_visible():
+                    await loc.click(timeout=2500)
+                    await page.wait_for_timeout(1500)
+                    return
+            except Exception:
+                pass
+
     async def fill(self, page, applicant: Dict[str, Any], *, auto_submit: bool = False) -> AdapterResult:
         result = AdapterResult(ats=self.name, page_url=page.url)
 
@@ -36,14 +72,15 @@ class WorkdayAdapter(BaseATSAdapter):
                 result.errors.append(f"apply_nav:{exc}")
                 await self.ensure_application_form(page)
 
+        # Adventure button: navigate via href when possible
+        await self._navigate_adventure_button(page, result)
+
         # Dismiss cookie / sign-in walls / apply as guest when present
         for sel in [
             "button:has-text('Accept')",
             "button:has-text('Apply Manually')",
             "a:has-text('Apply Manually')",
             "button:has-text('Create Account')",
-            "a[data-automation-id='adventureButton']",
-            "button[data-automation-id='adventureButton']",
             "button:has-text('Apply')",
             "button:has-text('Continue')",
         ]:
@@ -118,6 +155,14 @@ class WorkdayAdapter(BaseATSAdapter):
                         "input[aria-label*='City' i]",
                     ],
                 },
+                "address": {
+                    "value": applicant.get("address") or applicant.get("location"),
+                    "selectors": [
+                        "input[data-automation-id*='addressLine1' i]",
+                        "input[data-automation-id*='address' i]",
+                        "input[aria-label*='Address' i]",
+                    ],
+                },
                 "linkedin": {
                     "value": applicant.get("linkedin"),
                     "selectors": [
@@ -133,6 +178,7 @@ class WorkdayAdapter(BaseATSAdapter):
                     "selectors": [
                         "input[type='file']",
                         "[data-automation-id='file-upload-input-ref']",
+                        "input[data-automation-id*='file' i]",
                     ],
                 }
 
@@ -141,7 +187,48 @@ class WorkdayAdapter(BaseATSAdapter):
             result.filled_keys.extend(keys)
             result.fields_attempted += len([k for k, v in mapping.items() if v.get("value")])
 
-            # Selects / dropdowns (Workday often uses listboxes)
+            # Extra pass: any visible data-automation-id inputs still empty
+            try:
+                auto_ids = await page.evaluate(
+                    """() => Array.from(document.querySelectorAll('[data-automation-id]'))
+                      .filter(el => ['INPUT','TEXTAREA','SELECT'].includes(el.tagName) && !el.disabled)
+                      .map(el => el.getAttribute('data-automation-id'))
+                      .filter(Boolean)
+                      .slice(0, 40)"""
+                )
+                for aid in auto_ids or []:
+                    aid_l = aid.lower()
+                    value = None
+                    key = None
+                    if "firstname" in aid_l:
+                        value, key = applicant.get("first_name"), "first_name"
+                    elif "lastname" in aid_l:
+                        value, key = applicant.get("last_name"), "last_name"
+                    elif "email" in aid_l:
+                        value, key = applicant.get("email"), "email"
+                    elif "phone" in aid_l:
+                        value, key = applicant.get("phone"), "phone"
+                    if not value or (key and key in result.filled_keys):
+                        continue
+                    try:
+                        loc = page.locator(f"[data-automation-id='{aid}']").first
+                        if await loc.count():
+                            existing = ""
+                            try:
+                                existing = await loc.input_value()
+                            except Exception:
+                                pass
+                            if existing and str(existing).strip():
+                                continue
+                            await loc.fill(str(value))
+                            result.fields_filled += 1
+                            result.filled_keys.append(key or aid)
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+
+            # Selects / dropdowns
             selects = page.locator("select:visible")
             for i in range(min(await selects.count(), 10)):
                 try:
@@ -149,7 +236,16 @@ class WorkdayAdapter(BaseATSAdapter):
                     options = await sel.evaluate(
                         "el => Array.from(el.options).map(o => ({v:o.value,t:o.text.trim()}))"
                     )
-                    pick = next((o["v"] for o in options if o.get("v") and o.get("t") and o["t"].lower() not in ("", "select one")), None)
+                    pick = next(
+                        (
+                            o["v"]
+                            for o in options
+                            if o.get("v")
+                            and o.get("t")
+                            and o["t"].lower() not in ("", "select one", "select")
+                        ),
+                        None,
+                    )
                     if pick:
                         await sel.select_option(value=pick)
                         result.fields_filled += 1
@@ -161,15 +257,16 @@ class WorkdayAdapter(BaseATSAdapter):
 
             result.fields_filled += await self.answer_unlabeled_textareas(page, applicant, _ans)
 
-            # Next / Submit
+            # Multi-step Next / Submit
             next_clicked = False
             for sel in [
                 "[data-automation-id='bottom-navigation-next-button']",
                 "button[data-automation-id='pageFooterNextButton']",
+                "button[data-automation-id='bottom-navigation-next-button']",
                 "button:has-text('Next')",
                 "button:has-text('Continue')",
-                "button:has-text('Submit')",
                 "button:has-text('Save and Continue')",
+                "button:has-text('Submit')",
             ]:
                 try:
                     loc = page.locator(sel).first

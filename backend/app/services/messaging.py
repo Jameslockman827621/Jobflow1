@@ -13,10 +13,15 @@ import re
 from typing import Any, Dict, List, Optional
 
 import httpx
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _digits(phone: str) -> str:
+    return re.sub(r"\D", "", phone or "")
 
 
 class MessagingService:
@@ -84,7 +89,7 @@ class MessagingService:
 
     async def send(self, channel: str, to: str, body: str) -> Dict[str, Any]:
         channel = (channel or "").lower()
-        if channel in ("whatsapp", "wa"):
+        if channel in ("whatsapp", "wa", "twilio", "sms"):
             return await self.send_whatsapp(to, body)
         if channel in ("imessage", "imsg", "sms_imessage"):
             return await self.send_imessage(to, body)
@@ -102,17 +107,87 @@ class MessagingService:
             return {"command": cmd, "args": args}
         return {"command": "HELP", "args": [], "raw": text}
 
+    def _queue_apply_for_job(
+        self,
+        db: Session,
+        user_id: int,
+        job_id: int,
+    ) -> Dict[str, Any]:
+        """Create/find Application for job_id and queue headless apply_one."""
+        from app.models.application import Application
+        from app.models.job import Job
+        from app.tasks.headless_apply_tasks import apply_one
+
+        job = db.query(Job).filter(Job.id == job_id).first()
+        if not job:
+            return {"ok": False, "error": "job_not_found", "job_id": job_id}
+
+        application = (
+            db.query(Application)
+            .filter(Application.user_id == user_id, Application.job_id == job_id)
+            .first()
+        )
+        if not application:
+            application = Application(
+                user_id=user_id,
+                job_id=job_id,
+                status="ready_to_apply",
+                stage="not_started",
+                applied_via="messaging",
+            )
+            db.add(application)
+            db.commit()
+            db.refresh(application)
+        elif application.status in ("draft", None, ""):
+            application.status = "ready_to_apply"
+            db.commit()
+
+        task = apply_one.delay(user_id, application.id, auto_submit=False, dry_run=False)
+        return {
+            "ok": True,
+            "job_id": job_id,
+            "application_id": application.id,
+            "task_id": task.id,
+        }
+
+    def _status_counts(self, db: Session, user_id: int) -> Dict[str, int]:
+        from app.models.application import Application
+
+        apps = db.query(Application).filter(Application.user_id == user_id).all()
+        return {
+            "submitted": len([a for a in apps if a.status == "submitted"]),
+            "ready": len([a for a in apps if a.status == "ready_to_apply"]),
+            "interviews": len(
+                [a for a in apps if a.stage in ("phone_screen", "technical", "onsite")]
+            ),
+            "total": len(apps),
+        }
+
     async def handle_inbound(
         self,
         channel: str,
         from_number: str,
         body: str,
         user_context: Optional[Dict[str, Any]] = None,
+        *,
+        db: Optional[Session] = None,
+        user_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         parsed = self.parse_command(body)
         cmd = parsed["command"]
         args = parsed.get("args") or []
-        user_context = user_context or {}
+        user_context = dict(user_context or {})
+        queued: Optional[Dict[str, Any]] = None
+
+        # Refresh STATUS counts from DB when available
+        if db is not None and user_id is not None:
+            counts = self._status_counts(db, user_id)
+            user_context.setdefault("submitted", counts["submitted"])
+            user_context.setdefault("ready", counts["ready"])
+            user_context.setdefault("interviews", counts["interviews"])
+            user_context["submitted"] = counts["submitted"]
+            user_context["ready"] = counts["ready"]
+            user_context["interviews"] = counts["interviews"]
 
         if cmd == "HELP":
             reply = (
@@ -131,6 +206,21 @@ class MessagingService:
             )
         elif cmd == "JOBS":
             jobs = user_context.get("jobs") or []
+            if not jobs and db is not None and user_id is not None:
+                from app.models.application import Application
+                from app.models.job import Job
+
+                ready = (
+                    db.query(Application)
+                    .filter(Application.user_id == user_id, Application.status == "ready_to_apply")
+                    .limit(10)
+                    .all()
+                )
+                jobs = []
+                for a in ready:
+                    job = db.query(Job).filter(Job.id == a.job_id).first()
+                    if job:
+                        jobs.append({"id": job.id, "title": job.title, "company": job.company})
             if not jobs:
                 reply = "No ready-to-apply jobs. Open the dashboard to select roles."
             else:
@@ -140,12 +230,61 @@ class MessagingService:
             if not args:
                 reply = "Usage: APPLY <job_id>"
             else:
-                reply = f"Queued headless apply for job {args[0]}. I'll message you when it's filled."
+                try:
+                    job_id = int(args[0])
+                except (TypeError, ValueError):
+                    reply = "Usage: APPLY <job_id> (numeric id)"
+                else:
+                    if db is None or user_id is None:
+                        reply = (
+                            f"Queued headless apply for job {job_id}. "
+                            "I'll message you when it's filled."
+                        )
+                        user_context["pending_apply_job_id"] = job_id
+                    else:
+                        queued = self._queue_apply_for_job(db, user_id, job_id)
+                        if queued.get("ok"):
+                            reply = (
+                                f"Queued headless apply for job {job_id} "
+                                f"(application #{queued['application_id']}). "
+                                "I'll message you when it's filled."
+                            )
+                        else:
+                            reply = f"Could not queue apply for job {job_id}: {queued.get('error')}."
         else:
             reply = "Unknown command. Reply HELP for options."
 
         send_result = await self.send(channel, from_number, reply)
-        return {"ok": True, "command": cmd, "reply": reply, "send": send_result}
+        out: Dict[str, Any] = {
+            "ok": True,
+            "command": cmd,
+            "reply": reply,
+            "send": send_result,
+        }
+        if queued is not None:
+            out["queued"] = queued
+        return out
+
+    def lookup_user_by_phone(self, db: Session, from_number: str):
+        """Match Twilio From digits against CV.phone."""
+        from app.models.cv import CV
+        from app.models.user import User
+
+        target = _digits(from_number)
+        if not target:
+            return None
+        # Prefer last 10 digits for NA numbers
+        suffixes = {target}
+        if len(target) >= 10:
+            suffixes.add(target[-10:])
+        cvs = db.query(CV).filter(CV.phone.isnot(None)).all()
+        for cv in cvs:
+            digits = _digits(cv.phone or "")
+            if not digits:
+                continue
+            if digits in suffixes or digits[-10:] in suffixes or target.endswith(digits[-10:]):
+                return db.query(User).filter(User.id == cv.user_id).first()
+        return None
 
 
 messaging_service = MessagingService()

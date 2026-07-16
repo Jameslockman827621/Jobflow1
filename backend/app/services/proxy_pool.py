@@ -7,10 +7,12 @@ Configure PROXY_POOL as a comma-separated list of proxy URLs, e.g.:
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
 import itertools
 import random
 import threading
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 from urllib.parse import urlparse
 
 from fake_useragent import UserAgent
@@ -23,6 +25,32 @@ _lock = threading.Lock()
 _cycle = None
 
 
+# Playwright init script to reduce automation fingerprints
+stealth_init_script = """
+Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+Object.defineProperty(navigator, 'plugins', {
+  get: () => [1, 2, 3, 4, 5],
+});
+window.chrome = window.chrome || { runtime: {} };
+const originalQuery = window.navigator.permissions && window.navigator.permissions.query;
+if (originalQuery) {
+  window.navigator.permissions.query = (parameters) => (
+    parameters && parameters.name === 'notifications'
+      ? Promise.resolve({ state: Notification.permission })
+      : originalQuery(parameters)
+  );
+}
+"""
+
+
+async def human_delay(min_ms: int = 200, max_ms: int = 800) -> None:
+    """Async sleep for a human-like random delay between min_ms and max_ms."""
+    lo = max(0, int(min_ms))
+    hi = max(lo, int(max_ms))
+    await asyncio.sleep(random.uniform(lo, hi) / 1000.0)
+
+
 def _proxy_list() -> List[str]:
     raw = getattr(settings, "PROXY_POOL", None)
     if not raw:
@@ -30,6 +58,18 @@ def _proxy_list() -> List[str]:
     if isinstance(raw, list):
         return [p.strip() for p in raw if p and str(p).strip()]
     return [p.strip() for p in str(raw).split(",") if p.strip()]
+
+
+def sticky_proxy_for_user(user_id: Optional[Union[int, str]]) -> Optional[str]:
+    """Pick a stable proxy for a user via hash modulo pool size."""
+    proxies = _proxy_list()
+    if not proxies:
+        return None
+    if user_id is None:
+        return next_proxy()
+    digest = hashlib.sha256(str(user_id).encode("utf-8")).hexdigest()
+    idx = int(digest[:8], 16) % len(proxies)
+    return proxies[idx]
 
 
 def next_proxy() -> Optional[str]:
@@ -51,8 +91,14 @@ def httpx_proxies(proxy: Optional[str] = None) -> Optional[Dict[str, str]]:
     return {"http://": proxy, "https://": proxy}
 
 
-def playwright_proxy(proxy: Optional[str] = None) -> Optional[Dict]:
-    """Playwright launch proxy dict."""
+def playwright_proxy(
+    proxy: Optional[str] = None,
+    *,
+    user_id: Optional[Union[int, str]] = None,
+) -> Optional[Dict]:
+    """Playwright launch proxy dict. Prefer sticky proxy when user_id given."""
+    if proxy is None and user_id is not None:
+        proxy = sticky_proxy_for_user(user_id)
     proxy = proxy or next_proxy()
     if not proxy:
         return None
@@ -96,5 +142,5 @@ def pool_status() -> Dict:
     return {
         "enabled": bool(proxies),
         "count": len(proxies),
-        "rotation": "round_robin" if proxies else "none",
+        "rotation": "sticky_user_hash" if proxies else "none",
     }
