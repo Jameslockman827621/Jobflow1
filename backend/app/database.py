@@ -52,6 +52,7 @@ def init_db():
     stmts = [
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS auto_apply_submit BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS monitor_auto_queue BOOLEAN DEFAULT FALSE",
     ]
     try:
         with sync_engine.begin() as conn:

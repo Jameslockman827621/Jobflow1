@@ -161,6 +161,7 @@ function DashboardPage() {
   const [lastApplyRun, setLastApplyRun] = useState<ApplyRunSummary | null>(null);
   const [queueHeadless, setQueueHeadless] = useState(false);
   const [genuineSubmit, setGenuineSubmit] = useState(false);
+  const [monitorAutoQueue, setMonitorAutoQueue] = useState(false);
   const [boardConnect, setBoardConnect] = useState<{
     linkedin?: { connected: boolean; connect_url?: string };
     indeed?: { connected: boolean; connect_url?: string };
@@ -276,6 +277,7 @@ function DashboardPage() {
       if (settingsRes.ok) {
         const st = await settingsRes.json();
         setGenuineSubmit(!!st.auto_apply_submit);
+        setMonitorAutoQueue(!!st.monitor_auto_queue);
         if (st.auto_apply_submit) setQueueHeadless(true);
       }
       if (covRes.ok) {
@@ -878,6 +880,27 @@ function DashboardPage() {
                 />
                 <span>Genuinely submit for me</span>
                 <span className="text-xs text-slate-400 font-normal">(fills + submits when confirmed)</span>
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={monitorAutoQueue}
+                  onChange={async (e) => {
+                    const on = e.target.checked;
+                    setMonitorAutoQueue(on);
+                    try {
+                      await authFetch('/api/v1/apply-engine/settings', {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ monitor_auto_queue: on }),
+                      });
+                    } catch {
+                      /* non-blocking */
+                    }
+                  }}
+                  className="w-4 h-4 text-teal-500 border-slate-300 rounded focus:ring-teal-500 cursor-pointer"
+                />
+                <span>Auto-queue high-match monitored jobs</span>
               </label>
               <button
                 onClick={() => setSelectedJobs(new Set())}

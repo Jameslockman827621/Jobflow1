@@ -90,7 +90,7 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 - [ ] Sentry / OpenTelemetry
 - [x] Structured logging JSON
 - [x] Health check reports: DB, Redis, Celery workers, Playwright package
-- [ ] Secrets scanning; never log board cookies
+- [x] Secrets scanning; never log board cookies
 - [ ] Extension icons (real assets, not 1×1 PNG)
 - [x] CSRF for cookie-based flows if any; tighten CORS in production
 
@@ -100,9 +100,9 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 
 - [ ] Workday/Ashby deeper coverage beyond fixtures
 - [x] Answer bank UX in dashboard (CRUD)
-- [ ] Per-company sticky fingerprint already exists — document + test under concurrency
+- [x] Per-company sticky fingerprint already exists — document + test under concurrency
 - [x] Stale run sweeper metrics endpoint for ops
-- [ ] Company career-page monitor → auto-queue high-match jobs (opt-in)
+- [x] Company career-page monitor → auto-queue high-match jobs (opt-in)
 
 ---
 

@@ -12,6 +12,8 @@ from app.middleware.rate_limit import RateLimitMiddleware
 def _configure_logging() -> None:
     """JSON structured logging when structlog is available; else stdlib."""
     level = logging.DEBUG if settings.DEBUG else logging.INFO
+    from app.core.log_redact import install_redacting_filter
+
     try:
         import structlog
 
@@ -38,9 +40,30 @@ def _configure_logging() -> None:
             level=level,
             format="%(asctime)s %(levelname)s %(name)s %(message)s",
         )
+    install_redacting_filter()
+
+
+def _configure_sentry() -> None:
+    dsn = (getattr(settings, "SENTRY_DSN", None) or "").strip()
+    if not dsn:
+        return
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+        from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+
+        sentry_sdk.init(
+            dsn=dsn,
+            environment=settings.ENVIRONMENT,
+            traces_sample_rate=0.1 if settings.ENVIRONMENT == "production" else 0.0,
+            integrations=[FastApiIntegration(), SqlalchemyIntegration()],
+        )
+    except Exception as exc:
+        logging.getLogger("jobscale").warning("Sentry init skipped: %s", exc)
 
 
 _configure_logging()
+_configure_sentry()
 
 
 @asynccontextmanager

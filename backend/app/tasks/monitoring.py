@@ -57,42 +57,8 @@ def _jobs_fingerprint(jobs: List[JobData]) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _on_new_jobs_detected(
-    company: MonitoredCompany,
-    saved: int,
-    fingerprint: str,
-    previous_fingerprint: Optional[str],
-) -> None:
-    """Lightweight hook when new jobs are persisted for a monitored company."""
-    meta = {
-        "company": company.slug,
-        "ats_type": company.ats_type,
-        "new_jobs": saved,
-        "fingerprint": fingerprint[:12],
-        "previous": (previous_fingerprint or "")[:12] or None,
-        "changed": previous_fingerprint is not None and previous_fingerprint != fingerprint,
-    }
-    print(f"[monitor] new jobs detected: {meta}")
-    try:
-        from app.tasks.alerts import send_daily_job_alerts
-        # Queue a lightweight alert refresh when boards change (best-effort)
-        send_daily_job_alerts.delay()
-    except Exception as exc:
-        print(f"[monitor] alert queue skipped: {exc}")
-
-
-def _ensure_source(db, name: str, base_url: str = "") -> JobSource:
-    source = db.query(JobSource).filter_by(name=name).first()
-    if not source:
-        source = JobSource(name=name, base_url=base_url)
-        db.add(source)
-        db.commit()
-        db.refresh(source)
-    return source
-
-
-def _persist_jobs(db, source: JobSource, jobs: List[JobData]) -> int:
-    saved = 0
+def _persist_jobs(db, source: JobSource, jobs: List[JobData]) -> List[int]:
+    saved_ids: List[int] = []
     for job_data in jobs:
         if job_data.external_id:
             existing = db.query(Job).filter_by(
@@ -109,30 +75,82 @@ def _persist_jobs(db, source: JobSource, jobs: List[JobData]) -> int:
             ).first()
             if existing:
                 continue
-        db.add(
-            Job(
-                source_id=source.id,
-                external_id=job_data.external_id,
-                external_url=job_data.external_url,
-                title=job_data.title,
-                company=job_data.company,
-                location=job_data.location,
-                remote=job_data.remote,
-                hybrid=job_data.hybrid,
-                description=job_data.description,
-                department=job_data.department,
-                seniority=job_data.seniority,
-                min_salary=job_data.min_salary,
-                max_salary=job_data.max_salary,
-                scraped_at=datetime.utcnow(),
-                posted_date=job_data.posted_date,
-                is_active=True,
-            )
+        row = Job(
+            source_id=source.id,
+            external_id=job_data.external_id,
+            external_url=job_data.external_url,
+            title=job_data.title,
+            company=job_data.company,
+            location=job_data.location,
+            remote=job_data.remote,
+            hybrid=job_data.hybrid,
+            description=job_data.description,
+            department=job_data.department,
+            seniority=job_data.seniority,
+            min_salary=job_data.min_salary,
+            max_salary=job_data.max_salary,
+            scraped_at=datetime.utcnow(),
+            posted_date=job_data.posted_date,
+            is_active=True,
         )
-        saved += 1
-    if saved:
+        db.add(row)
+        db.flush()
+        saved_ids.append(row.id)
+    if saved_ids:
         db.commit()
-    return saved
+    return saved_ids
+
+
+def _on_new_jobs_detected(
+    company: MonitoredCompany,
+    saved_ids: List[int],
+    fingerprint: str,
+    previous_fingerprint: Optional[str],
+) -> None:
+    """Lightweight hook when new jobs are persisted for a monitored company."""
+    meta = {
+        "company": company.slug,
+        "ats_type": company.ats_type,
+        "new_jobs": len(saved_ids),
+        "fingerprint": fingerprint[:12],
+        "previous": (previous_fingerprint or "")[:12] or None,
+        "changed": previous_fingerprint is not None and previous_fingerprint != fingerprint,
+    }
+    print(f"[monitor] new jobs detected: {meta}")
+    try:
+        from app.tasks.alerts import send_daily_job_alerts
+        send_daily_job_alerts.delay()
+    except Exception as exc:
+        print(f"[monitor] alert queue skipped: {exc}")
+
+    # Opt-in users: queue high-match jobs onto auto-apply list
+    if saved_ids and previous_fingerprint is not None and previous_fingerprint != fingerprint:
+        try:
+            from app.database import SessionLocal
+            from app.services.monitor_auto_queue import auto_queue_new_jobs_for_opted_in_users
+
+            db = SessionLocal()
+            try:
+                result = auto_queue_new_jobs_for_opted_in_users(
+                    db,
+                    company_name=company.name or company.slug,
+                    job_ids=saved_ids,
+                )
+                print(f"[monitor] auto_queue: {result}")
+            finally:
+                db.close()
+        except Exception as exc:
+            print(f"[monitor] auto_queue skipped: {exc}")
+
+
+def _ensure_source(db, name: str, base_url: str = "") -> JobSource:
+    source = db.query(JobSource).filter_by(name=name).first()
+    if not source:
+        source = JobSource(name=name, base_url=base_url)
+        db.add(source)
+        db.commit()
+        db.refresh(source)
+    return source
 
 
 def _scrape_priority(priority: str, limit: int = 50) -> dict:
@@ -166,7 +184,7 @@ def _scrape_priority(priority: str, limit: int = 50) -> dict:
             try:
                 jobs = _run_async(scraper.scrape_company_jobs(company.slug))
                 source = _ensure_source(db, company.ats_type, getattr(scraper, "base_url", ""))
-                saved = _persist_jobs(db, source, jobs)
+                saved_ids = _persist_jobs(db, source, jobs)
                 fingerprint = _jobs_fingerprint(jobs)
                 previous = company.last_fingerprint
                 if previous != fingerprint:
@@ -175,11 +193,11 @@ def _scrape_priority(priority: str, limit: int = 50) -> dict:
                 elapsed_ms = (time.time() - started) * 1000
                 mark_scraped(db, company, len(jobs), elapsed_ms=elapsed_ms, failed=False)
                 db.commit()
-                if saved > 0:
-                    _on_new_jobs_detected(company, saved, fingerprint, previous)
+                if saved_ids:
+                    _on_new_jobs_detected(company, saved_ids, fingerprint, previous)
                 totals["companies"] += 1
                 totals["jobs_found"] += len(jobs)
-                totals["jobs_saved"] += saved
+                totals["jobs_saved"] += len(saved_ids)
             except Exception as exc:
                 mark_scraped(db, company, 0, failed=True)
                 db.commit()

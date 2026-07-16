@@ -77,7 +77,8 @@ class ApplyReportRequest(BaseModel):
 
 
 class AutoApplySettingsUpdate(BaseModel):
-    auto_apply_submit: bool
+    auto_apply_submit: Optional[bool] = None
+    monitor_auto_queue: Optional[bool] = None
 
 
 class HeadlessRetryRequest(BaseModel):
@@ -113,9 +114,11 @@ async def get_auto_apply_settings(
             pass
     completeness = profile_completeness(payload)
     opted_in = bool(getattr(current_user, "auto_apply_submit", False))
+    monitor_q = bool(getattr(current_user, "monitor_auto_queue", False))
 
     return {
         "auto_apply_submit": opted_in,
+        "monitor_auto_queue": monitor_q,
         "platform_allows_submit": bool(getattr(settings, "HEADLESS_APPLY_AUTO_SUBMIT", True)),
         "headless_enabled": bool(getattr(settings, "HEADLESS_APPLY_ENABLED", True)),
         "captcha_available": captcha_service.available,
@@ -139,20 +142,22 @@ async def update_auto_apply_settings(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Opt in/out of genuine submit auto-apply (required for world-class unattended apply)."""
+    """Opt in/out of genuine submit auto-apply and monitored-job auto-queue."""
     user = db.query(User).filter(User.id == current_user.id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    user.auto_apply_submit = bool(body.auto_apply_submit)
+    if body.auto_apply_submit is not None:
+        user.auto_apply_submit = bool(body.auto_apply_submit)
+    if body.monitor_auto_queue is not None:
+        user.monitor_auto_queue = bool(body.monitor_auto_queue)
     db.commit()
     db.refresh(user)
     return {
         "ok": True,
-        "auto_apply_submit": user.auto_apply_submit,
+        "auto_apply_submit": bool(user.auto_apply_submit),
+        "monitor_auto_queue": bool(user.monitor_auto_queue),
         "message": (
-            "Genuine auto-apply enabled. Headless runs with auto_submit will submit for you."
-            if user.auto_apply_submit
-            else "Genuine auto-apply disabled. Forms will be filled but not submitted."
+            "Settings updated."
         ),
     }
 

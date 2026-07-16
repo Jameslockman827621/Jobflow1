@@ -27,6 +27,8 @@ class User(Base, TimestampMixin):
     is_employed = Column(Boolean, default=False)
     # Genuine auto-apply: when True, headless worker may SUBMIT forms for the user
     auto_apply_submit = Column(Boolean, default=False)
+    # Opt-in: when monitored career pages post new jobs, auto-add high-match ones to auto-apply list
+    monitor_auto_queue = Column(Boolean, default=False)
     
     # Relationships
     profile = relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
