@@ -85,9 +85,24 @@ async def run_headless_apply(
     ats = package.get("ats") or detect_ats(job.external_url or "")
     if ats in ("generic", "", None) and job.source is not None:
         src = (getattr(job.source, "name", None) or "").lower()
-        if src in ("greenhouse", "lever", "ashby", "workday", "workable"):
+        if src in (
+            "greenhouse",
+            "lever",
+            "ashby",
+            "workday",
+            "workable",
+            "linkedin",
+            "indeed",
+        ):
             ats = src
             package["ats"] = ats
+
+    from app.services.board_classify import classify_url
+
+    board_info = classify_url(job.external_url or "")
+    if ats in ("generic", "", None) and board_info.get("ats"):
+        ats = board_info["ats"]
+        package["ats"] = ats
 
     cv = None
     if application.cv_id:
@@ -206,6 +221,23 @@ async def run_headless_apply(
     screenshot_path = None
     last_error = None
     result = None
+    storage_state_path = None
+
+    # Load LinkedIn/Indeed browser session when available
+    if board_info.get("needs_session") or ats in ("linkedin", "indeed"):
+        try:
+            from app.services.board_session import (
+                get_board_session,
+                touch_last_used,
+                write_storage_state_file,
+            )
+
+            sess = get_board_session(db, user.id, ats if ats in ("linkedin", "indeed") else board_info.get("board"))
+            if sess:
+                storage_state_path = write_storage_state_file(sess)
+                touch_last_used(db, sess)
+        except Exception as exc:
+            logger.warning("board session load failed: %s", exc)
 
     for attempt in range(2):  # retry once on timeout
         page = None
@@ -219,11 +251,14 @@ async def run_headless_apply(
                     proxy=proxy,
                     args=["--disable-blink-features=AutomationControlled"],
                 )
-                context = await browser.new_context(
-                    user_agent=headers.get("User-Agent"),
-                    locale="en-US",
-                    extra_http_headers={k: v for k, v in headers.items() if k != "User-Agent"},
-                )
+                ctx_kwargs = {
+                    "user_agent": headers.get("User-Agent"),
+                    "locale": "en-US",
+                    "extra_http_headers": {k: v for k, v in headers.items() if k != "User-Agent"},
+                }
+                if storage_state_path:
+                    ctx_kwargs["storage_state"] = storage_state_path
+                context = await browser.new_context(**ctx_kwargs)
                 page = await context.new_page()
                 await page.add_init_script(stealth_init_script)
                 await human_delay(300, 900)
@@ -280,11 +315,20 @@ async def run_headless_apply(
         }
 
     # Captcha unsolved → needs_user (not a separate captcha status for user-facing)
+    # Already-applied on LinkedIn/Indeed: treat as non-error filled/skipped
+    already = bool((result.meta or {}).get("already_applied") or (result.meta or {}).get("skipped"))
     if result.submitted:
         status = "submitted"
         application.status = "submitted"
         application.stage = "applied"
         application.submitted_at = datetime.utcnow()
+        application.applied_via = "headless"
+    elif already:
+        status = "filled"
+        application.status = "submitted" if (result.meta or {}).get("already_applied") else "in_progress"
+        if (result.meta or {}).get("already_applied"):
+            application.stage = "applied"
+            application.submitted_at = application.submitted_at or datetime.utcnow()
         application.applied_via = "headless"
     elif result.captcha_present and not result.captcha_solved:
         status = "needs_user"
@@ -302,6 +346,9 @@ async def run_headless_apply(
 
     meta = result.to_dict()
     meta["resume_local_path"] = applicant.get("resume_local_path")
+    meta["board"] = board_info
+    meta["apply_mode"] = (result.meta or {}).get("apply_mode") or board_info.get("apply_mode")
+    meta["session_used"] = bool(storage_state_path)
     if batch_id:
         meta["batch_id"] = batch_id
     meta["submit_policy"] = {

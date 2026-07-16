@@ -254,11 +254,11 @@ def build_fill_plan(payload: Dict[str, Any], ats: str) -> Dict[str, Any]:
         {"key": "cover_letter", "strategies": ["textarea", "label"], "type": "textarea"},
     ]
 
-    multi_step = ats in ("workday", "workable", "greenhouse")
+    multi_step = ats in ("workday", "workable", "greenhouse", "linkedin", "indeed", "generic")
     return {
         "ats": ats,
         "multi_step": multi_step,
-        "max_steps": 6 if ats == "workday" else 4,
+        "max_steps": 8 if ats in ("linkedin", "workday") else (6 if ats == "indeed" else 4),
         "auto_submit": False,  # user confirm by default; headless can override
         "field_types_supported": [
             "text", "email", "tel", "url", "textarea", "select", "radio",
@@ -331,10 +331,21 @@ def build_apply_package(
 
     completeness = profile_completeness(payload)
     ats = detect_ats(job.external_url or "")
+    from app.services.board_classify import classify_url
+    from app.services.board_session import get_board_session
+
+    board = classify_url(job.external_url or "")
+    if ats in ("generic", "") and board.get("ats"):
+        ats = board["ats"]
     plan = build_fill_plan(payload, ats)
     # Extension may genuinely submit when user opted in
     plan["auto_submit"] = bool(getattr(user, "auto_apply_submit", False))
     plan["genuine_submit"] = bool(getattr(user, "auto_apply_submit", False))
+    plan["apply_mode"] = board.get("apply_mode")
+
+    session_ok = False
+    if board.get("needs_session") and ats in ("linkedin", "indeed"):
+        session_ok = bool(get_board_session(db, user.id, ats))
 
     return {
         "application_id": application.id if application else None,
@@ -343,6 +354,7 @@ def build_apply_package(
         "job_title": job.title,
         "company": job.company,
         "ats": ats,
+        "board": board,
         "applicant": payload,
         "fill_plan": plan,
         "profile_completeness": completeness,
@@ -360,5 +372,9 @@ def build_apply_package(
             ),
             "headless": True,
             "genuine_submit": bool(getattr(user, "auto_apply_submit", False)),
+            "easy_apply": ats in ("linkedin", "indeed"),
+            "board_session": session_ok,
+            "needs_session": bool(board.get("needs_session")),
+            "handoff": True,
         },
     }

@@ -39,6 +39,8 @@
 | CAPTCHA solve in prod | Wired for all adapters; real boards need `TWOCAPTCHA_API_KEY` (mock won’t pass employers) |
 | Live employer auto-submit | Proven on fixtures; **not** load-tested against real boards (don’t spam) |
 | Workday account walls | Guest / Apply Manually heuristics improved; many boards still need user login |
+| LinkedIn / Indeed live | Adapters + session API + fixtures proven; live Easy Apply needs `storage_state` upload |
+| Company sites | Generic + ATS handoff; quirky custom forms may still need the user |
 | WhatsApp / iMessage | Twilio + bridge adapters; need credentials |
 | Proxy evasion | Pool ready; empty without `PROXY_POOL` |
 | Hundreds of successful submits/user | Quotas + fan-out ready; measure after keys + worker deploy |

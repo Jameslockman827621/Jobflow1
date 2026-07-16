@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Careers — Direct Apply Corp</title>
+</head>
+<body>
+  <h1>Apply at DirectCorp</h1>
+  <form id="company-form" onsubmit="return coSubmit(event)">
+    <label>First name</label>
+    <input id="jobscale-co-first" autocomplete="given-name" required />
+    <label>Last name</label>
+    <input id="jobscale-co-last" autocomplete="family-name" required />
+    <label>Email</label>
+    <input id="jobscale-co-email" type="email" required />
+    <button type="submit" id="submit_app">Submit application</button>
+  </form>
+  <div id="confirmation" style="display:none">
+    <h2>Thank you for applying</h2>
+    <p>We've received your application.</p>
+  </div>
+  <script>
+    function coSubmit(e) {
+      e.preventDefault();
+      document.getElementById('company-form').style.display = 'none';
+      document.getElementById('confirmation').style.display = 'block';
+      history.pushState({}, '', location.pathname + '?submitted=true');
+      return false;
+    }
+  </script>
+</body>
+</html>

@@ -5,6 +5,9 @@ from .greenhouse import GreenhouseAdapter
 from .lever import LeverAdapter
 from .ashby import AshbyAdapter
 from .workday import WorkdayAdapter
+from .workable import WorkableAdapter
+from .linkedin import LinkedInAdapter
+from .indeed import IndeedAdapter
 from .generic import GenericAdapter
 
 __all__ = [
@@ -15,5 +18,8 @@ __all__ = [
     "LeverAdapter",
     "AshbyAdapter",
     "WorkdayAdapter",
+    "WorkableAdapter",
+    "LinkedInAdapter",
+    "IndeedAdapter",
     "GenericAdapter",
 ]

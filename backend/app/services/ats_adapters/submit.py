@@ -18,6 +18,12 @@ CONFIRMATION_PATTERNS = [
     r"you applied",
     r"thanks for your interest",
     r"your application has been received",
+    # LinkedIn Easy Apply
+    r"application sent",
+    r"your application was submitted",
+    # Indeed
+    r"your application has been submitted",
+    r"application submitted",
 ]
 
 SUBMIT_BUTTON_TEXTS = [

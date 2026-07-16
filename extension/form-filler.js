@@ -419,6 +419,61 @@
     return false;
   }
 
+  function fillLinkedIn(applicant) {
+    let n = 0;
+    // Click Easy Apply if present
+    const easy = document.querySelector(
+      "button.jobs-apply-button, button[aria-label*='Easy Apply' i], #jobscale-easy-apply"
+    );
+    if (easy && !easy.disabled) {
+      easy.click();
+      n += 1;
+    }
+    const pairs = [
+      ["#jobscale-li-first", applicant.first_name],
+      ["#jobscale-li-last", applicant.last_name],
+      ["#jobscale-li-email", applicant.email],
+      ["#jobscale-li-phone", applicant.phone],
+      ["input[id*='firstName' i]", applicant.first_name],
+      ["input[id*='lastName' i]", applicant.last_name],
+      ["input[type='email']", applicant.email],
+      ["input[type='tel']", applicant.phone],
+    ];
+    for (const [sel, val] of pairs) {
+      if (fillByIdOrSel(sel, val)) n += 1;
+    }
+    return n;
+  }
+
+  function fillIndeed(applicant) {
+    let n = 0;
+    const applyBtn = document.querySelector(
+      "#jobscale-indeed-apply, #indeedApplyButton, button.ia-IndeedApplyButton"
+    );
+    if (applyBtn && !applyBtn.disabled) {
+      // Prefer Indeed Apply text buttons
+      const buttons = Array.from(document.querySelectorAll('button'));
+      const indeedApply = buttons.find((b) => /indeed apply|apply now/i.test(b.innerText || ''));
+      if (indeedApply) indeedApply.click();
+      else applyBtn.click();
+      n += 1;
+    }
+    const pairs = [
+      ["#jobscale-indeed-name", applicant.full_name],
+      ["#jobscale-indeed-first", applicant.first_name],
+      ["#jobscale-indeed-last", applicant.last_name],
+      ["#jobscale-indeed-email", applicant.email],
+      ["#jobscale-indeed-phone", applicant.phone],
+      ["input[name='name']", applicant.full_name],
+      ["input[type='email']", applicant.email],
+      ["input[type='tel']", applicant.phone],
+    ];
+    for (const [sel, val] of pairs) {
+      if (fillByIdOrSel(sel, val)) n += 1;
+    }
+    return n;
+  }
+
   function fillAshby(applicant) {
     let n = 0;
     const pairs = [
@@ -524,6 +579,8 @@
     else if (ats === 'lever') filled += fillLever(applicant);
     else if (ats === 'ashby') filled += fillAshby(applicant);
     else if (ats === 'workday') filled += fillWorkday(applicant);
+    else if (ats === 'linkedin') filled += fillLinkedIn(applicant);
+    else if (ats === 'indeed') filled += fillIndeed(applicant);
 
     // Resume PDF upload (required by most ATS)
     if (applicant.cv_id || applicant.cv_download_url) {
@@ -614,7 +671,8 @@
       fields += result.filled;
       lastCaptcha = result.captcha;
       showToast(`JobScale: filled step ${steps} (${result.filled} fields)`);
-      if (!plan.multi_step && detectATS() !== 'workday' && detectATS() !== 'greenhouse') break;
+      const atsNow = detectATS();
+      if (!plan.multi_step && !['workday', 'greenhouse', 'linkedin', 'indeed'].includes(atsNow)) break;
       await sleep(800);
       const advanced = clickNext(plan);
       if (!advanced) break;
@@ -714,6 +772,8 @@
     fillPage,
     fillAshby,
     fillGreenhouse,
+    fillLinkedIn,
+    fillIndeed,
     runMultiStep,
     autoFillFromJobScale,
     reportApply,

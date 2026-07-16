@@ -202,6 +202,8 @@ def get_adapter(ats: str) -> BaseATSAdapter:
     from .ashby import AshbyAdapter
     from .workday import WorkdayAdapter
     from .workable import WorkableAdapter
+    from .linkedin import LinkedInAdapter
+    from .indeed import IndeedAdapter
     from .generic import GenericAdapter
 
     ats = (ats or "generic").lower()
@@ -211,7 +213,10 @@ def get_adapter(ats: str) -> BaseATSAdapter:
         "ashby": AshbyAdapter,
         "workday": WorkdayAdapter,
         "workable": WorkableAdapter,
+        "linkedin": LinkedInAdapter,
+        "indeed": IndeedAdapter,
         "generic": GenericAdapter,
+        "company_site": GenericAdapter,
     }
     cls = mapping.get(ats, GenericAdapter)
     return cls()

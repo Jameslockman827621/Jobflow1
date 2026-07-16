@@ -536,6 +536,99 @@ async def report_extension_apply(
     }
 
 
+class BoardSessionUpsert(BaseModel):
+    storage_state: dict
+    label: Optional[str] = None
+
+
+@router.get("/board-sessions")
+async def list_sessions(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List LinkedIn/Indeed login sessions for headless Easy Apply."""
+    from app.services.board_session import list_board_sessions
+
+    return {"sessions": list_board_sessions(db, current_user.id)}
+
+
+@router.get("/board-sessions/{board}")
+async def get_session(
+    board: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from app.services.board_session import get_board_session
+
+    row = get_board_session(db, current_user.id, board)
+    if not row:
+        raise HTTPException(status_code=404, detail="No session for board")
+    return {
+        "board": row.board,
+        "label": row.label,
+        "is_valid": bool(row.is_valid),
+        "has_storage_state": True,
+        "last_used_at": row.last_used_at.isoformat() if row.last_used_at else None,
+        "expires_at": row.expires_at.isoformat() if row.expires_at else None,
+    }
+
+
+@router.put("/board-sessions/{board}")
+async def put_session(
+    board: str,
+    body: BoardSessionUpsert,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Upload Playwright storage_state JSON for LinkedIn or Indeed.
+    Export via: await context.storage_state() in a logged-in browser.
+    """
+    from app.services.board_session import upsert_board_session
+
+    try:
+        row = upsert_board_session(
+            db,
+            current_user.id,
+            board,
+            body.storage_state,
+            label=body.label,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {
+        "ok": True,
+        "board": row.board,
+        "label": row.label,
+        "message": f"{row.board} session saved — headless Easy Apply can use it.",
+    }
+
+
+@router.delete("/board-sessions/{board}")
+async def delete_session(
+    board: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from app.services.board_session import delete_board_session
+
+    ok = delete_board_session(db, current_user.id, board)
+    if not ok:
+        raise HTTPException(status_code=404, detail="No session for board")
+    return {"ok": True, "deleted": board}
+
+
+@router.get("/board-classify")
+async def board_classify_endpoint(
+    url: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Preview how a job URL will be routed (Easy Apply / handoff / ATS)."""
+    from app.services.board_classify import classify_url
+
+    return classify_url(url)
+
+
 @router.get("/messaging/status")
 async def messaging_status(current_user: User = Depends(get_current_user)):
     return messaging_service.status()
