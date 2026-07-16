@@ -111,4 +111,11 @@ beat_schedule = {
         "task": "app.tasks.on_demand_search.clean_expired_cache",
         "schedule": crontab(minute=0, hour=3),
     },
+
+    # Fail stuck headless ApplyRuns (worker kill / OOM) every 5 minutes
+    "fail-stale-apply-runs": {
+        "task": "app.tasks.headless_apply_tasks.fail_stale_apply_runs",
+        "schedule": 300.0,
+        "kwargs": {"max_age_minutes": 15},
+    },
 }

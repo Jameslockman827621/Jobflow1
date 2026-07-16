@@ -212,8 +212,13 @@ class AshbyAdapter(BaseATSAdapter):
         result.meta["core_ok"] = core_fields_ok(result.filled_keys) or bool(
             set(result.filled_keys) & {"email", "label_email", "full_name"}
         )
+        async def _refill():
+            more, more_keys = await self.fill_by_selectors(page, mapping)
+            result.fields_filled += more
+            result.filled_keys.extend(more_keys)
+
         if auto_submit:
-            await attempt_genuine_submit_gated(page, result, applicant)
+            await attempt_genuine_submit_gated(page, result, applicant, refill_fn=_refill)
         else:
             result.needs_user = True
         result.page_url = page.url

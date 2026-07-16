@@ -53,6 +53,7 @@ async def run_headless_apply(
     application_id: int,
     auto_submit: bool = False,
     dry_run: bool = False,
+    batch_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     application = (
         db.query(Application)
@@ -61,6 +62,18 @@ async def run_headless_apply(
     )
     if not application:
         return {"ok": False, "error": "application_not_found"}
+
+    # Idempotency: never re-submit an already-submitted application
+    if application.status == "submitted" and not dry_run:
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": "already_submitted",
+            "application_id": application.id,
+            "status": "submitted",
+            "genuine_apply": True,
+            "submitted": True,
+        }
 
     job = db.query(Job).filter(Job.id == application.job_id).first()
     if not job or not job.external_url:
@@ -103,6 +116,7 @@ async def run_headless_apply(
         ats_type=ats,
         status="running",
         started_at=datetime.utcnow(),
+        meta_json=json.dumps({"batch_id": batch_id} if batch_id else {}),
     )
     db.add(run)
     db.commit()
@@ -117,6 +131,7 @@ async def run_headless_apply(
         run.meta_json = json.dumps(
             {
                 "dry_run": True,
+                "batch_id": batch_id,
                 "package_ats": ats,
                 "adapter": adapter.name,
                 "max_steps": adapter.max_steps,
@@ -197,7 +212,7 @@ async def run_headless_apply(
         browser = None
         try:
             proxy = playwright_proxy(user_id=user.id)
-            headers = fingerprint_headers()
+            headers = fingerprint_headers(user_id=user.id)
             async with async_playwright() as p:
                 browser = await p.chromium.launch(
                     headless=True,
@@ -287,6 +302,8 @@ async def run_headless_apply(
 
     meta = result.to_dict()
     meta["resume_local_path"] = applicant.get("resume_local_path")
+    if batch_id:
+        meta["batch_id"] = batch_id
     meta["submit_policy"] = {
         "requested_auto_submit": bool(auto_submit),
         "user_auto_apply_submit": user_allows_submit,
@@ -351,7 +368,7 @@ async def live_fill_url(
 
     ats = ats or detect_ats(url)
     adapter = get_adapter(ats)
-    headers = fingerprint_headers()
+    headers = fingerprint_headers(user_id=user_id or None)
     proxy = playwright_proxy(user_id=user_id or None)
     async with async_playwright() as p:
         browser = await p.chromium.launch(

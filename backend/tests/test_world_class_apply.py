@@ -188,18 +188,20 @@ def test_batch_fans_out_tasks(monkeypatch):
         def __init__(self, tid):
             self.id = tid
 
-    def fake_delay(*args, **kwargs):
+    def fake_apply_async(*args, **kwargs):
         tid = f"task-{len(queued)+1}"
         queued.append({"args": args, "kwargs": kwargs, "id": tid})
         return FakeAsyncResult(tid)
 
     monkeypatch.setattr(
-        "app.tasks.headless_apply_tasks.apply_one.delay", fake_delay
+        "app.tasks.headless_apply_tasks.apply_one.apply_async", fake_apply_async
     )
     out = apply_batch(1, [10, 11, 12], auto_submit=True, dry_run=False, max_per_batch=50)
     assert out["fan_out"] is True
     assert out["total"] == 3
+    assert out["batch_id"]
     assert len(queued) == 3
+    assert queued[0]["kwargs"].get("queue") == "apply"
 
 
 def test_settings_exposes_genuine_ready(client):

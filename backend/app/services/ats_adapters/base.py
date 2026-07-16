@@ -201,6 +201,7 @@ def get_adapter(ats: str) -> BaseATSAdapter:
     from .lever import LeverAdapter
     from .ashby import AshbyAdapter
     from .workday import WorkdayAdapter
+    from .workable import WorkableAdapter
     from .generic import GenericAdapter
 
     ats = (ats or "generic").lower()
@@ -209,7 +210,7 @@ def get_adapter(ats: str) -> BaseATSAdapter:
         "lever": LeverAdapter,
         "ashby": AshbyAdapter,
         "workday": WorkdayAdapter,
-        "workable": GenericAdapter,
+        "workable": WorkableAdapter,
         "generic": GenericAdapter,
     }
     cls = mapping.get(ats, GenericAdapter)

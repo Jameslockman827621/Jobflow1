@@ -12,7 +12,7 @@ import hashlib
 import itertools
 import random
 import threading
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Set, Union
 from urllib.parse import urlparse
 
 from fake_useragent import UserAgent
@@ -23,6 +23,7 @@ from app.core.config import settings
 _UA = UserAgent()
 _lock = threading.Lock()
 _cycle = None
+_dead_proxies: Set[str] = set()
 
 
 # Playwright init script to reduce automation fingerprints
@@ -56,8 +57,18 @@ def _proxy_list() -> List[str]:
     if not raw:
         return []
     if isinstance(raw, list):
-        return [p.strip() for p in raw if p and str(p).strip()]
-    return [p.strip() for p in str(raw).split(",") if p.strip()]
+        proxies = [p.strip() for p in raw if p and str(p).strip()]
+    else:
+        proxies = [p.strip() for p in str(raw).split(",") if p.strip()]
+    with _lock:
+        return [p for p in proxies if p not in _dead_proxies]
+
+
+def mark_proxy_dead(proxy: str) -> None:
+    if not proxy:
+        return
+    with _lock:
+        _dead_proxies.add(proxy)
 
 
 def sticky_proxy_for_user(user_id: Optional[Union[int, str]]) -> Optional[str]:
@@ -111,19 +122,50 @@ def playwright_proxy(
     return cfg
 
 
-def fingerprint_headers() -> Dict[str, str]:
-    """Realistic browser headers to reduce fingerprinting signals."""
-    chrome_ver = random.choice(["120", "121", "122", "123", "124", "125"])
-    platforms = [
-        '"Windows"',
-        '"macOS"',
-        '"Linux"',
-    ]
-    platform = random.choice(platforms)
+def _stable_rng(seed: str) -> random.Random:
+    digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
+    return random.Random(int(digest[:16], 16))
+
+
+def fingerprint_headers(user_id: Optional[Union[int, str]] = None) -> Dict[str, str]:
+    """
+    Realistic browser headers. When user_id is set, UA/platform are sticky
+    so sticky proxies don't rotate fingerprints mid-session.
+    """
+    rng = _stable_rng(f"fp:{user_id}") if user_id is not None else random.Random()
+    chrome_ver = rng.choice(["120", "121", "122", "123", "124", "125"])
+    platforms = ['"Windows"', '"macOS"', '"Linux"']
+    platform = rng.choice(platforms)
+    try:
+        ua = _UA.chrome
+    except Exception:
+        ua = (
+            f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            f"(KHTML, like Gecko) Chrome/{chrome_ver}.0.0.0 Safari/537.36"
+        )
+    # Make sticky UA when user_id present by templating chrome ver into a stable base
+    if user_id is not None:
+        if platform == '"Windows"':
+            ua = (
+                f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                f"(KHTML, like Gecko) Chrome/{chrome_ver}.0.0.0 Safari/537.36"
+            )
+        elif platform == '"macOS"':
+            ua = (
+                f"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                f"(KHTML, like Gecko) Chrome/{chrome_ver}.0.0.0 Safari/537.36"
+            )
+        else:
+            ua = (
+                f"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                f"(KHTML, like Gecko) Chrome/{chrome_ver}.0.0.0 Safari/537.36"
+            )
+
+    lang = rng.choice(["en-US,en;q=0.9", "en-GB,en;q=0.9", "en-US,en;q=0.8"])
     return {
-        "User-Agent": _UA.random,
+        "User-Agent": ua,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language": random.choice(["en-US,en;q=0.9", "en-GB,en;q=0.9", "en-US,en;q=0.8"]),
+        "Accept-Language": lang,
         "Accept-Encoding": "gzip, deflate, br",
         "Sec-Ch-Ua": f'"Chromium";v="{chrome_ver}", "Google Chrome";v="{chrome_ver}", "Not-A.Brand";v="99"',
         "Sec-Ch-Ua-Mobile": "?0",
@@ -139,8 +181,12 @@ def fingerprint_headers() -> Dict[str, str]:
 
 def pool_status() -> Dict:
     proxies = _proxy_list()
+    with _lock:
+        dead = len(_dead_proxies)
     return {
         "enabled": bool(proxies),
         "count": len(proxies),
+        "dead": dead,
         "rotation": "sticky_user_hash" if proxies else "none",
+        "fingerprint": "sticky_per_user",
     }

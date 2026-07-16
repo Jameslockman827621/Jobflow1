@@ -7,9 +7,8 @@ from typing import Any, Dict
 from app.services.apply_engine import answer_open_ended
 from .base import AdapterResult, BaseATSAdapter
 from .form_helpers import (
+    advance_with_validation_recovery,
     attempt_genuine_submit_gated,
-    click_next_only,
-    collect_validation_errors,
     core_fields_ok,
     detect_and_solve_captcha,
 )
@@ -170,25 +169,24 @@ class GreenhouseAdapter(BaseATSAdapter):
         await self.ensure_application_form(page)
         await page.wait_for_timeout(800)
 
+        async def _refill():
+            await self._fill_core_and_questions(page, applicant, result)
+
         for step in range(self.max_steps):
             await self._fill_core_and_questions(page, applicant, result)
             result.steps_completed = step + 1
             result.meta["core_ok"] = core_fields_ok(result.filled_keys)
             result.meta["resume_uploaded"] = "resume" in result.filled_keys
 
-            # Last step or single-page: try submit / stop
             if step == self.max_steps - 1:
                 break
 
-            advanced = await click_next_only(page)
-            if not advanced:
+            adv = await advance_with_validation_recovery(page, applicant, refill_fn=_refill)
+            if adv.get("validation_errors"):
+                result.meta["validation_errors"] = adv["validation_errors"]
+            if not adv.get("advanced"):
                 break
-            await page.wait_for_timeout(800)
-            # If Next caused validation errors, re-fill once
-            errors = await collect_validation_errors(page)
-            if errors:
-                result.meta["validation_errors"] = errors
-                await self._fill_core_and_questions(page, applicant, result)
+            await page.wait_for_timeout(400)
 
         await detect_and_solve_captcha(page, result)
         result.meta["required_core"] = ["first_name", "last_name", "email"]
@@ -197,7 +195,7 @@ class GreenhouseAdapter(BaseATSAdapter):
         result.meta["multi_step"] = result.steps_completed > 1
 
         if auto_submit:
-            await attempt_genuine_submit_gated(page, result, applicant)
+            await attempt_genuine_submit_gated(page, result, applicant, refill_fn=_refill)
         else:
             result.needs_user = True
             if result.captcha_present and not result.captcha_solved:

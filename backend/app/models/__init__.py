@@ -9,6 +9,7 @@ from .cv import CV
 from .preferences import UserPreferences
 from .search_cache import SearchCache
 from .company import MonitoredCompany, ApplyRun
+from .answer_bank import AnswerBankEntry
 
 __all__ = [
     "User",
@@ -27,4 +28,5 @@ __all__ = [
     "SearchCache",
     "MonitoredCompany",
     "ApplyRun",
+    "AnswerBankEntry",
 ]

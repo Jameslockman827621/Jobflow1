@@ -3,17 +3,22 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from app.services.captcha import captcha_service
 
 
 NEXT_LABELS = ["next", "continue", "save and continue", "review", "save & continue"]
-CORE_KEYS_ANY = (
-    ("first_name", "label_first name", "given_name"),
-    ("last_name", "label_last name", "family_name"),
-    ("email", "label_email"),
-)
+
+# Structured blocked_reason codes for dashboards / batch aggregation
+BLOCK_CAPTCHA = "captcha_unsolved"
+BLOCK_PROFILE = "profile_incomplete"
+BLOCK_VALIDATION = "validation_failed"
+BLOCK_NOT_READY = "not_ready"
+BLOCK_ACCOUNT_WALL = "account_wall"
+BLOCK_CORE = "core_identity"
+
+RefillFn = Callable[[], Awaitable[None]]
 
 
 async def collect_validation_errors(page) -> List[Dict[str, str]]:
@@ -44,14 +49,12 @@ async def collect_validation_errors(page) -> List[Dict[str, str]]:
                   push(el, el.validationMessage || 'required');
                 }
               });
-              // HTML5 validity
               document.querySelectorAll('input, select, textarea').forEach(el => {
                 if (el.disabled || el.type === 'hidden') return;
                 if (typeof el.checkValidity === 'function' && !el.checkValidity()) {
                   push(el, el.validationMessage || 'invalid');
                 }
               });
-              // de-dupe by name+label
               const seen = new Set();
               return out.filter(o => {
                 const k = (o.name || '') + '|' + (o.label || '');
@@ -63,6 +66,58 @@ async def collect_validation_errors(page) -> List[Dict[str, str]]:
         )
     except Exception:
         return []
+
+
+async def refill_from_validation_errors(
+    page,
+    applicant: Dict[str, Any],
+    errors: List[Dict[str, str]],
+) -> int:
+    """Best-effort refill of fields called out by validation errors."""
+    filled = 0
+    for err in errors or []:
+        label = (err.get("label") or err.get("name") or "").lower()
+        name = (err.get("name") or "").lower()
+        key = label + " " + name
+        value = None
+        if any(x in key for x in ("first", "given")):
+            value = applicant.get("first_name")
+        elif any(x in key for x in ("last", "family", "surname")):
+            value = applicant.get("last_name")
+        elif "email" in key:
+            value = applicant.get("email")
+        elif any(x in key for x in ("phone", "tel", "mobile")):
+            value = applicant.get("phone")
+        elif "linkedin" in key:
+            value = applicant.get("linkedin")
+        elif any(x in key for x in ("sponsor", "visa")):
+            value = "No"
+        elif any(x in key for x in ("authorized", "legally", "work auth")):
+            value = "Yes"
+        elif any(x in key for x in ("name",)) and not any(x in key for x in ("company", "user")):
+            value = applicant.get("full_name")
+        elif any(x in key for x in ("location", "city")):
+            value = applicant.get("location")
+        if value in (None, ""):
+            continue
+        # Prefer named control
+        try:
+            if err.get("name"):
+                loc = page.locator(f"[name='{err['name']}'], #{err['name']}").first
+                if await loc.count():
+                    await loc.fill(str(value))
+                    filled += 1
+                    continue
+        except Exception:
+            pass
+        try:
+            loc = page.get_by_label(re.compile(re.escape((err.get("label") or "")[:40]), re.I))
+            if await loc.count():
+                await loc.first.fill(str(value))
+                filled += 1
+        except Exception:
+            continue
+    return filled
 
 
 async def click_next_only(page, labels: Optional[List[str]] = None) -> bool:
@@ -119,6 +174,36 @@ async def click_next_only(page, labels: Optional[List[str]] = None) -> bool:
     return False
 
 
+async def advance_with_validation_recovery(
+    page,
+    applicant: Dict[str, Any],
+    refill_fn: Optional[RefillFn] = None,
+) -> Dict[str, Any]:
+    """Click Next, then refill once if validation errors appear."""
+    advanced = await click_next_only(page)
+    if not advanced:
+        return {"advanced": False, "validation_errors": [], "refilled": 0}
+    errors = await collect_validation_errors(page)
+    refilled = 0
+    if errors:
+        if refill_fn:
+            await refill_fn()
+            refilled = -1  # adapter-managed
+        else:
+            refilled = await refill_from_validation_errors(page, applicant, errors)
+        # Try advancing again after refill
+        if refilled:
+            advanced2 = await click_next_only(page)
+            errors = await collect_validation_errors(page)
+            return {
+                "advanced": advanced2,
+                "validation_errors": errors,
+                "refilled": refilled,
+                "retried": True,
+            }
+    return {"advanced": True, "validation_errors": errors, "refilled": refilled}
+
+
 async def detect_and_solve_captcha(page, result) -> None:
     """Detect reCAPTCHA/hCaptcha and solve via captcha_service when available."""
     try:
@@ -141,7 +226,7 @@ async def detect_and_solve_captcha(page, result) -> None:
             return
 
     if not captcha_service.available:
-        result.meta["blocked_reason"] = result.meta.get("blocked_reason") or "captcha_unsolved"
+        result.meta["blocked_reason"] = result.meta.get("blocked_reason") or BLOCK_CAPTCHA
         return
 
     try:
@@ -172,6 +257,7 @@ async def detect_and_solve_captcha(page, result) -> None:
         solved = await captcha_service.solve(ctype, info["sitekey"], page.url)
         if not (solved.get("ok") and solved.get("token")):
             result.errors.append(f"captcha:{solved.get('error') or 'solve_failed'}")
+            result.meta["blocked_reason"] = BLOCK_CAPTCHA
             return
         token = solved["token"]
         await page.evaluate(
@@ -183,9 +269,20 @@ async def detect_and_solve_captcha(page, result) -> None:
                 el.value = token;
                 el.dispatchEvent(new Event('input', { bubbles: true }));
               });
-              if (window.___grecaptcha_cfg) {
-                try { /* noop — token injection is best-effort */ } catch (e) {}
-              }
+              try {
+                if (typeof ___grecaptcha_cfg !== 'undefined') {
+                  const clients = ___grecaptcha_cfg.clients || {};
+                  Object.keys(clients).forEach(k => {
+                    const c = clients[k];
+                    const walk = (obj, depth) => {
+                      if (!obj || depth > 4) return;
+                      if (typeof obj.callback === 'function') { try { obj.callback(token); } catch (e) {} }
+                      if (typeof obj === 'object') Object.keys(obj).forEach(kk => walk(obj[kk], depth + 1));
+                    };
+                    walk(c, 0);
+                  });
+                }
+              } catch (e) {}
             }""",
             token,
         )
@@ -193,6 +290,7 @@ async def detect_and_solve_captcha(page, result) -> None:
         result.meta["captcha_provider"] = solved.get("provider")
     except Exception as exc:
         result.errors.append(f"captcha:{exc}")
+        result.meta["blocked_reason"] = BLOCK_CAPTCHA
 
 
 def core_fields_ok(filled_keys: List[str], *, require_name_parts: bool = True) -> bool:
@@ -212,19 +310,17 @@ def readiness_for_submit(result, applicant: Dict[str, Any]) -> Dict[str, Any]:
     missing: List[str] = []
     core_ok = bool((result.meta or {}).get("core_ok")) or core_fields_ok(result.filled_keys)
     if not core_ok:
-        missing.append("core_identity")
+        missing.append(BLOCK_CORE)
     resume_ok = (
         "resume" in (result.filled_keys or [])
         or bool((result.meta or {}).get("resume_uploaded"))
-        or not applicant.get("resume_local_path")  # no resume expected
+        or not applicant.get("resume_local_path")
     )
-    # If we have a resume path, require upload succeeded
     if applicant.get("resume_local_path") and "resume" not in (result.filled_keys or []):
-        # Soft: many boards don't expose file input until later step
         result.meta["resume_pending"] = True
     if result.captcha_present and not result.captcha_solved:
-        missing.append("captcha")
-    ready = core_ok and "captcha" not in missing
+        missing.append(BLOCK_CAPTCHA)
+    ready = core_ok and BLOCK_CAPTCHA not in missing
     return {
         "ready": ready,
         "core_ok": core_ok,
@@ -233,8 +329,13 @@ def readiness_for_submit(result, applicant: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-async def attempt_genuine_submit_gated(page, result, applicant: Dict[str, Any]) -> None:
-    """Solve captcha, gate on readiness, submit only with confirmation."""
+async def attempt_genuine_submit_gated(
+    page,
+    result,
+    applicant: Dict[str, Any],
+    refill_fn: Optional[RefillFn] = None,
+) -> None:
+    """Solve captcha, gate on readiness, submit with one validation recovery loop."""
     from .submit import attempt_submit_and_confirm
 
     await detect_and_solve_captcha(page, result)
@@ -242,28 +343,35 @@ async def attempt_genuine_submit_gated(page, result, applicant: Dict[str, Any]) 
     result.meta["submit_readiness"] = gate
     if not gate["ready"]:
         result.needs_user = True
-        result.meta["blocked_reason"] = ",".join(gate["missing"]) or "not_ready"
+        result.meta["blocked_reason"] = ",".join(gate["missing"]) or BLOCK_NOT_READY
         return
 
-    # Recover once from validation errors
     for attempt in range(2):
         submit_result = await attempt_submit_and_confirm(page)
         result.meta["submit"] = submit_result
         if submit_result.get("confirmed"):
             result.submitted = True
             result.needs_user = False
+            result.meta.pop("blocked_reason", None)
             return
+
         errors = await collect_validation_errors(page)
         result.meta["validation_errors"] = errors
-        if not errors or attempt == 1:
-            # Uncertain submit — do NOT mark submitted without confirmation
-            result.submitted = False
-            result.needs_user = True
-            if submit_result.get("action") != "none":
-                result.meta["submit_uncertain"] = True
-            return
-        # Leave loop for adapters to re-fill; mark for retry
-        result.meta["validation_retry"] = attempt + 1
+        if errors and attempt == 0:
+            result.meta["validation_retry"] = 1
+            if refill_fn:
+                await refill_fn()
+            else:
+                await refill_from_validation_errors(page, applicant, errors)
+            continue
+
+        result.submitted = False
+        result.needs_user = True
+        if errors:
+            result.meta["blocked_reason"] = BLOCK_VALIDATION
+        elif submit_result.get("action") != "none":
+            result.meta["submit_uncertain"] = True
+            result.meta["blocked_reason"] = result.meta.get("blocked_reason") or "submit_unconfirmed"
         return
 
 

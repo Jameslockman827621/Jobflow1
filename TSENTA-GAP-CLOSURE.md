@@ -20,6 +20,15 @@
 | Dashboard Automation panel | “Genuinely submit for me” opt-in + headless queue |
 | Company discovery / coverage | Monitored boards + coverage API |
 | Health `/ready` | DB hard check; Redis degraded-ok; captcha / proxy / messaging flags |
+| **Scale: apply queue** | Dedicated Celery `apply` queue, `--concurrency=1` apply-worker, fan-out + rate limit |
+| **Scale: quotas** | Billable statuses only; enforced inside `apply_one`; failed/dry_run don't burn quota |
+| **Scale: stale sweeper** | Beat marks `running` >15m as `stale` every 5 minutes |
+| **Scale: observability** | `GET /headless/batch/{batch_id}`, `GET /metrics/apply`, `batch_id` on runs |
+| **Workable adapter** | Dedicated fill/submit (not Generic); fixture genuine submit proven |
+| **Answer bank** | Persisted Q→A; `/answer` upserts; reused across applications |
+| **Sticky fingerprints** | UA/platform stable per `user_id` (matches sticky proxy) |
+| **Validation recovery** | One refill loop on Next/Submit validation errors before `needs_user` |
+| **Idempotent submit** | Already-`submitted` applications skip re-apply |
 
 ## Still not Tsenta-class
 

@@ -151,11 +151,25 @@ async def answer_open_ended(
     question: str,
     payload: Dict[str, Any],
     job: Optional[Job] = None,
+    *,
+    db: Optional[Session] = None,
+    user_id: Optional[int] = None,
 ) -> str:
     """Answer open-ended application questions in the applicant's voice."""
     question = (question or "").strip()
     if not question:
         return ""
+
+    # Answer bank hit (learned from prior applications / user edits)
+    if db is not None and user_id:
+        try:
+            from app.services.answer_bank import lookup_answer
+
+            saved = lookup_answer(db, user_id, question)
+            if saved:
+                return saved
+        except Exception as exc:
+            logger.warning("answer bank lookup failed: %s", exc)
 
     # Heuristic answers without LLM
     q = question.lower()

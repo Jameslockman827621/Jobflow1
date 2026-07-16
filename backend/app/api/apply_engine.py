@@ -1,6 +1,8 @@
 """Apply engine API: packages, captcha, headless apply, messaging bots."""
 
-from datetime import datetime
+import json
+from collections import Counter
+from datetime import datetime, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response
@@ -18,6 +20,7 @@ from app.services.captcha import captcha_service
 from app.services.headless_apply import run_headless_apply
 from app.services.messaging import messaging_service
 from app.services.apply_limits import check_apply_quota
+from app.services.answer_bank import upsert_answer
 from app.models.cv import CV
 from app.models.profile import UserProfile
 from app.tasks.headless_apply_tasks import apply_batch, apply_one
@@ -28,6 +31,8 @@ router = APIRouter()
 class OpenEndedRequest(BaseModel):
     question: str
     job_id: Optional[int] = None
+    answer: Optional[str] = None  # when set, upsert into answer bank
+    save: bool = True
 
 
 class CaptchaSolveRequest(BaseModel):
@@ -206,8 +211,27 @@ async def answer_question(
     )
     payload = build_applicant_payload(current_user, profile, cv)
     job = db.query(Job).filter(Job.id == body.job_id).first() if body.job_id else None
-    answer = await answer_open_ended(body.question, payload, job)
-    return {"question": body.question, "answer": answer}
+
+    # Explicit save of a user-provided answer
+    if body.answer and body.save:
+        row = upsert_answer(db, current_user.id, body.question, body.answer)
+        return {
+            "question": body.question,
+            "answer": row.answer,
+            "saved": True,
+            "source": "user",
+            "use_count": row.use_count,
+        }
+
+    answer = await answer_open_ended(
+        body.question, payload, job, db=db, user_id=current_user.id
+    )
+    if body.save and answer:
+        try:
+            upsert_answer(db, current_user.id, body.question, answer)
+        except Exception:
+            pass
+    return {"question": body.question, "answer": answer, "saved": bool(body.save and answer)}
 
 
 @router.post("/captcha/solve")
@@ -265,8 +289,11 @@ async def headless_batch(
         raise HTTPException(status_code=400, detail="No application_ids")
     if len(body.application_ids) > 200:
         raise HTTPException(status_code=400, detail="Max 200 applications per batch")
+    max_per = min(body.max_per_batch, 100)
+    requested = len(body.application_ids)
+    to_queue = body.application_ids[:max_per]
     if not body.dry_run:
-        quota = check_apply_quota(db, current_user.id, requested=len(body.application_ids))
+        quota = check_apply_quota(db, current_user.id, requested=len(to_queue))
         if not quota["allowed"]:
             raise HTTPException(status_code=429, detail=quota)
     task = apply_batch.delay(
@@ -274,15 +301,96 @@ async def headless_batch(
         body.application_ids,
         auto_submit=body.auto_submit,
         dry_run=body.dry_run,
-        max_per_batch=min(body.max_per_batch, 100),
+        max_per_batch=max_per,
     )
     return {
         "ok": True,
         "queued": True,
         "task_id": task.id,
-        "count": len(body.application_ids),
+        "requested": requested,
+        "queued_count": len(to_queue),
+        "deferred_count": max(0, requested - len(to_queue)),
         "fan_out": True,
-        "message": "Batch headless apply queued (one Celery task per application)",
+        "message": (
+            f"Batch headless apply queued: {len(to_queue)}/{requested} "
+            "(one Celery task per application on apply queue)"
+        ),
+    }
+
+
+@router.get("/headless/batch/{batch_id}")
+async def headless_batch_status(
+    batch_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Aggregate ApplyRun outcomes for a batch_id (DB-backed, not Redis TTL)."""
+    rows = (
+        db.query(ApplyRun)
+        .filter(ApplyRun.user_id == current_user.id)
+        .order_by(ApplyRun.created_at.desc())
+        .limit(500)
+        .all()
+    )
+    matched = []
+    for r in rows:
+        try:
+            meta = json.loads(r.meta_json or "{}")
+        except Exception:
+            meta = {}
+        if meta.get("batch_id") == batch_id:
+            matched.append(r)
+    by_status = Counter(r.status for r in matched)
+    return {
+        "batch_id": batch_id,
+        "total": len(matched),
+        "by_status": dict(by_status),
+        "submitted": by_status.get("submitted", 0),
+        "failed": by_status.get("failed", 0) + by_status.get("stale", 0),
+        "needs_user": by_status.get("needs_user", 0),
+        "running": by_status.get("running", 0),
+        "runs": [
+            {
+                "id": r.id,
+                "application_id": r.application_id,
+                "status": r.status,
+                "ats_type": r.ats_type,
+                "fields_filled": r.fields_filled,
+                "error": r.error,
+            }
+            for r in matched[:100]
+        ],
+    }
+
+
+@router.get("/metrics/apply")
+async def apply_metrics(
+    hours: int = 24,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Last-N-hours apply success rates for the current user (scale observability)."""
+    since = datetime.utcnow() - timedelta(hours=min(max(hours, 1), 168))
+    rows = (
+        db.query(ApplyRun)
+        .filter(ApplyRun.user_id == current_user.id, ApplyRun.created_at >= since)
+        .all()
+    )
+    by_status = Counter(r.status for r in rows)
+    by_ats = Counter((r.ats_type or "unknown") for r in rows)
+    submitted = by_status.get("submitted", 0)
+    attempted = len([r for r in rows if r.status not in ("deferred", "skipped")])
+    return {
+        "window_hours": min(max(hours, 1), 168),
+        "total_runs": len(rows),
+        "attempted": attempted,
+        "submitted": submitted,
+        "success_rate": round(submitted / attempted, 3) if attempted else 0.0,
+        "by_status": dict(by_status),
+        "by_ats": dict(by_ats),
+        "needs_user": by_status.get("needs_user", 0),
+        "failed": by_status.get("failed", 0),
+        "stale": by_status.get("stale", 0),
     }
 
 
