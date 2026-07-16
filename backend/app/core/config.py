@@ -83,6 +83,11 @@ class Settings(BaseSettings):
     # Optional observability
     SENTRY_DSN: Optional[str] = None
 
+    # Google OAuth (optional — endpoints return 503 when unset)
+    GOOGLE_CLIENT_ID: Optional[str] = None
+    GOOGLE_CLIENT_SECRET: Optional[str] = None
+    GOOGLE_REDIRECT_URI: Optional[str] = None  # defaults to {API}/auth/google/callback
+
     # When no scrapers return jobs, seed curated demo rows once (never in production)
     AUTO_SEED_DEMO_JOBS: bool = True
 

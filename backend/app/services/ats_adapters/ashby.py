@@ -191,6 +191,29 @@ class AshbyAdapter(BaseATSAdapter):
         from .form_helpers import attempt_genuine_submit_gated, click_next_only, core_fields_ok
 
         for step in range(self.max_steps - 1):
+            # Prefer Yes on work-auth / authorization selects before advancing
+            try:
+                selects = page.locator("select:visible")
+                for i in range(min(await selects.count(), 8)):
+                    sel = selects.nth(i)
+                    options = await sel.evaluate(
+                        "el => Array.from(el.options).map(o => ({v:o.value,t:o.text.trim()}))"
+                    )
+                    pick = next(
+                        (
+                            o["v"]
+                            for o in options
+                            if o.get("v") and (o.get("t") or "").lower() in ("yes", "y")
+                        ),
+                        None,
+                    )
+                    if pick:
+                        await sel.select_option(value=pick)
+                        result.fields_filled += 1
+                        result.filled_keys.append("select_yes")
+            except Exception:
+                pass
+
             advanced = await click_next_only(page)
             if not advanced:
                 break

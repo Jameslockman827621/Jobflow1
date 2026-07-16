@@ -1,0 +1,17 @@
+# Gitleaks — allowlist for local/dev placeholders only
+title = "JobScale gitleaks"
+
+[allowlist]
+description = "Known non-secret placeholders"
+paths = [
+  '''backend/\.env\.example''',
+  '''frontend/\.env\.example''',
+  '''.*\.md''',
+  '''backend/tests/fixtures/.*''',
+]
+regexes = [
+  '''change-me-in-production-please''',
+  '''test-secret-key-not-for-production-use-32chars''',
+  '''ci-secret-key-not-for-production-use-32chars''',
+  '''test-google-client-secret''',
+]

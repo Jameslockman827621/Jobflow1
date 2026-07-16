@@ -103,9 +103,13 @@ class WorkdayAdapter(BaseATSAdapter):
             "[data-automation-id='legalNameSection_firstName'], input[aria-label*='First Name' i]"
         ).count()
         email_login = page.locator("input[type='email'], input[data-automation-id*='email' i]")
-        sign_in_wall = await page.locator(
-            "text=/sign in to your account/i, text=/create account/i, [data-automation-id*='signIn' i]"
-        ).count()
+        # Do not mix text=/…/i with CSS attribute selectors in one string —
+        # Playwright treats the comma as RegExp flags and throws SyntaxError.
+        sign_in_wall = (
+            await page.locator("text=/sign in to your account/i").count()
+            or await page.locator("text=/create account/i").count()
+            or await page.locator("[data-automation-id*='signIn' i]").count()
+        )
         if await email_login.count() and not has_identity and sign_in_wall:
             try:
                 await email_login.first.fill(str(applicant.get("email") or ""))
@@ -256,7 +260,7 @@ class WorkdayAdapter(BaseATSAdapter):
             except Exception:
                 pass
 
-            # Selects / dropdowns
+            # Selects / dropdowns — prefer Yes / authorized answers for EEO / work auth
             selects = page.locator("select:visible")
             for i in range(min(await selects.count(), 10)):
                 try:
@@ -270,15 +274,46 @@ class WorkdayAdapter(BaseATSAdapter):
                             for o in options
                             if o.get("v")
                             and o.get("t")
-                            and o["t"].lower() not in ("", "select one", "select")
+                            and o["t"].lower() in ("yes", "y", "true", "authorized")
                         ),
                         None,
                     )
+                    if not pick:
+                        pick = next(
+                            (
+                                o["v"]
+                                for o in options
+                                if o.get("v")
+                                and o.get("t")
+                                and o["t"].lower() not in ("", "select one", "select", "please select")
+                            ),
+                            None,
+                        )
                     if pick:
                         await sel.select_option(value=pick)
                         result.fields_filled += 1
                 except Exception:
                     pass
+
+            # Voluntary disclosure / agreement checkboxes
+            try:
+                boxes = page.locator(
+                    "input[type='checkbox'][data-automation-id*='agreement' i], "
+                    "input[type='checkbox'][data-automation-id*='consent' i], "
+                    "input[type='checkbox'][aria-label*='agree' i], "
+                    "#agree, input[type='checkbox']:visible"
+                )
+                for i in range(min(await boxes.count(), 8)):
+                    box = boxes.nth(i)
+                    try:
+                        if await box.is_visible() and not await box.is_checked():
+                            await box.check(timeout=1500)
+                            result.fields_filled += 1
+                            result.filled_keys.append("disclosure_checkbox")
+                    except Exception:
+                        continue
+            except Exception:
+                pass
 
             async def _ans(q):
                 return await answer_open_ended(q, applicant, None)

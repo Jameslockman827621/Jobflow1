@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Ashby Fixture Application — Backend Engineer</title>
+</head>
+<body>
+  <h1>Backend Engineer at JobScaleTest</h1>
+  <a href="#application" id="apply_btn">Apply for this Job</a>
+
+  <form id="ashby_form" onsubmit="return handleSubmit(event)">
+    <div>
+      <label for="first_name">First Name</label>
+      <input id="first_name" name="first_name" autocomplete="given-name" aria-label="First Name" type="text" required />
+    </div>
+    <div>
+      <label for="last_name">Last Name</label>
+      <input id="last_name" name="last_name" autocomplete="family-name" aria-label="Last Name" type="text" required />
+    </div>
+    <div>
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" autocomplete="email" aria-label="Email" required />
+    </div>
+    <div>
+      <label for="phone">Phone</label>
+      <input id="phone" name="phone" type="tel" aria-label="Phone" />
+    </div>
+    <div>
+      <label for="linkedin">LinkedIn Profile URL</label>
+      <input id="linkedin" name="linkedin" aria-label="LinkedIn Profile URL" type="text" />
+    </div>
+    <div>
+      <label for="location">Location</label>
+      <input id="location" name="location" aria-label="Location" type="text" />
+    </div>
+    <div>
+      <label for="why">Why do you want to work here?</label>
+      <textarea id="why" name="why" aria-label="Why do you want to work here?"></textarea>
+    </div>
+    <div>
+      <label for="work_auth">Are you authorized to work in the US?</label>
+      <select id="work_auth" name="work_auth" aria-label="Are you authorized to work in the US?">
+        <option value="">Select</option>
+        <option value="Yes">Yes</option>
+        <option value="No">No</option>
+      </select>
+    </div>
+    <button type="button" id="ashby_next">Next</button>
+    <button type="submit" id="submit_app" style="display:none">Submit application</button>
+  </form>
+
+  <div id="confirmation" style="display:none">
+    <h2>Application submitted</h2>
+    <p>Thank you for applying. We've received your application.</p>
+  </div>
+
+  <script>
+    document.getElementById('ashby_next').onclick = () => {
+      document.getElementById('ashby_next').style.display = 'none';
+      document.getElementById('submit_app').style.display = 'inline-block';
+    };
+    function handleSubmit(e) {
+      e.preventDefault();
+      document.getElementById('ashby_form').style.display = 'none';
+      document.getElementById('confirmation').style.display = 'block';
+      history.pushState({}, '', location.pathname + '?submitted=true');
+      return false;
+    }
+  </script>
+</body>
+</html>

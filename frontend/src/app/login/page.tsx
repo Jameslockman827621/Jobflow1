@@ -10,7 +10,9 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const [isRegister, setIsRegister] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
+  const [googleAvailable, setGoogleAvailable] = useState(true);
 
   const [formData, setFormData] = useState({
     email: "",
@@ -23,7 +25,60 @@ function LoginForm() {
     if (searchParams.get("mode") === "signup") {
       setIsRegister(true);
     }
+    const oauthErr = searchParams.get("oauth_error");
+    if (oauthErr) {
+      setError(
+        oauthErr === "not_configured"
+          ? "Google sign-in is not configured on this server."
+          : `Google sign-in failed (${oauthErr}).`
+      );
+    }
   }, [searchParams]);
+
+  // Complete Google OAuth redirect (callback lands here with oauth_token)
+  useEffect(() => {
+    const oauthToken = searchParams.get("oauth_token");
+    if (!oauthToken) return;
+    (async () => {
+      setLoading(true);
+      try {
+        localStorage.setItem("jobscale_token", oauthToken);
+        const { getApiBase } = await import("@/lib/apiBase");
+        const meRes = await fetch(`${getApiBase()}/auth/me`, {
+          headers: { Authorization: `Bearer ${oauthToken}` },
+        });
+        if (!meRes.ok) throw new Error("Google session invalid");
+        const userData = await meRes.json();
+        localStorage.setItem("jobscale_user", JSON.stringify(userData));
+        window.location.href = "/dashboard";
+      } catch (e: any) {
+        setError(e.message || "Google sign-in failed");
+        setLoading(false);
+      }
+    })();
+  }, [searchParams]);
+
+  async function continueWithGoogle() {
+    setGoogleLoading(true);
+    setError("");
+    try {
+      const { getApiBase } = await import("@/lib/apiBase");
+      const res = await fetch(`${getApiBase()}/auth/google`);
+      if (res.status === 503) {
+        setGoogleAvailable(false);
+        setError("Google sign-in is not configured. Use email/password.");
+        return;
+      }
+      if (!res.ok) throw new Error("Could not start Google sign-in");
+      const data = await res.json();
+      if (!data.authorize_url) throw new Error("Missing authorize URL");
+      window.location.href = data.authorize_url;
+    } catch (e: any) {
+      setError(e.message || "Google sign-in failed");
+    } finally {
+      setGoogleLoading(false);
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,6 +216,30 @@ function LoginForm() {
                 )}
               </button>
             </form>
+
+            {googleAvailable && (
+              <div className="mt-4">
+                <div className="relative my-4">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-slate-100" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase tracking-wide">
+                    <span className="bg-white px-2 text-slate-400">or</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={continueWithGoogle}
+                  disabled={googleLoading || loading}
+                  className="w-full py-2.5 text-sm font-medium rounded-lg border border-slate-200 bg-white text-slate-800 hover:bg-slate-50 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden>
+                    <path fill="#EA4335" d="M12 10.2v3.6h5.1c-.2 1.2-1.5 3.6-5.1 3.6-3.1 0-5.6-2.5-5.6-5.6S8.9 6.2 12 6.2c1.8 0 3 .7 3.7 1.4l2.5-2.4C16.7 3.7 14.5 2.8 12 2.8 6.9 2.8 2.8 6.9 2.8 12S6.9 21.2 12 21.2c5.3 0 8.8-3.7 8.8-8.9 0-.6-.1-1.1-.2-1.6H12z"/>
+                  </svg>
+                  {googleLoading ? "Redirecting…" : "Continue with Google"}
+                </button>
+              </div>
+            )}
 
             {!isRegister && (
               <div className="mt-3 text-center">

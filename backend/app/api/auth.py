@@ -127,9 +127,12 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         user = db.query(User).filter(User.email == form_data.username).first()
 
         if not user or not user.verify_password(form_data.password):
+            detail = "Incorrect email or password"
+            if user and not user.hashed_password and user.google_sub:
+                detail = "This account uses Google sign-in. Continue with Google."
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect email or password",
+                detail=detail,
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
@@ -159,6 +162,139 @@ async def get_me(current_user: User = Depends(get_current_user)):
             is_active=current_user.is_active,
             is_verified=bool(current_user.is_verified),
         )
+    finally:
+        db.close()
+
+
+class GoogleTokenRequest(BaseModel):
+    id_token: str
+
+
+def _upsert_google_user(db, claims: dict) -> User:
+    """Create or link a user from Google claims (sub + email)."""
+    sub = str(claims.get("sub") or "")
+    email = str(claims.get("email") or "").lower().strip()
+    if not sub or not email:
+        raise HTTPException(status_code=400, detail="Google account missing email")
+
+    user = db.query(User).filter(User.google_sub == sub).first()
+    if not user:
+        user = db.query(User).filter(User.email == email).first()
+    if user:
+        user.google_sub = sub
+        user.is_verified = True
+        user.is_active = True
+    else:
+        user = User(email=email, hashed_password=None, google_sub=sub, is_verified=True)
+        db.add(user)
+        db.flush()
+        profile = UserProfile(
+            user_id=user.id,
+            first_name=str(claims.get("given_name") or claims.get("name") or "").split(" ")[0] or "Google",
+            last_name=str(claims.get("family_name") or ""),
+        )
+        db.add(profile)
+    db.commit()
+    db.refresh(user)
+    # Ensure profile exists when linking existing email account
+    profile = db.query(UserProfile).filter(UserProfile.user_id == user.id).first()
+    if not profile:
+        db.add(
+            UserProfile(
+                user_id=user.id,
+                first_name=str(claims.get("given_name") or "Google"),
+                last_name=str(claims.get("family_name") or ""),
+            )
+        )
+        db.commit()
+    return user
+
+
+@router.get("/google")
+async def google_oauth_start():
+    """Return Google authorize URL (or 503 when OAuth not configured)."""
+    from app.services.google_oauth import build_authorize_url, google_oauth_configured
+
+    if not google_oauth_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="Google OAuth is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.",
+        )
+    url, state = build_authorize_url()
+    return {"authorize_url": url, "state": state}
+
+
+@router.get("/google/callback")
+async def google_oauth_callback(code: str = "", state: str = "", error: str = ""):
+    """OAuth redirect callback — exchanges code and redirects to APP_URL with JWT."""
+    from fastapi.responses import RedirectResponse
+    from app.services.google_oauth import exchange_code, fetch_userinfo, google_oauth_configured
+
+    app_url = settings.APP_URL.rstrip("/")
+    if error:
+        return RedirectResponse(f"{app_url}/login?oauth_error={error}")
+    if not code:
+        return RedirectResponse(f"{app_url}/login?oauth_error=missing_code")
+    if not google_oauth_configured():
+        return RedirectResponse(f"{app_url}/login?oauth_error=not_configured")
+
+    try:
+        tokens = await exchange_code(code)
+        access = tokens.get("access_token")
+        if not access:
+            raise ValueError("no_access_token")
+        claims = await fetch_userinfo(access)
+        # Normalize claim keys
+        claims = {
+            "sub": claims.get("sub"),
+            "email": claims.get("email"),
+            "email_verified": claims.get("email_verified", True),
+            "given_name": claims.get("given_name"),
+            "family_name": claims.get("family_name"),
+            "name": claims.get("name"),
+        }
+        db = SessionLocal()
+        try:
+            user = _upsert_google_user(db, claims)
+            jwt = create_access_token(
+                data={"sub": user.email},
+                expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+            )
+        finally:
+            db.close()
+        return RedirectResponse(f"{app_url}/login?oauth_token={jwt}")
+    except Exception as exc:
+        logger.warning("Google OAuth callback failed: %s", exc)
+        return RedirectResponse(f"{app_url}/login?oauth_error=auth_failed")
+
+
+@router.post("/google/token", response_model=Token)
+async def google_oauth_id_token(body: GoogleTokenRequest):
+    """
+    Exchange a Google ID token for a JobScale JWT (SPA / testable path).
+
+    Verifies audience against GOOGLE_CLIENT_ID via Google tokeninfo.
+    """
+    from app.services import google_oauth as google_oauth_svc
+
+    try:
+        claims = await google_oauth_svc.verify_id_token(body.id_token)
+    except RuntimeError:
+        raise HTTPException(
+            status_code=503,
+            detail="Google OAuth is not configured. Set GOOGLE_CLIENT_ID.",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail=str(exc))
+
+    db = SessionLocal()
+    try:
+        user = _upsert_google_user(db, claims)
+        access_token = create_access_token(
+            data={"sub": user.email},
+            expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+        )
+        return {"access_token": access_token, "token_type": "bearer"}
     finally:
         db.close()
 

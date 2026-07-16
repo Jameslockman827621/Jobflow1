@@ -37,6 +37,7 @@ python-dotenv==1.0.0
 structlog==24.1.0
 email-validator==2.1.0
 stripe==8.0.0
+sentry-sdk[fastapi]==1.40.0
 
 # Testing
 pytest==7.4.4

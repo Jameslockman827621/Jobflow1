@@ -54,7 +54,7 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 - [x] Password reset (token email + set password)
 - [x] Email verification endpoints + verify page (`is_verified` on `/me`)
 - [x] Refresh tokens / longer-lived sessions for extension
-- [ ] OAuth (Google) optional
+- [x] OAuth (Google) optional
 
 ### P1.2 Tracker / Kanban
 - [x] Kanban can **move stage** via `PUT /applications/{id}` (select on card)
@@ -87,18 +87,18 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 
 - [x] Global HTTP rate limit middleware (per IP + per user)
 - [x] Alembic migrations for **all** tables (stop relying on `create_all` for board_sessions, answer_bank, flags)
-- [ ] Sentry / OpenTelemetry
+- [x] Sentry soft-init via `SENTRY_DSN` (+ `sentry-sdk` dependency); OpenTelemetry still open
 - [x] Structured logging JSON
 - [x] Health check reports: DB, Redis, Celery workers, Playwright package
-- [x] Secrets scanning; never log board cookies
-- [ ] Extension icons (real assets, not 1×1 PNG)
+- [x] Secrets scanning (gitleaks CI + log redaction); never log board cookies
+- [x] Extension icons (real 16/48/128 PNG assets, not 1×1)
 - [x] CSRF for cookie-based flows if any; tighten CORS in production
 
 ---
 
 ## P3 — Scale & quality of apply engine
 
-- [ ] Workday/Ashby deeper coverage beyond fixtures
+- [x] Workday/Ashby multi-step fixture coverage (genuine submit path); live boards still open
 - [x] Answer bank UX in dashboard (CRUD)
 - [x] Per-company sticky fingerprint already exists — document + test under concurrency
 - [x] Stale run sweeper metrics endpoint for ops
@@ -137,3 +137,4 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 | Wave 3 | Admin scrape gate; Apify LinkedIn wrappers; rate limit MW; Alembic board/answer/admin; Kanban apply_run badges; reconnect UX; answer-bank CRUD; extension long-lived JWT |
 | Wave 4 | Real referral Pro trial + Stripe credit; unsubscribe tokens; interview coach UI; Kanban DnD; prod CORS/email honesty; structlog JSON; ops metrics; extension host_permissions |
 | Wave 5 | Monitor auto-queue opt-in; fingerprint concurrency test; cookie/token log redaction; optional SENTRY_DSN hook |
+| Wave 6 | Google OAuth (authorize/callback/id_token + login UI); Workday/Ashby multi-step fixtures + submit selectors; real extension icons; gitleaks CI; sentry-sdk in requirements |
