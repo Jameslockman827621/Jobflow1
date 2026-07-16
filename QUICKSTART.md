@@ -110,6 +110,60 @@ LLM_MODEL=gpt-4-turbo-preview
 
 This enables AI-powered CV tailoring and cover letter generation.
 
+## Apply engine (headless + monitoring)
+
+Server-side apply uses Playwright + Celery. Extension still fills forms in-browser; the dashboard can optionally queue headless runs.
+
+### Playwright (local)
+
+```bash
+cd backend
+source venv/bin/activate
+pip install -r requirements.txt
+playwright install --with-deps chromium
+```
+
+Docker images already run `playwright install --with-deps chromium` (see `backend/Dockerfile`).
+
+### Celery worker + beat
+
+Beat drives hot/warm/cold company monitoring and other schedules. Run both in separate terminals:
+
+```bash
+cd backend
+source venv/bin/activate
+celery -A app.tasks.celery_app worker --loglevel=info
+celery -A app.tasks.celery_app beat --loglevel=info
+```
+
+### Env vars (apply / messaging)
+
+See `backend/.env.example`. Key knobs:
+
+```
+TWOCAPTCHA_API_KEY=
+CAPTCHA_MOCK=false
+PROXY_POOL=
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_WHATSAPP_FROM=
+IMESSAGE_BRIDGE_URL=
+HEADLESS_APPLY_ENABLED=true
+HEADLESS_APPLY_AUTO_SUBMIT=false
+WEBHOOK_SECRET=
+```
+
+Readiness: `GET /api/v1/health/ready` reports DB, Redis (degraded if down), captcha, proxy pool, messaging, and headless flag.
+
+### Scale smoke (optional)
+
+With API up and DB reachable:
+
+```bash
+cd backend
+python scripts/scale_apply_smoke.py --users 5 --jobs 20
+```
+
 ## Next Steps
 
 1. Register an account at http://localhost:3000/login

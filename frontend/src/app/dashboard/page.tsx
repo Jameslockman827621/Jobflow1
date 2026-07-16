@@ -36,6 +36,27 @@ interface ApplicationPackage {
   status: string;
 }
 
+interface CoverageStats {
+  monitored_career_pages: number;
+  coverage_pct?: number;
+}
+
+interface ApplyQuota {
+  remaining_today: number;
+  daily_limit: number;
+  daily_used: number;
+  allowed: boolean;
+}
+
+interface ApplyRunSummary {
+  id: number;
+  status: string;
+  ats_type?: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+  error?: string | null;
+}
+
 function SkeletonCard() {
   return (
     <div className="bg-white rounded-lg border border-slate-200 p-5 animate-pulse">
@@ -135,6 +156,10 @@ function DashboardPage() {
   const [selectedJobs, setSelectedJobs] = useState<Set<number>>(new Set());
   const [error, setError] = useState('');
   const [appCount, setAppCount] = useState(0);
+  const [coverage, setCoverage] = useState<CoverageStats | null>(null);
+  const [applyQuota, setApplyQuota] = useState<ApplyQuota | null>(null);
+  const [lastApplyRun, setLastApplyRun] = useState<ApplyRunSummary | null>(null);
+  const [queueHeadless, setQueueHeadless] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -151,6 +176,39 @@ function DashboardPage() {
       toast.success(`Onboarding complete! Found ${searchParams.get('jobs') || 'new'} jobs.`);
     }
   }, [searchParams]);
+
+  async function loadAutomationMetrics() {
+    try {
+      const [covRes, quotaRes, runsRes] = await Promise.all([
+        authFetch('/api/v1/companies/coverage'),
+        authFetch('/api/v1/apply-engine/quota'),
+        authFetch('/api/v1/apply-engine/runs?limit=5'),
+      ]);
+      if (covRes.ok) {
+        const cov = await covRes.json();
+        setCoverage({
+          monitored_career_pages: cov.monitored_career_pages ?? 0,
+          coverage_pct: cov.coverage_pct,
+        });
+      }
+      if (quotaRes.ok) {
+        const q = await quotaRes.json();
+        setApplyQuota({
+          remaining_today: q.remaining_today ?? 0,
+          daily_limit: q.daily_limit ?? 0,
+          daily_used: q.daily_used ?? 0,
+          allowed: q.allowed !== false,
+        });
+      }
+      if (runsRes.ok) {
+        const runsData = await runsRes.json();
+        const runs = runsData.runs || [];
+        setLastApplyRun(runs[0] || null);
+      }
+    } catch {
+      /* non-blocking */
+    }
+  }
 
   async function loadDashboard() {
     try {
@@ -181,6 +239,7 @@ function DashboardPage() {
         const stats = await statsRes.json();
         setAppCount(stats.total || 0);
       }
+      await loadAutomationMetrics();
     } catch (err: any) {
       setError(err.message || 'Failed to load dashboard');
     } finally {
@@ -248,18 +307,58 @@ function DashboardPage() {
       });
       if (!res.ok) {
         const err = await res.json();
-        if (err.detail?.includes('No CV found')) {
+        if (typeof err.detail === 'string' && err.detail.includes('No CV found')) {
           toast.error('Please create a CV first');
           router.push('/cv-builder');
           return;
         }
-        throw new Error(err.detail || 'Failed to start applications');
+        throw new Error(
+          typeof err.detail === 'string' ? err.detail : 'Failed to start applications'
+        );
       }
       const data = await res.json();
-      setBatchResults(data.applications || []);
+      const applications = data.applications || [];
+      setBatchResults(applications);
+
+      if (queueHeadless) {
+        const applicationIds = applications
+          .map((a: { application_id?: number }) => a.application_id)
+          .filter((id: number | undefined): id is number => typeof id === 'number');
+        if (applicationIds.length > 0) {
+          try {
+            const hlRes = await authFetch('/api/v1/apply-engine/headless/batch', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                application_ids: applicationIds,
+                dry_run: false,
+                auto_submit: false,
+              }),
+            });
+            if (!hlRes.ok) {
+              const hlErr = await hlRes.json().catch(() => ({}));
+              const detail =
+                typeof hlErr.detail === 'string'
+                  ? hlErr.detail
+                  : hlErr.detail?.reason || 'Headless queue failed';
+              toast.error(`Applications started, but headless queue failed: ${detail}`);
+            } else {
+              toast.success(
+                `${data.total} applications started — headless apply queued (${applicationIds.length})`
+              );
+            }
+          } catch {
+            toast.error('Applications started, but headless queue request failed');
+          }
+        } else {
+          toast.success(`${data.total} applications started!`);
+        }
+      } else {
+        toast.success(`${data.total} applications started!`);
+      }
+
       setShowModal(true);
       setSelectedJobs(new Set());
-      toast.success(`${data.total} applications started!`);
       loadDashboard();
     } catch (err: any) {
       toast.error(err.message || 'Failed to apply');
@@ -308,7 +407,7 @@ function DashboardPage() {
         </div>
 
         {/* Stat cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <div className="bg-white rounded-lg border border-slate-200 p-5">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">Matched Jobs</span>
@@ -335,6 +434,39 @@ function DashboardPage() {
               </div>
             </div>
             <div className="text-2xl font-semibold text-teal-600 tabular-nums">{selectedJobs.size}</div>
+          </div>
+        </div>
+
+        {/* Automation strip */}
+        <div className="mb-8 px-4 py-3 border border-slate-200 rounded-lg bg-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold text-slate-900 uppercase tracking-wide">Automation</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Extension fills forms; optional headless queue runs server-side
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-slate-600">
+            <span>
+              <span className="text-slate-400 text-xs uppercase tracking-wide mr-1.5">Monitored</span>
+              <span className="font-medium text-slate-900 tabular-nums">
+                {coverage?.monitored_career_pages ?? '—'}
+              </span>
+            </span>
+            <span>
+              <span className="text-slate-400 text-xs uppercase tracking-wide mr-1.5">Quota left</span>
+              <span className="font-medium text-slate-900 tabular-nums">
+                {applyQuota != null ? applyQuota.remaining_today : '—'}
+                {applyQuota != null ? (
+                  <span className="text-slate-400 font-normal">/{applyQuota.daily_limit}</span>
+                ) : null}
+              </span>
+            </span>
+            <span>
+              <span className="text-slate-400 text-xs uppercase tracking-wide mr-1.5">Last run</span>
+              <span className="font-medium text-slate-900">
+                {lastApplyRun?.status ?? 'none'}
+              </span>
+            </span>
           </div>
         </div>
 
@@ -442,11 +574,20 @@ function DashboardPage() {
       {/* Fixed bottom action bar */}
       {selectedJobs.size > 0 && (
         <div className="fixed bottom-0 left-0 lg:left-56 right-0 z-30 bg-white border-t border-slate-200 shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <p className="text-sm text-slate-600">
               <span className="font-semibold text-navy-900">{selectedJobs.size}</span> job{selectedJobs.size !== 1 ? 's' : ''} selected
             </p>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={queueHeadless}
+                  onChange={(e) => setQueueHeadless(e.target.checked)}
+                  className="w-4 h-4 text-teal-500 border-slate-300 rounded focus:ring-teal-500 cursor-pointer"
+                />
+                <span>Queue headless apply (server-side)</span>
+              </label>
               <button
                 onClick={() => setSelectedJobs(new Set())}
                 className="px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-md transition-colors font-medium"
@@ -491,7 +632,9 @@ function DashboardPage() {
               </div>
             </div>
             <div className="px-6 py-4">
-              <p className="text-sm text-slate-600 mb-4">Your applications have been prepared. The Chrome extension will auto-apply to these jobs, or you can apply manually using the links below.</p>
+              <p className="text-sm text-slate-600 mb-4">
+                Extension fills forms; optional headless queue runs server-side. You can also apply manually using the links below.
+              </p>
               <div className="space-y-2">
                 {batchResults.map((result, i) => (
                   <div key={i} className={`p-3.5 rounded-lg border ${result.status === 'already_applied' ? 'border-amber-200 bg-amber-50/50' : 'border-slate-200 bg-slate-50/50'}`}>

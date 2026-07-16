@@ -33,6 +33,7 @@ class Settings(BaseSettings):
 
     # CAPTCHA (2Captcha)
     TWOCAPTCHA_API_KEY: Optional[str] = None
+    CAPTCHA_MOCK: bool = False  # or set TWOCAPTCHA_API_KEY=mock for test tokens
 
     # Headless apply
     HEADLESS_APPLY_ENABLED: bool = True
@@ -43,6 +44,9 @@ class Settings(BaseSettings):
     TWILIO_AUTH_TOKEN: Optional[str] = None
     TWILIO_WHATSAPP_FROM: Optional[str] = None  # e.g. whatsapp:+14155238886
     IMESSAGE_BRIDGE_URL: Optional[str] = None  # BlueBubbles / custom Mac bridge
+
+    # Generic inbound webhook HMAC (messaging / partner hooks)
+    WEBHOOK_SECRET: Optional[str] = None
     
     # Email
     SMTP_HOST: str = "smtp.gmail.com"
