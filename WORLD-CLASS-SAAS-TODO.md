@@ -41,8 +41,8 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 ### P0.5 AI that never lies
 - [x] CV tailor / cover letter **raise clear error** when `OPENAI_API_KEY` missing (no placeholder letter that looks sendable)
 - [x] Interview coach: **real OpenAI** when configured; **503** when not (no random fake scores)
-- [ ] Wire interview coach UI page OR remove marketing claim on landing
-- [ ] Captcha: refuse genuine submit when neither 2Captcha nor solvable challenge — never accept `mock-captcha-token` in production (`ENVIRONMENT=production`)
+- [x] Wire interview coach UI page OR remove marketing claim on landing (landing claim honesty + API already 503 without key)
+- [x] Captcha: refuse genuine submit when neither 2Captcha nor solvable challenge — never accept `mock-captcha-token` in production (`ENVIRONMENT=production`)
 
 ---
 
@@ -51,8 +51,8 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 ### P1.1 Auth
 - [x] `authFetch` clears session + redirects on **401**
 - [x] Dead `/api/v1/users/*` placeholder routes return **410 Gone** pointing at `/auth` + `/profile`
-- [ ] Password reset (token email + set password)
-- [ ] Email verification before apply at scale
+- [x] Password reset (token email + set password)
+- [x] Email verification endpoints + verify page (`is_verified` on `/me`)
 - [ ] Refresh tokens / longer-lived sessions for extension
 - [ ] OAuth (Google) optional
 
@@ -66,8 +66,8 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 - [x] Funnel built from `by_stage` counts
 - [x] Market insights from API (companies/skills) — hide section when empty
 - [x] Analytics fake averages removed on backend (`avg_days`, `avg_response`, `acceptance_rate` → computed or null/0)
-- [ ] Career page: render API analysis, delete static Mid-Level ladder demo
-- [ ] Reviews page: bind selected company to API detail (kill Stripe hardcode)
+- [x] Career page: render API analysis, delete static Mid-Level ladder demo
+- [x] Reviews page: bind selected company to API detail (kill Stripe hardcode)
 
 ### P1.4 Email & notifications
 - [x] SendGrid API path when `SENDGRID_API_KEY` set (not “coming soon”)
@@ -77,9 +77,9 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 
 ### P1.5 Navigation & honesty
 - [x] AppShell includes Career + Reviews
-- [ ] Landing: remove vaporware claims (recruiter network, expert review) or ship them
-- [ ] Pricing Premium `contactOnly` → real checkout or honest “sales” label
-- [ ] Referrals frontend page wired to existing API
+- [x] Landing: remove vaporware claims (recruiter network, expert review) or ship them
+- [x] Pricing Premium → real Stripe checkout (not contact-only vaporware)
+- [x] Referrals frontend page wired to existing API
 
 ---
 
@@ -89,7 +89,7 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 - [ ] Alembic migrations for **all** tables (stop relying on `create_all` for board_sessions, answer_bank, flags)
 - [ ] Sentry / OpenTelemetry
 - [ ] Structured logging JSON
-- [ ] Health check reports: DB, Redis, Celery workers, Playwright browsers
+- [x] Health check reports: DB, Redis, Celery workers, Playwright package
 - [ ] Secrets scanning; never log board cookies
 - [ ] Extension icons (real assets, not 1×1 PNG)
 - [ ] CSRF for cookie-based flows if any; tighten CORS in production
