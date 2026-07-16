@@ -32,7 +32,10 @@ function LoginForm() {
 
     try {
       if (isRegister) {
-        await register(formData.email, formData.password, formData.first_name, formData.last_name);
+        const ref = searchParams.get("ref");
+        await register(formData.email, formData.password, formData.first_name, formData.last_name, {
+          referralCode: ref,
+        });
       } else {
         const next = searchParams.get("next");
         await login(formData.email, formData.password, { redirectTo: next });

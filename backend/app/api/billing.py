@@ -183,6 +183,12 @@ async def stripe_webhook(request: Request):
                     if cid:
                         user.stripe_customer_id = cid
                     db.commit()
+                    try:
+                        from app.services.referral_rewards import try_fulfill_pending_referral_credits
+
+                        try_fulfill_pending_referral_credits(db, user)
+                    except Exception:
+                        pass
             finally:
                 db.close()
 
@@ -220,14 +226,19 @@ async def stripe_webhook(request: Request):
                 plan = "free"
             elif "pro" in nickname:
                 plan = "pro"
-            # Match configured price IDs
+            # Match configured price IDs (check each ID independently)
             pid = price.get("id") or ""
-            if pid and pid == (settings.STRIPE_PRICE_PREMIUM_MONTHLY or settings.STRIPE_PRICE_PREMIUM_YEARLY):
-                plan = "premium"
-            elif pid and pid in (
+            premium_ids = {
+                settings.STRIPE_PRICE_PREMIUM_MONTHLY,
+                settings.STRIPE_PRICE_PREMIUM_YEARLY,
+            } - {None, ""}
+            pro_ids = {
                 settings.STRIPE_PRICE_PRO_MONTHLY,
                 settings.STRIPE_PRICE_PRO_YEARLY,
-            ):
+            } - {None, ""}
+            if pid and pid in premium_ids:
+                plan = "premium"
+            elif pid and pid in pro_ids:
                 plan = "pro"
         if status in ("canceled", "unpaid", "incomplete_expired"):
             plan = "free"
@@ -244,6 +255,13 @@ async def stripe_webhook(request: Request):
 
                         user.subscription_end = datetime.utcfromtimestamp(period_end)
                     db.commit()
+                    # Fulfill any pending referral Stripe credits now that customer exists
+                    try:
+                        from app.services.referral_rewards import try_fulfill_pending_referral_credits
+
+                        try_fulfill_pending_referral_credits(db, user)
+                    except Exception:
+                        pass
             finally:
                 db.close()
 

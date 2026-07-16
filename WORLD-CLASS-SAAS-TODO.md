@@ -28,15 +28,15 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 - [x] Extension cookie sync → BoardSession (prior)
 - [x] **Encrypt BoardSession storage_state at rest** (Fernet from SECRET_KEY; plaintext legacy still readable once)
 - [x] Extension **configurable API/dashboard base** via `chrome.storage` + options page (not hardcoded forever)
-- [ ] Production host_permissions for real HTTPS app domains
+- [x] Production host_permissions for real HTTPS app domains
 - [x] Session expiry UI on dashboard when connect status flips to disconnected mid-batch
 
 ### P0.4 Quotas & billing honesty
 - [x] **Plan-based apply quotas enforced** (free 5/day & 5/month; pro/premium higher) in `apply_limits.py`
 - [x] Quota endpoint returns `plan` + monthly remaining
 - [x] Stripe webhook handles `customer.subscription.updated` / plan sync (not only checkout + delete)
-- [ ] Map Stripe Price IDs → plan in env; reject checkout if price IDs missing (already partial)
-- [ ] Referral credits actually apply Stripe coupon / balance (today cosmetic)
+- [x] Map Stripe Price IDs → plan in env; reject checkout if price IDs missing (already partial)
+- [x] Referral credits actually apply Stripe coupon / balance (today cosmetic)
 
 ### P0.5 AI that never lies
 - [x] CV tailor / cover letter **raise clear error** when `OPENAI_API_KEY` missing (no placeholder letter that looks sendable)
@@ -58,7 +58,7 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 
 ### P1.2 Tracker / Kanban
 - [x] Kanban can **move stage** via `PUT /applications/{id}` (select on card)
-- [ ] Drag-and-drop between columns
+- [x] Drag-and-drop between columns
 - [x] Show apply-run status badge on card (submitted / needs_user / filled)
 
 ### P1.3 Analytics & career (no fiction)
@@ -72,8 +72,8 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 ### P1.4 Email & notifications
 - [x] SendGrid API path when `SENDGRID_API_KEY` set (not “coming soon”)
 - [x] Use `APP_URL` for links (not hardcoded localhost in new emails)
-- [ ] DEBUG still prints — OK for dev; production must not short-circuit if SendGrid/SMTP configured
-- [ ] Unsubscribe / preference center for alerts
+- [x] DEBUG still prints — OK for dev; production must not short-circuit if SendGrid/SMTP configured
+- [x] Unsubscribe / preference center for alerts
 
 ### P1.5 Navigation & honesty
 - [x] AppShell includes Career + Reviews
@@ -88,11 +88,11 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 - [x] Global HTTP rate limit middleware (per IP + per user)
 - [x] Alembic migrations for **all** tables (stop relying on `create_all` for board_sessions, answer_bank, flags)
 - [ ] Sentry / OpenTelemetry
-- [ ] Structured logging JSON
+- [x] Structured logging JSON
 - [x] Health check reports: DB, Redis, Celery workers, Playwright package
 - [ ] Secrets scanning; never log board cookies
 - [ ] Extension icons (real assets, not 1×1 PNG)
-- [ ] CSRF for cookie-based flows if any; tighten CORS in production
+- [x] CSRF for cookie-based flows if any; tighten CORS in production
 
 ---
 
@@ -101,7 +101,7 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 - [ ] Workday/Ashby deeper coverage beyond fixtures
 - [x] Answer bank UX in dashboard (CRUD)
 - [ ] Per-company sticky fingerprint already exists — document + test under concurrency
-- [ ] Stale run sweeper metrics endpoint for ops
+- [x] Stale run sweeper metrics endpoint for ops
 - [ ] Company career-page monitor → auto-queue high-match jobs (opt-in)
 
 ---
@@ -135,3 +135,4 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 | Billing | subscription.updated |
 | Nav | Career + Reviews |
 | Wave 3 | Admin scrape gate; Apify LinkedIn wrappers; rate limit MW; Alembic board/answer/admin; Kanban apply_run badges; reconnect UX; answer-bank CRUD; extension long-lived JWT |
+| Wave 4 | Real referral Pro trial + Stripe credit; unsubscribe tokens; interview coach UI; Kanban DnD; prod CORS/email honesty; structlog JSON; ops metrics; extension host_permissions |

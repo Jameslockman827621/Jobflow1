@@ -4,14 +4,21 @@ Email Service
 Supports:
 - SendGrid (production)
 - SMTP fallback
-- Console output (development)
+- Console output (development only — never success in production)
 """
 
+import logging
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import Optional, List
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
+
+
+def _is_production() -> bool:
+    return str(settings.ENVIRONMENT).lower() == "production"
 
 
 class EmailService:
@@ -24,6 +31,21 @@ class EmailService:
         self.smtp_password = settings.SMTP_PASSWORD or ""
         self.from_email = settings.FROM_EMAIL
         self.from_name = "JobScale"
+
+    def _unsub_footer(self, user_id: Optional[int] = None) -> str:
+        manage = f"{settings.APP_URL.rstrip('/')}/alerts"
+        if user_id:
+            from app.services.unsubscribe import unsubscribe_url
+
+            unsub = unsubscribe_url(user_id)
+        else:
+            unsub = manage
+        return (
+            f'<p style="color:#9ca3af;font-size:12px;margin-top:24px;text-align:center">'
+            f'<a href="{manage}" style="color:#9ca3af">Manage preferences</a>'
+            f' &nbsp;|&nbsp; '
+            f'<a href="{unsub}" style="color:#9ca3af">Unsubscribe</a></p>'
+        )
     
     def send_email(
         self,
@@ -32,7 +54,7 @@ class EmailService:
         html_content: str,
         text_content: Optional[str] = None,
     ) -> bool:
-        """Send an email"""
+        """Send an email. Production never reports success for console-only fallback."""
         sg_key = (self.sendgrid_api_key or "").strip()
         if sg_key and sg_key.lower() not in ("mock", "placeholder", "your-key"):
             try:
@@ -61,17 +83,22 @@ class EmailService:
                 )
                 if resp.status_code in (200, 202):
                     return True
-                print(f"SendGrid failed: {resp.status_code} {resp.text[:300]}")
+                logger.warning("SendGrid failed: %s %s", resp.status_code, resp.text[:300])
             except Exception as e:
-                print(f"SendGrid error: {e}")
+                logger.warning("SendGrid error: %s", e)
 
-        if settings.DEBUG and not (self.smtp_user and self.smtp_password):
+        has_smtp = bool(self.smtp_user and self.smtp_password)
+        if settings.DEBUG and not _is_production() and not has_smtp:
             print(f"\nEMAIL (DEV MODE — no SMTP/SendGrid)")
             print(f"To: {to}")
             print(f"Subject: {subject}")
             print(f"Content: {html_content[:200]}...")
             print()
             return True
+
+        if not has_smtp and _is_production():
+            logger.error("Email send failed: no SendGrid/SMTP configured in production")
+            return False
 
         try:
             msg = MIMEMultipart("alternative")
@@ -97,7 +124,7 @@ class EmailService:
 
             return True
         except Exception as e:
-            print(f"Failed to send email: {e}")
+            logger.error("Failed to send email: %s", e)
             return False
     
     def send_welcome_email(self, to: str, name: str) -> bool:
@@ -209,14 +236,14 @@ class EmailService:
             <ul>
                 <li>Research the company</li>
                 <li>Review common interview questions for this role</li>
-                <li>Practice with our AI interview coach (coming soon!)</li>
+                <li><a href="{settings.APP_URL.rstrip('/')}/interview-coach">Practice with the AI interview coach</a></li>
             </ul>
             
             <p style="margin-top: 30px;">
-                <a href="{settings.APP_URL}/dashboard" 
+                <a href="{settings.APP_URL.rstrip('/')}/interview-coach" 
                    style="background-color: #16a34a; color: white; padding: 12px 24px; 
                           text-decoration: none; border-radius: 6px; display: inline-block;">
-                    Update Application Status
+                    Open interview coach
                 </a>
             </p>
             
@@ -229,9 +256,9 @@ class EmailService:
         """
         return self.send_email(to, subject, html)
     
-    def send_job_alert(self, to: str, jobs: List[dict]) -> bool:
+    def send_job_alert(self, to: str, jobs: List[dict], user_id: Optional[int] = None) -> bool:
         """Send job alert email with new matching jobs"""
-        subject = f"🔔 {len(jobs)} New Jobs Match Your Profile"
+        subject = f"{len(jobs)} New Jobs Match Your Profile"
         
         jobs_html = ""
         for job in jobs[:5]:  # Max 5 jobs
@@ -262,9 +289,7 @@ class EmailService:
                 </a>
             </p>
             
-            <p style="color: #666; font-size: 14px; margin-top: 30px;">
-                Don't want these emails? <a href="#" style="color: #666;">Unsubscribe</a>
-            </p>
+            {self._unsub_footer(user_id)}
             
             <p>
                 The JobScale Team
@@ -274,7 +299,7 @@ class EmailService:
         """
         return self.send_email(to, subject, html)
 
-    def send_salary_upgrade_alert(self, to: str, name: str, current_salary: int, jobs: List[dict]) -> bool:
+    def send_salary_upgrade_alert(self, to: str, name: str, current_salary: int, jobs: List[dict], user_id: Optional[int] = None) -> bool:
         """Send salary upgrade alert - the post-hire retention email"""
         subject = f"💰 We found jobs paying more than your £{current_salary:,} salary"
         
@@ -334,14 +359,14 @@ class EmailService:
             
             <div style="padding: 15px; text-align: center; color: #9ca3af; font-size: 12px;">
                 <p>You're receiving this because you enabled salary alerts on JobScale.</p>
-                <p><a href="{settings.APP_URL}/profile" style="color: #9ca3af;">Manage preferences</a> | <a href="#" style="color: #9ca3af;">Unsubscribe</a></p>
+                {self._unsub_footer(user_id)}
             </div>
         </body>
         </html>
         """
         return self.send_email(to, subject, html)
 
-    def send_weekly_career_report(self, to: str, name: str, report: dict) -> bool:
+    def send_weekly_career_report(self, to: str, name: str, report: dict, user_id: Optional[int] = None) -> bool:
         """Send weekly career report email (upsell for annual report)"""
         subject = "📊 Your Weekly Career Report"
         
@@ -392,9 +417,7 @@ class EmailService:
                 <a href="{settings.APP_URL}/pricing" style="color: #7c3aed; font-weight: 600; font-size: 14px;">Upgrade to Pro →</a>
             </div>
             
-            <p style="color: #9ca3af; font-size: 12px; margin-top: 20px; text-align: center;">
-                <a href="{settings.APP_URL}/profile" style="color: #9ca3af;">Manage preferences</a>
-            </p>
+            {self._unsub_footer(user_id)}
         </body>
         </html>
         """

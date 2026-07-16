@@ -148,6 +148,19 @@ class Settings(BaseSettings):
             raise RuntimeError(
                 "ENVIRONMENT=production requires a strong SECRET_KEY (32+ chars, not the default)."
             )
+        # Never ship with DEBUG console email short-circuit
+        object.__setattr__(self, "DEBUG", False)
+        origins = self.cors_origins()
+        if not origins:
+            raise RuntimeError("ENVIRONMENT=production requires CORS_ORIGINS to be set.")
+        if any(o.strip() == "*" for o in origins):
+            raise RuntimeError("ENVIRONMENT=production forbids CORS_ORIGINS=*")
+        # Prefer explicit HTTPS app origins (allow localhost only if explicitly listed for staged prod)
+        https_origins = [o for o in origins if o.startswith("https://")]
+        if not https_origins:
+            raise RuntimeError(
+                "ENVIRONMENT=production requires at least one https:// origin in CORS_ORIGINS."
+            )
 
 
 settings = Settings()

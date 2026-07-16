@@ -265,11 +265,29 @@ export default function KanbanPage() {
                   </span>
                 </div>
 
-                <div className="space-y-2">
+                <div
+                  className="space-y-2 min-h-[80px]"
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const appId = Number(e.dataTransfer.getData('text/app-id'));
+                    if (!appId) return;
+                    const targetStage = stage.id === 'wishlist' ? 'not_started' : stage.id;
+                    moveStage(appId, targetStage);
+                  }}
+                >
                   {stageApps.map((app) => (
                     <div
                       key={app.id}
-                      className="bg-white rounded-lg p-3.5 shadow-sm hover:shadow-md transition-shadow border border-slate-100"
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData('text/app-id', String(app.id));
+                        e.dataTransfer.effectAllowed = 'move';
+                      }}
+                      className="bg-white rounded-lg p-3.5 shadow-sm hover:shadow-md transition-shadow border border-slate-100 cursor-grab active:cursor-grabbing"
                     >
                       <h3 className="font-semibold text-slate-900 text-sm leading-snug">{app.job?.title || 'Untitled'}</h3>
                       <p className="text-sm text-slate-500 mt-1">{app.job?.company || 'Unknown'}</p>
@@ -343,7 +361,7 @@ export default function KanbanPage() {
                 {stageApps.map((app) => (
                   <div
                     key={app.id}
-                    className="p-4 hover:bg-slate-50 transition-colors cursor-pointer"
+                    className="p-4 hover:bg-slate-50 transition-colors"
                   >
                     <h3 className="font-semibold text-slate-900 text-base">{app.job?.title || 'Untitled'}</h3>
                     <p className="text-sm text-slate-500 mt-1">{app.job?.company || 'Unknown'}</p>
@@ -352,6 +370,20 @@ export default function KanbanPage() {
                       <LocationIcon className="w-3 h-3" />
                       <span>{app.job?.location || ''}</span>
                     </div>
+                    <label className="block mt-3 text-[10px] uppercase tracking-wide text-slate-400">
+                      Move to
+                      <select
+                        className="mt-0.5 w-full text-xs rounded border border-slate-200 bg-white px-2 py-1.5 text-slate-700"
+                        value={app.stage || 'not_started'}
+                        onChange={(e) => moveStage(app.id, e.target.value)}
+                      >
+                        {STAGES.map((s) => (
+                          <option key={s.id} value={s.id === 'wishlist' ? 'not_started' : s.id}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                   </div>
                 ))}
               </div>

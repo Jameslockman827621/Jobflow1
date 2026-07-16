@@ -17,7 +17,13 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string, opts?: { redirectTo?: string | null }) => Promise<void>;
-  register: (email: string, password: string, firstName: string, lastName: string) => Promise<void>;
+  register: (
+    email: string,
+    password: string,
+    firstName: string,
+    lastName: string,
+    opts?: { referralCode?: string | null }
+  ) => Promise<void>;
   logout: () => void;
   getToken: () => string | null;
   authFetch: (url: string, options?: RequestInit) => Promise<Response>;
@@ -128,7 +134,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push(dest);
   }
 
-  async function register(email: string, password: string, firstName: string, lastName: string) {
+  async function register(
+    email: string,
+    password: string,
+    firstName: string,
+    lastName: string,
+    opts?: { referralCode?: string | null }
+  ) {
     const apiBase = getApiBase();
 
     const response = await fetch(`${apiBase}/auth/register`, {
@@ -153,6 +165,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const loginData = await loginRes.json();
     localStorage.setItem(TOKEN_KEY, loginData.access_token);
     syncTokenToExtension(loginData.access_token);
+
+    const ref = opts?.referralCode?.trim();
+    if (ref) {
+      try {
+        await fetch(`${apiBase}/referrals/claim`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${loginData.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ code: ref }),
+        });
+      } catch {
+        // Non-blocking — user can claim later
+      }
+    }
 
     const meRes = await fetch(`${apiBase}/auth/me`, {
       headers: { 'Authorization': `Bearer ${loginData.access_token}` },

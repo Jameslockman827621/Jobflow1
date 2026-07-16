@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,6 +7,40 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api import health, auth, jobs, users, applications, profile, interview, billing, referrals, interview_coach, career, analytics, reviews, onboarding, cvs, auto_apply, career_report, salary_alerts, companies, apply_engine, webhooks, answer_bank
 from app.middleware.rate_limit import RateLimitMiddleware
+
+
+def _configure_logging() -> None:
+    """JSON structured logging when structlog is available; else stdlib."""
+    level = logging.DEBUG if settings.DEBUG else logging.INFO
+    try:
+        import structlog
+
+        structlog.configure(
+            processors=[
+                structlog.contextvars.merge_contextvars,
+                structlog.processors.add_log_level,
+                structlog.processors.TimeStamper(fmt="iso"),
+                structlog.processors.StackInfoRenderer(),
+                structlog.processors.format_exc_info,
+                structlog.processors.JSONRenderer(),
+            ],
+            wrapper_class=structlog.make_filtering_bound_logger(level),
+            logger_factory=structlog.PrintLoggerFactory(),
+            cache_logger_on_first_use=True,
+        )
+        structlog.get_logger("jobscale").info(
+            "logging_configured",
+            environment=settings.ENVIRONMENT,
+            json=True,
+        )
+    except Exception:
+        logging.basicConfig(
+            level=level,
+            format="%(asctime)s %(levelname)s %(name)s %(message)s",
+        )
+
+
+_configure_logging()
 
 
 @asynccontextmanager
@@ -21,12 +56,18 @@ app = FastAPI(
 )
 
 # CORS
+_cors_methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+_cors_headers = ["Authorization", "Content-Type", "Accept", "X-Requested-With"]
+if str(settings.ENVIRONMENT).lower() != "production":
+    _cors_methods = ["*"]
+    _cors_headers = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins(),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=_cors_methods,
+    allow_headers=_cors_headers,
 )
 app.add_middleware(RateLimitMiddleware)
 

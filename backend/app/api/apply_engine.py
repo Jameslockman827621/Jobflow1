@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.api.auth import get_current_user
+from app.core.security import get_current_admin, get_current_user
 from app.database import get_db
 from app.models.application import Application
 from app.models.company import ApplyRun
@@ -396,6 +396,32 @@ async def apply_metrics(
         "needs_user": by_status.get("needs_user", 0),
         "failed": by_status.get("failed", 0),
         "stale": by_status.get("stale", 0),
+    }
+
+
+@router.get("/metrics/ops")
+async def apply_ops_metrics(
+    hours: int = 24,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin),
+):
+    """Admin: global ApplyRun health (stale/failed/submitted) across all users."""
+    _ = current_user
+    since = datetime.utcnow() - timedelta(hours=min(max(hours, 1), 168))
+    rows = db.query(ApplyRun).filter(ApplyRun.created_at >= since).all()
+    by_status = Counter(r.status for r in rows)
+    by_ats = Counter((r.ats_type or "unknown") for r in rows)
+    return {
+        "window_hours": min(max(hours, 1), 168),
+        "total_runs": len(rows),
+        "by_status": dict(by_status),
+        "by_ats": dict(by_ats),
+        "stale": by_status.get("stale", 0),
+        "failed": by_status.get("failed", 0),
+        "needs_user": by_status.get("needs_user", 0),
+        "submitted": by_status.get("submitted", 0),
+        "running": by_status.get("running", 0),
+        "queued": by_status.get("queued", 0),
     }
 
 

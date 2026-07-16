@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: 'grid' },
   { href: '/cv-builder', label: 'CV Builder', icon: 'document' },
   { href: '/kanban', label: 'Tracker', icon: 'columns' },
+  { href: '/interview-coach', label: 'Coach', icon: 'trending' },
   { href: '/answers', label: 'Answers', icon: 'document' },
   { href: '/analytics', label: 'Analytics', icon: 'chart' },
   { href: '/career', label: 'Career', icon: 'trending' },
