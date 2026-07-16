@@ -161,6 +161,13 @@ function DashboardPage() {
   const [lastApplyRun, setLastApplyRun] = useState<ApplyRunSummary | null>(null);
   const [queueHeadless, setQueueHeadless] = useState(false);
   const [genuineSubmit, setGenuineSubmit] = useState(false);
+  const [boardConnect, setBoardConnect] = useState<{
+    linkedin?: { connected: boolean; connect_url?: string };
+    indeed?: { connected: boolean; connect_url?: string };
+    extension_required?: boolean;
+    message?: string;
+  } | null>(null);
+  const [connectingBoard, setConnectingBoard] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -178,6 +185,74 @@ function DashboardPage() {
     }
   }, [searchParams]);
 
+  async function loadConnectStatus() {
+    try {
+      const res = await authFetch('/api/v1/apply-engine/connect/status');
+      if (res.ok) {
+        const data = await res.json();
+        setBoardConnect({
+          linkedin: data.boards?.linkedin,
+          indeed: data.boards?.indeed,
+          extension_required: data.extension_required,
+          message: data.message,
+        });
+      }
+    } catch {
+      /* non-blocking */
+    }
+  }
+
+  async function connectBoard(board: 'linkedin' | 'indeed') {
+    setConnectingBoard(board);
+    setError('');
+    try {
+      // Prefer extension bridge (real cookie sync)
+      const ext = (window as any).JobScaleExtension;
+      if (ext && typeof ext.connectBoard === 'function') {
+        const result = await ext.connectBoard(board);
+        if (result?.ok) {
+          toast.success(`${board === 'linkedin' ? 'LinkedIn' : 'Indeed'} connected for Easy Apply`);
+          await loadConnectStatus();
+          return;
+        }
+        // Fall through to open board + poll if extension returned error
+        if (result?.error && !String(result.error).includes('timeout')) {
+          toast.error(result.error);
+        }
+      } else {
+        // Dispatch for content-script bridge if present without JobScaleExtension
+        window.dispatchEvent(new CustomEvent('jobscale-connect-board', { detail: { board } }));
+      }
+      const url =
+        boardConnect?.[board]?.connect_url
+        || (board === 'linkedin' ? 'https://www.linkedin.com/feed/' : 'https://www.indeed.com/');
+      window.open(url, '_blank', 'noopener,noreferrer');
+      toast.success(`Log into ${board === 'linkedin' ? 'LinkedIn' : 'Indeed'} in the new tab — JobScale extension will sync your session`);
+      // Poll for up to ~40s
+      for (let i = 0; i < 10; i++) {
+        await new Promise((r) => setTimeout(r, 4000));
+        await loadConnectStatus();
+        const connected = (await authFetch('/api/v1/apply-engine/connect/status').then((r) => r.json()).catch(() => null))
+          ?.boards?.[board]?.connected;
+        if (connected) {
+          toast.success(`${board === 'linkedin' ? 'LinkedIn' : 'Indeed'} connected`);
+          break;
+        }
+      }
+      await loadConnectStatus();
+    } finally {
+      setConnectingBoard(null);
+    }
+  }
+
+  async function disconnectBoard(board: 'linkedin' | 'indeed') {
+    const res = await authFetch(`/api/v1/apply-engine/board-sessions/${board}`, { method: 'DELETE' });
+    if (res.ok) {
+      toast.success(`${board === 'linkedin' ? 'LinkedIn' : 'Indeed'} disconnected`);
+      await loadConnectStatus();
+    }
+  }
+
   async function loadAutomationMetrics() {
     try {
       const [covRes, quotaRes, runsRes, settingsRes] = await Promise.all([
@@ -185,6 +260,7 @@ function DashboardPage() {
         authFetch('/api/v1/apply-engine/quota'),
         authFetch('/api/v1/apply-engine/runs?limit=5'),
         authFetch('/api/v1/apply-engine/settings'),
+        loadConnectStatus(),
       ]);
       if (settingsRes.ok) {
         const st = await settingsRes.json();
@@ -459,7 +535,7 @@ function DashboardPage() {
           <div>
             <p className="text-xs font-semibold text-slate-900 uppercase tracking-wide">Automation</p>
             <p className="text-xs text-slate-500 mt-0.5">
-              Extension fills forms; optional headless queue runs server-side
+              Connect LinkedIn/Indeed, then queue genuine headless Easy Apply
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-slate-600">
@@ -484,6 +560,57 @@ function DashboardPage() {
                 {lastApplyRun?.status ?? 'none'}
               </span>
             </span>
+          </div>
+        </div>
+
+        {/* Connect LinkedIn / Indeed */}
+        <div className="mb-8 px-4 py-4 border border-slate-200 rounded-lg bg-white">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
+            <div>
+              <p className="text-xs font-semibold text-slate-900 uppercase tracking-wide">Board connections</p>
+              <p className="text-xs text-slate-500 mt-0.5 max-w-xl">
+                Install the JobScale Chrome extension, click Connect, log in — we sync your session so Easy Apply can run for you.
+              </p>
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            {(['linkedin', 'indeed'] as const).map((board) => {
+              const info = boardConnect?.[board];
+              const connected = !!info?.connected;
+              const label = board === 'linkedin' ? 'LinkedIn' : 'Indeed';
+              return (
+                <div
+                  key={board}
+                  className="flex items-center justify-between gap-3 rounded-md border border-slate-100 bg-slate-50/50 px-3 py-3"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">{label}</p>
+                    <p className={`text-xs mt-0.5 ${connected ? 'text-teal-700' : 'text-slate-500'}`}>
+                      {connected ? 'Connected · Easy Apply ready' : 'Not connected'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {connected && (
+                      <button
+                        type="button"
+                        onClick={() => disconnectBoard(board)}
+                        className="text-xs text-slate-500 hover:text-slate-800 px-2 py-1"
+                      >
+                        Disconnect
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      disabled={connectingBoard === board}
+                      onClick={() => connectBoard(board)}
+                      className="px-3 py-1.5 text-xs font-semibold rounded-md bg-navy-900 text-white hover:bg-navy-800 disabled:opacity-50"
+                    >
+                      {connectingBoard === board ? 'Connecting…' : connected ? 'Reconnect' : 'Connect'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 

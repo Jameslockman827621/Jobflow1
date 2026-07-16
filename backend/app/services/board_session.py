@@ -14,6 +14,116 @@ from app.models.board_session import BoardSession
 
 SUPPORTED_BOARDS = frozenset({"linkedin", "indeed"})
 
+# Auth cookie signals — without these, Easy Apply will hit login walls
+REQUIRED_COOKIES = {
+    "linkedin": ("li_at",),
+    "indeed": ("PPID", "CTK", "INDEED_CSRF_TOKEN", "indeed_rcc", "SOC"),
+}
+
+BOARD_HOME = {
+    "linkedin": "https://www.linkedin.com/feed/",
+    "indeed": "https://www.indeed.com/",
+}
+
+
+def cookies_to_storage_state(cookies: list, board: str) -> Dict[str, Any]:
+    """Convert Chrome/extension cookie objects into Playwright storage_state."""
+    board = (board or "").lower().strip()
+    if board not in SUPPORTED_BOARDS:
+        raise ValueError(f"Unsupported board: {board}")
+    if not isinstance(cookies, list) or not cookies:
+        raise ValueError("cookies must be a non-empty list")
+
+    out = []
+    names = set()
+    for c in cookies:
+        if not isinstance(c, dict) or not c.get("name"):
+            continue
+        name = str(c["name"])
+        names.add(name)
+        domain = c.get("domain") or (
+            ".linkedin.com" if board == "linkedin" else ".indeed.com"
+        )
+        # Playwright wants expires as float seconds; chrome uses expirationDate
+        expires = c.get("expires")
+        if expires is None and c.get("expirationDate") is not None:
+            expires = float(c["expirationDate"])
+        if expires is None:
+            expires = -1
+        same_site = c.get("sameSite") or c.get("same_site") or "Lax"
+        if isinstance(same_site, str):
+            # Chrome: no_restriction | lax | strict | unspecified
+            ss = same_site.lower().replace("_", "")
+            if ss in ("norestriction", "none"):
+                same_site = "None"
+            elif ss == "strict":
+                same_site = "Strict"
+            else:
+                same_site = "Lax"
+        out.append(
+            {
+                "name": name,
+                "value": str(c.get("value") or ""),
+                "domain": domain,
+                "path": c.get("path") or "/",
+                "expires": expires,
+                "httpOnly": bool(c.get("httpOnly", c.get("http_only", False))),
+                "secure": bool(c.get("secure", True)),
+                "sameSite": same_site,
+            }
+        )
+
+    if not out:
+        raise ValueError("No valid cookies provided")
+
+    required = REQUIRED_COOKIES.get(board) or ()
+    if board == "linkedin":
+        if "li_at" not in names:
+            raise ValueError(
+                "LinkedIn session incomplete — missing li_at. "
+                "Log into LinkedIn in Chrome, then Connect again."
+            )
+    elif board == "indeed":
+        if not any(n in names for n in required):
+            raise ValueError(
+                "Indeed session incomplete — log into Indeed in Chrome, then Connect again."
+            )
+
+    return {"cookies": out, "origins": []}
+
+
+def connect_status(db: Session, user_id: int) -> Dict[str, Any]:
+    """Dashboard-facing connect status for LinkedIn / Indeed."""
+    boards = {}
+    for board in sorted(SUPPORTED_BOARDS):
+        row = get_board_session(db, user_id, board)
+        cookie_names = []
+        if row:
+            state = storage_state_dict(row) or {}
+            cookie_names = [c.get("name") for c in (state.get("cookies") or []) if c.get("name")]
+        boards[board] = {
+            "connected": bool(row and row.is_valid),
+            "label": row.label if row else None,
+            "last_used_at": row.last_used_at.isoformat() if row and row.last_used_at else None,
+            "updated_at": row.updated_at.isoformat() if row and getattr(row, "updated_at", None) else None,
+            "cookie_count": len(cookie_names),
+            "has_auth_cookie": (
+                ("li_at" in cookie_names)
+                if board == "linkedin"
+                else any(n in cookie_names for n in REQUIRED_COOKIES["indeed"])
+            ),
+            "connect_url": BOARD_HOME[board],
+        }
+    return {
+        "boards": boards,
+        "extension_required": True,
+        "method": "extension_cookie_sync",
+        "message": (
+            "Install the JobScale extension, click Connect, log into the board, "
+            "and we sync your session for Easy Apply."
+        ),
+    }
+
 
 def upsert_board_session(
     db: Session,

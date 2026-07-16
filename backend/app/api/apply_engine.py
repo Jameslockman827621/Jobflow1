@@ -541,6 +541,56 @@ class BoardSessionUpsert(BaseModel):
     label: Optional[str] = None
 
 
+class BoardCookiesUpsert(BaseModel):
+    cookies: List[dict]
+    label: Optional[str] = None
+
+
+@router.get("/connect/status")
+async def connect_status_endpoint(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Whether LinkedIn / Indeed are connected for Easy Apply."""
+    from app.services.board_session import connect_status
+
+    return connect_status(db, current_user.id)
+
+
+@router.post("/board-sessions/{board}/from-cookies")
+async def session_from_cookies(
+    board: str,
+    body: BoardCookiesUpsert,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Extension Connect path: Chrome cookies → Playwright storage_state → BoardSession.
+    This is how users 'connect LinkedIn/Indeed' for genuine Easy Apply.
+    """
+    from app.services.board_session import cookies_to_storage_state, upsert_board_session
+
+    try:
+        state = cookies_to_storage_state(body.cookies, board)
+        row = upsert_board_session(
+            db,
+            current_user.id,
+            board,
+            state,
+            label=body.label or f"extension-{board}",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    cookie_count = len((state or {}).get("cookies") or [])
+    return {
+        "ok": True,
+        "connected": True,
+        "board": row.board,
+        "cookie_count": cookie_count,
+        "message": f"{board} connected. Easy Apply can run with your session.",
+    }
+
+
 @router.get("/board-sessions")
 async def list_sessions(
     db: Session = Depends(get_db),

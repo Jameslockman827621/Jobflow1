@@ -52,6 +52,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       loadingEl.style.display = 'none';
       loggedInEl.classList.remove('hidden');
 
+      await refreshConnectStatus();
       await loadJobs();
     } catch (error) {
       console.error('Error:', error);
@@ -183,6 +184,51 @@ document.addEventListener('DOMContentLoaded', async () => {
   dashboardBtn.addEventListener('click', () => {
     chrome.tabs.create({ url: `${DASHBOARD_URL}/dashboard` });
   });
+
+  async function refreshConnectStatus() {
+    const el = document.getElementById('connect-status');
+    if (!el) return;
+    chrome.runtime.sendMessage({ action: 'getConnectStatus' }, (resp) => {
+      if (!resp || !resp.ok) {
+        el.textContent = 'Boards: sign in to sync status';
+        return;
+      }
+      const li = resp.boards && resp.boards.linkedin;
+      const ind = resp.boards && resp.boards.indeed;
+      el.textContent =
+        `LinkedIn: ${li && li.connected ? '✓ connected' : 'not connected'} · `
+        + `Indeed: ${ind && ind.connected ? '✓ connected' : 'not connected'}`;
+      const liBtn = document.getElementById('connect-linkedin-btn');
+      const indBtn = document.getElementById('connect-indeed-btn');
+      if (liBtn) liBtn.textContent = li && li.connected ? 'Reconnect LinkedIn' : 'Connect LinkedIn';
+      if (indBtn) indBtn.textContent = ind && ind.connected ? 'Reconnect Indeed' : 'Connect Indeed';
+    });
+  }
+
+  const connectLi = document.getElementById('connect-linkedin-btn');
+  const connectInd = document.getElementById('connect-indeed-btn');
+  if (connectLi) {
+    connectLi.addEventListener('click', () => {
+      connectLi.disabled = true;
+      connectLi.textContent = 'Connecting…';
+      chrome.runtime.sendMessage({ action: 'connectBoard', board: 'linkedin' }, (resp) => {
+        connectLi.disabled = false;
+        alert(resp && resp.ok ? 'LinkedIn connected for Easy Apply.' : (resp && resp.error) || 'Connect failed — log into LinkedIn then try again.');
+        refreshConnectStatus();
+      });
+    });
+  }
+  if (connectInd) {
+    connectInd.addEventListener('click', () => {
+      connectInd.disabled = true;
+      connectInd.textContent = 'Connecting…';
+      chrome.runtime.sendMessage({ action: 'connectBoard', board: 'indeed' }, (resp) => {
+        connectInd.disabled = false;
+        alert(resp && resp.ok ? 'Indeed connected for Easy Apply.' : (resp && resp.error) || 'Connect failed — log into Indeed then try again.');
+        refreshConnectStatus();
+      });
+    });
+  }
 });
 
 function escapeHtml(str) {

@@ -1,29 +1,76 @@
 // JobScale Dashboard Bridge
-// Runs on localhost:3000 - syncs auth token to chrome.storage so the extension can use it
-(function() {
+// Syncs auth token + handles Connect LinkedIn/Indeed from the dashboard page
+(function () {
   'use strict';
 
   function syncToken() {
     try {
       const token = localStorage.getItem('jobscale_token');
       if (token) {
-        chrome.runtime.sendMessage({ action: 'syncToken', token: token }, () => {});
+        chrome.runtime.sendMessage({ action: 'syncToken', token }, () => {});
       }
     } catch (e) {
-      // Cross-origin or extension not loaded
+      // Extension not loaded
     }
   }
 
-  // Sync on load
   syncToken();
 
-  // Sync when storage changes (e.g. after login in another tab)
   window.addEventListener('storage', (e) => {
     if (e.key === 'jobscale_token' && e.newValue) {
       chrome.runtime.sendMessage({ action: 'syncToken', token: e.newValue }, () => {});
     }
   });
 
-  // Poll for token changes (same-tab login)
   setInterval(syncToken, 2000);
+
+  // Dashboard → extension: Connect board
+  window.addEventListener('jobscale-connect-board', (ev) => {
+    const board = ev.detail && ev.detail.board;
+    if (!board) return;
+    syncToken();
+    chrome.runtime.sendMessage({ action: 'connectBoard', board }, (resp) => {
+      window.dispatchEvent(
+        new CustomEvent('jobscale-connect-result', {
+          detail: resp || { ok: false, error: 'Extension did not respond — is it installed?' },
+        })
+      );
+    });
+  });
+
+  // Dashboard asks for status
+  window.addEventListener('jobscale-connect-status', () => {
+    chrome.runtime.sendMessage({ action: 'getConnectStatus' }, (resp) => {
+      window.dispatchEvent(
+        new CustomEvent('jobscale-connect-status-result', { detail: resp || { ok: false } })
+      );
+    });
+  });
+
+  // Background → page when connect succeeds
+  try {
+    chrome.runtime.onMessage.addListener((msg) => {
+      if (msg && msg.action === 'boardConnected') {
+        window.dispatchEvent(
+          new CustomEvent('jobscale-board-connected', { detail: { board: msg.board } })
+        );
+      }
+    });
+  } catch (e) { /* ignore */ }
+
+  // Expose for React without custom events if needed
+  window.JobScaleExtension = {
+    connectBoard(board) {
+      return new Promise((resolve) => {
+        window.dispatchEvent(new CustomEvent('jobscale-connect-board', { detail: { board } }));
+        const handler = (ev) => {
+          window.removeEventListener('jobscale-connect-result', handler);
+          resolve(ev.detail);
+        };
+        window.addEventListener('jobscale-connect-result', handler);
+        setTimeout(() => resolve({ ok: false, error: 'timeout' }), 45000);
+      });
+    },
+    installed: true,
+  };
 })();

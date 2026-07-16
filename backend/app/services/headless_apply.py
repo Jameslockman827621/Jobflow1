@@ -224,6 +224,7 @@ async def run_headless_apply(
     storage_state_path = None
 
     # Load LinkedIn/Indeed browser session when available
+    board_sess = None
     if board_info.get("needs_session") or ats in ("linkedin", "indeed"):
         try:
             from app.services.board_session import (
@@ -231,11 +232,49 @@ async def run_headless_apply(
                 touch_last_used,
                 write_storage_state_file,
             )
+            from urllib.parse import urlparse
 
-            sess = get_board_session(db, user.id, ats if ats in ("linkedin", "indeed") else board_info.get("board"))
-            if sess:
-                storage_state_path = write_storage_state_file(sess)
-                touch_last_used(db, sess)
+            board_key = ats if ats in ("linkedin", "indeed") else board_info.get("board")
+            board_sess = get_board_session(db, user.id, board_key) if board_key else None
+            if board_sess:
+                storage_state_path = write_storage_state_file(board_sess)
+                touch_last_used(db, board_sess)
+            else:
+                # Real board hosts require Connect; local fixtures can still run without cookies
+                host = (urlparse(job.external_url or "").netloc or "").lower()
+                needs_live_session = ("linkedin.com" in host) or ("indeed.com" in host)
+                if needs_live_session:
+                    label = "LinkedIn" if "linkedin" in (ats or host) else "Indeed"
+                    run.status = "needs_user"
+                    run.finished_at = datetime.utcnow()
+                    run.error = "login_required"
+                    run.meta_json = json.dumps(
+                        {
+                            "blocked_reason": "login_required",
+                            "connect_hint": (
+                                f"Connect {label} from Dashboard → Board connections "
+                                "(install JobScale extension, log into the board, sync session)."
+                            ),
+                            "board": board_info,
+                        }
+                    )
+                    application.status = "in_progress"
+                    db.commit()
+                    return {
+                        "ok": True,
+                        "apply_run_id": run.id,
+                        "status": "needs_user",
+                        "submitted": False,
+                        "needs_user": True,
+                        "ats": ats,
+                        "session_used": False,
+                        "blocked_reason": "login_required",
+                        "connect_hint": (
+                            f"Connect {label} from Dashboard → Board connections "
+                            "(JobScale extension)."
+                        ),
+                        "genuine_apply": False,
+                    }
         except Exception as exc:
             logger.warning("board session load failed: %s", exc)
 
@@ -366,6 +405,20 @@ async def run_headless_apply(
     if screenshot_path:
         meta["screenshot_path"] = screenshot_path
 
+    # Stale Connect session → mark invalid so dashboard prompts Reconnect
+    if (
+        board_sess
+        and (result.meta or {}).get("blocked_reason") == "login_required"
+    ):
+        try:
+            board_sess.is_valid = 0
+            meta["session_invalidated"] = True
+            meta["connect_hint"] = (
+                f"Your {ats} session expired — reconnect from Dashboard → Board connections."
+            )
+        except Exception:
+            pass
+
     run.status = status
     run.fields_filled = result.fields_filled
     run.steps_completed = result.steps_completed
@@ -396,6 +449,9 @@ async def run_headless_apply(
         "screenshot_path": screenshot_path,
         "genuine_apply": bool(result.submitted),
         "submit_policy": meta["submit_policy"],
+        "session_used": bool(storage_state_path),
+        "blocked_reason": (result.meta or {}).get("blocked_reason"),
+        "connect_hint": meta.get("connect_hint") or package.get("connect_hint"),
     }
 
 

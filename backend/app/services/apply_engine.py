@@ -335,8 +335,42 @@ def build_apply_package(
     from app.services.board_session import get_board_session
 
     board = classify_url(job.external_url or "")
-    if ats in ("generic", "") and board.get("ats"):
+    if ats in ("generic", "", None) and board.get("ats") and board.get("ats") != "generic":
         ats = board["ats"]
+    # Local fixtures / custom domains: fall back to job source name
+    if ats in ("generic", "", None):
+        src = ""
+        try:
+            if getattr(job, "source", None) is not None:
+                src = (job.source.name or "").lower()
+            elif getattr(job, "source_id", None):
+                from app.models.job import JobSource
+
+                row = db.query(JobSource).filter(JobSource.id == job.source_id).first()
+                src = (row.name or "").lower() if row else ""
+        except Exception:
+            src = ""
+        if src in (
+            "greenhouse",
+            "lever",
+            "ashby",
+            "workday",
+            "workable",
+            "linkedin",
+            "indeed",
+        ):
+            ats = src
+    # Board Easy Apply always needs a connected browser session
+    if ats in ("linkedin", "indeed"):
+        board = {
+            **board,
+            "board": ats,
+            "ats": ats,
+            "apply_mode": board.get("apply_mode")
+            if board.get("apply_mode") not in (None, "company_site", "unknown")
+            else "easy_apply",
+            "needs_session": True,
+        }
     plan = build_fill_plan(payload, ats)
     # Extension may genuinely submit when user opted in
     plan["auto_submit"] = bool(getattr(user, "auto_apply_submit", False))
@@ -344,8 +378,15 @@ def build_apply_package(
     plan["apply_mode"] = board.get("apply_mode")
 
     session_ok = False
-    if board.get("needs_session") and ats in ("linkedin", "indeed"):
+    if ats in ("linkedin", "indeed"):
         session_ok = bool(get_board_session(db, user.id, ats))
+
+    connect_hint = None
+    if ats in ("linkedin", "indeed") and not session_ok:
+        connect_hint = (
+            f"Connect {ats.title()} from the dashboard (JobScale extension) "
+            "so Easy Apply can use your logged-in session."
+        )
 
     return {
         "application_id": application.id if application else None,
@@ -358,6 +399,7 @@ def build_apply_package(
         "applicant": payload,
         "fill_plan": plan,
         "profile_completeness": completeness,
+        "connect_hint": connect_hint,
         "capabilities": {
             "text": True,
             "select": True,

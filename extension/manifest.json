@@ -1,14 +1,15 @@
 {
   "manifest_version": 3,
   "name": "JobScale - AI Job Applications",
-  "version": "2.0.0",
-  "description": "Multi-step ATS auto-fill, CAPTCHA handoff, and one-click apply from Greenhouse, Lever, Workday, Ashby, and more.",
+  "version": "2.1.0",
+  "description": "Connect LinkedIn/Indeed, multi-step ATS auto-fill, and genuine Easy Apply.",
   "permissions": [
     "activeTab",
     "storage",
     "tabs",
     "contextMenus",
-    "scripting"
+    "scripting",
+    "cookies"
   ],
   "host_permissions": [
     "https://*.linkedin.com/*",
@@ -36,6 +37,14 @@
     "service_worker": "background.js"
   },
   "content_scripts": [
+    {
+      "matches": [
+        "https://*.linkedin.com/*",
+        "https://*.indeed.com/*"
+      ],
+      "js": ["board-connect.js"],
+      "run_at": "document_idle"
+    },
     {
       "matches": [
         "https://*.linkedin.com/jobs/*",

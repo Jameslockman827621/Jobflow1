@@ -159,6 +159,11 @@ class IndeedAdapter(BaseATSAdapter):
                 result.needs_user = True
                 result.meta["blocked_reason"] = "login_required"
                 result.meta["apply_mode"] = "login_required"
+                result.meta["connect_hint"] = (
+                    "Connect Indeed from Dashboard → Board connections "
+                    "(JobScale extension) so Apply can use your session."
+                )
+                result.errors.append("login_required")
                 return result
 
         classification = await classify_page(page, page.url)
