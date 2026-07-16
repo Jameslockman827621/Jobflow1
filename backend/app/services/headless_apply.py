@@ -337,122 +337,132 @@ async def run_headless_apply(
                     pass
             break
 
-    if result is None:
-        meta = {"error": str(last_error) if last_error else "unknown"}
+    try:
+        if result is None:
+            meta = {"error": str(last_error) if last_error else "unknown"}
+            if screenshot_path:
+                meta["screenshot_path"] = screenshot_path
+            if batch_id:
+                meta["batch_id"] = batch_id
+            run.status = "failed"
+            run.error = str(last_error)[:2000] if last_error else "unknown"
+            run.finished_at = datetime.utcnow()
+            run.meta_json = json.dumps(meta)
+            db.commit()
+            return {
+                "ok": False,
+                "error": str(last_error) if last_error else "unknown",
+                "apply_run_id": run.id,
+                "screenshot_path": screenshot_path,
+            }
+
+        # Captcha unsolved → needs_user (not a separate captcha status for user-facing)
+        # Already-applied on LinkedIn/Indeed: treat as non-error filled/skipped
+        already = bool((result.meta or {}).get("already_applied") or (result.meta or {}).get("skipped"))
+        if result.submitted:
+            status = "submitted"
+            application.status = "submitted"
+            application.stage = "applied"
+            application.submitted_at = datetime.utcnow()
+            application.applied_via = "headless"
+        elif already:
+            status = "filled"
+            application.status = "submitted" if (result.meta or {}).get("already_applied") else "in_progress"
+            if (result.meta or {}).get("already_applied"):
+                application.stage = "applied"
+                application.submitted_at = application.submitted_at or datetime.utcnow()
+            application.applied_via = "headless"
+        elif result.captcha_present and not result.captcha_solved:
+            status = "needs_user"
+            application.status = "in_progress"
+            application.applied_via = "headless"
+            result.needs_user = True
+        elif result.needs_user:
+            status = "needs_user"
+            application.status = "in_progress"
+            application.applied_via = "headless"
+        else:
+            status = "filled"
+            application.status = "in_progress"
+            application.applied_via = "headless"
+
+        meta = result.to_dict()
+        meta["resume_local_path"] = applicant.get("resume_local_path")
+        meta["board"] = board_info
+        meta["apply_mode"] = (result.meta or {}).get("apply_mode") or board_info.get("apply_mode")
+        meta["session_used"] = bool(storage_state_path)
+        if batch_id:
+            meta["batch_id"] = batch_id
+        meta["submit_policy"] = {
+            "requested_auto_submit": bool(auto_submit),
+            "user_auto_apply_submit": user_allows_submit,
+            "platform_allows_submit": platform_allows_submit,
+            "should_submit": should_submit,
+        }
+        if auto_submit and not should_submit:
+            meta["submit_blocked_reason"] = (
+                "user_opt_in_required"
+                if not user_allows_submit
+                else "platform_submit_disabled"
+            )
         if screenshot_path:
             meta["screenshot_path"] = screenshot_path
-        run.status = "failed"
-        run.error = str(last_error)[:2000] if last_error else "unknown"
+
+        # Stale Connect session → mark invalid so dashboard prompts Reconnect
+        if (
+            board_sess
+            and (result.meta or {}).get("blocked_reason") == "login_required"
+        ):
+            try:
+                board_sess.is_valid = 0
+                meta["session_invalidated"] = True
+                meta["connect_hint"] = (
+                    f"Your {ats} session expired — reconnect from Dashboard → Board connections."
+                )
+            except Exception:
+                pass
+
+        run.status = status
+        run.fields_filled = result.fields_filled
+        run.steps_completed = result.steps_completed
+        run.captcha_solved = result.captcha_solved
         run.finished_at = datetime.utcnow()
         run.meta_json = json.dumps(meta)
+        if result.errors:
+            run.error = "; ".join(result.errors)[:2000]
         db.commit()
+
         return {
-            "ok": False,
-            "error": str(last_error) if last_error else "unknown",
+            "ok": True,
             "apply_run_id": run.id,
+            "status": status,
+            "fields_filled": result.fields_filled,
+            "fields_attempted": result.fields_attempted,
+            "steps_completed": result.steps_completed,
+            "captcha_present": result.captcha_present,
+            "captcha_solved": result.captcha_solved,
+            "submitted": result.submitted,
+            "needs_user": result.needs_user or status == "needs_user",
+            "filled_keys": result.filled_keys,
+            "ats": ats,
+            "adapter": adapter.name,
+            "core_ok": (result.meta or {}).get("core_ok"),
+            "page_url": result.page_url,
+            "resume_local_path": applicant.get("resume_local_path"),
             "screenshot_path": screenshot_path,
+            "genuine_apply": bool(result.submitted),
+            "submit_policy": meta["submit_policy"],
+            "session_used": bool(storage_state_path),
+            "blocked_reason": (result.meta or {}).get("blocked_reason"),
+            "connect_hint": meta.get("connect_hint") or package.get("connect_hint"),
         }
-
-    # Captcha unsolved → needs_user (not a separate captcha status for user-facing)
-    # Already-applied on LinkedIn/Indeed: treat as non-error filled/skipped
-    already = bool((result.meta or {}).get("already_applied") or (result.meta or {}).get("skipped"))
-    if result.submitted:
-        status = "submitted"
-        application.status = "submitted"
-        application.stage = "applied"
-        application.submitted_at = datetime.utcnow()
-        application.applied_via = "headless"
-    elif already:
-        status = "filled"
-        application.status = "submitted" if (result.meta or {}).get("already_applied") else "in_progress"
-        if (result.meta or {}).get("already_applied"):
-            application.stage = "applied"
-            application.submitted_at = application.submitted_at or datetime.utcnow()
-        application.applied_via = "headless"
-    elif result.captcha_present and not result.captcha_solved:
-        status = "needs_user"
-        application.status = "in_progress"
-        application.applied_via = "headless"
-        result.needs_user = True
-    elif result.needs_user:
-        status = "needs_user"
-        application.status = "in_progress"
-        application.applied_via = "headless"
-    else:
-        status = "filled"
-        application.status = "in_progress"
-        application.applied_via = "headless"
-
-    meta = result.to_dict()
-    meta["resume_local_path"] = applicant.get("resume_local_path")
-    meta["board"] = board_info
-    meta["apply_mode"] = (result.meta or {}).get("apply_mode") or board_info.get("apply_mode")
-    meta["session_used"] = bool(storage_state_path)
-    if batch_id:
-        meta["batch_id"] = batch_id
-    meta["submit_policy"] = {
-        "requested_auto_submit": bool(auto_submit),
-        "user_auto_apply_submit": user_allows_submit,
-        "platform_allows_submit": platform_allows_submit,
-        "should_submit": should_submit,
-    }
-    if auto_submit and not should_submit:
-        meta["submit_blocked_reason"] = (
-            "user_opt_in_required"
-            if not user_allows_submit
-            else "platform_submit_disabled"
-        )
-    if screenshot_path:
-        meta["screenshot_path"] = screenshot_path
-
-    # Stale Connect session → mark invalid so dashboard prompts Reconnect
-    if (
-        board_sess
-        and (result.meta or {}).get("blocked_reason") == "login_required"
-    ):
-        try:
-            board_sess.is_valid = 0
-            meta["session_invalidated"] = True
-            meta["connect_hint"] = (
-                f"Your {ats} session expired — reconnect from Dashboard → Board connections."
-            )
-        except Exception:
-            pass
-
-    run.status = status
-    run.fields_filled = result.fields_filled
-    run.steps_completed = result.steps_completed
-    run.captcha_solved = result.captcha_solved
-    run.finished_at = datetime.utcnow()
-    run.meta_json = json.dumps(meta)
-    if result.errors:
-        run.error = "; ".join(result.errors)[:2000]
-    db.commit()
-
-    return {
-        "ok": True,
-        "apply_run_id": run.id,
-        "status": status,
-        "fields_filled": result.fields_filled,
-        "fields_attempted": result.fields_attempted,
-        "steps_completed": result.steps_completed,
-        "captcha_present": result.captcha_present,
-        "captcha_solved": result.captcha_solved,
-        "submitted": result.submitted,
-        "needs_user": result.needs_user or status == "needs_user",
-        "filled_keys": result.filled_keys,
-        "ats": ats,
-        "adapter": adapter.name,
-        "core_ok": (result.meta or {}).get("core_ok"),
-        "page_url": result.page_url,
-        "resume_local_path": applicant.get("resume_local_path"),
-        "screenshot_path": screenshot_path,
-        "genuine_apply": bool(result.submitted),
-        "submit_policy": meta["submit_policy"],
-        "session_used": bool(storage_state_path),
-        "blocked_reason": (result.meta or {}).get("blocked_reason"),
-        "connect_hint": meta.get("connect_hint") or package.get("connect_hint"),
-    }
+    finally:
+        # Never leave board cookies on disk after Playwright exits
+        if storage_state_path:
+            try:
+                os.unlink(storage_state_path)
+            except OSError:
+                pass
 
 
 async def live_fill_url(

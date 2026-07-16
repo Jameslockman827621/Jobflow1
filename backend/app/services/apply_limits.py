@@ -27,6 +27,15 @@ DEFAULT_BATCH_LIMIT = PLAN_QUOTAS["free"]["batch"]
 BILLABLE_STATUSES = ("submitted", "filled", "running", "queued", "needs_user")
 NON_BILLABLE_STATUSES = ("failed", "stale", "deferred", "skipped")
 
+# Connect / profile gates must NOT burn free-tier quota
+_NON_BILLABLE_META_LIKE = (
+    '%"blocked_reason": "login_required"%',
+    '%"blocked_reason":"login_required"%',
+    "%profile_incomplete%",
+    '%"blocked_reason": "workday_account_wall"%',
+    '%"blocked_reason":"workday_account_wall"%',
+)
+
 
 def normalize_plan(plan: Optional[str]) -> str:
     p = (plan or "free").lower().strip().split("_")[0]
@@ -38,12 +47,19 @@ def limits_for_plan(plan: Optional[str]) -> Dict[str, int]:
 
 
 def _billable_filter(query):
-    """Live headless/extension attempts that consume capacity."""
-    return query.filter(
+    """Live headless/extension attempts that consume capacity.
+
+    Excludes dry_run rows and connect/profile soft-blocks so users are not
+    punished when LinkedIn/Indeed session is missing or profile is incomplete.
+    """
+    q = query.filter(
         ApplyRun.status.in_(BILLABLE_STATUSES),
         or_(ApplyRun.meta_json.is_(None), ~ApplyRun.meta_json.like('%"dry_run": true%')),
         or_(ApplyRun.meta_json.is_(None), ~ApplyRun.meta_json.like('%"dry_run":true%')),
     )
+    for marker in _NON_BILLABLE_META_LIKE:
+        q = q.filter(or_(ApplyRun.meta_json.is_(None), ~ApplyRun.meta_json.like(marker)))
+    return q
 
 
 def check_apply_quota(

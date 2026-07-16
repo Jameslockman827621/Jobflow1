@@ -23,6 +23,7 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 - [x] Live LinkedIn/Indeed without Connect → `login_required` + connect hint (prior)
 - [x] Celery apply worker documented in QUICKSTART + health `/ready` reports workers
 - [ ] Live employer submit smoke (manual, ToS) for Greenhouse + LinkedIn Easy Apply
+- [x] Auto-apply reliability hardenings + edge matrix (`AUTO-APPLY-RELIABILITY.md`, 14 edge tests)
 
 ### P0.3 Connect boards (session)
 - [x] Extension cookie sync → BoardSession (prior)

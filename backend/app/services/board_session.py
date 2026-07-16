@@ -224,14 +224,26 @@ def storage_state_dict(row: BoardSession) -> Optional[Dict[str, Any]]:
 
 
 def write_storage_state_file(row: BoardSession) -> Optional[str]:
-    """Write storage_state to a temp JSON file for Playwright new_context."""
+    """Write storage_state to a temp JSON file for Playwright new_context.
+
+    Caller MUST delete the file in a finally block (see headless_apply).
+    Mode is 0o600 so board cookies are not world-readable.
+    """
     data = storage_state_dict(row)
     if not data:
         return None
     fd, path = tempfile.mkstemp(prefix=f"jobscale_{row.board}_", suffix=".json")
+    try:
+        os.fchmod(fd, 0o600)
+    except Exception:
+        pass
     os.close(fd)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f)
+    try:
+        os.chmod(path, 0o600)
+    except Exception:
+        pass
     return path
 
 

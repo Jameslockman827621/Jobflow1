@@ -306,7 +306,11 @@ def core_fields_ok(filled_keys: List[str], *, require_name_parts: bool = True) -
 
 
 def readiness_for_submit(result, applicant: Dict[str, Any]) -> Dict[str, Any]:
-    """Gate genuine submit on core fields, resume, and captcha."""
+    """Gate genuine submit on core fields, resume, and captcha.
+
+    Resume is soft here; ``attempt_genuine_submit_gated`` hard-blocks when the
+    live page still has a file input and resume was not attached.
+    """
     missing: List[str] = []
     core_ok = bool((result.meta or {}).get("core_ok")) or core_fields_ok(result.filled_keys)
     if not core_ok:
@@ -316,7 +320,7 @@ def readiness_for_submit(result, applicant: Dict[str, Any]) -> Dict[str, Any]:
         or bool((result.meta or {}).get("resume_uploaded"))
         or not applicant.get("resume_local_path")
     )
-    if applicant.get("resume_local_path") and "resume" not in (result.filled_keys or []):
+    if applicant.get("resume_local_path") and not resume_ok:
         result.meta["resume_pending"] = True
     if result.captcha_present and not result.captcha_solved:
         missing.append(BLOCK_CAPTCHA)
@@ -340,6 +344,25 @@ async def attempt_genuine_submit_gated(
 
     await detect_and_solve_captcha(page, result)
     gate = readiness_for_submit(result, applicant)
+    # Hard-require resume when the form still exposes a file input and we had a CV file
+    if (
+        applicant.get("resume_local_path")
+        and "resume" not in (result.filled_keys or [])
+        and not (result.meta or {}).get("resume_uploaded")
+    ):
+        try:
+            file_inputs = await page.locator("input[type='file']").count()
+        except Exception:
+            file_inputs = 0
+        if file_inputs > 0:
+            gate = dict(gate)
+            gate["ready"] = False
+            gate["resume_ok"] = False
+            missing = list(gate.get("missing") or [])
+            if "resume" not in missing:
+                missing.append("resume")
+            gate["missing"] = missing
+            result.meta["resume_required_on_page"] = True
     result.meta["submit_readiness"] = gate
     if not gate["ready"]:
         result.needs_user = True

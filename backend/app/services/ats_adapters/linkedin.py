@@ -281,25 +281,31 @@ class LinkedInAdapter(BaseATSAdapter):
         )
 
         if auto_submit:
-            # LinkedIn confirmation can be "Application sent"
+            # LinkedIn confirmation can be "Application sent" — never bare "applied"
+            # (Easy Apply review pages often contain the word "applied" / "Easy Apply").
             await attempt_genuine_submit_gated(page, result, applicant, refill_fn=_refill)
             if not result.submitted:
-                # Extra LinkedIn confirmation patterns
                 try:
                     text = (await page.inner_text("body")).lower()
-                    if any(
-                        x in text
-                        for x in (
-                            "application sent",
-                            "your application was sent",
-                            "applied",
-                        )
-                    ):
-                        # Only if we clicked submit
+                    strong = (
+                        "application sent",
+                        "your application was sent",
+                        "your application was submitted",
+                        "application successfully submitted",
+                    )
+                    if any(x in text for x in strong):
                         if (result.meta.get("submit") or {}).get("action") == "clicked_submit":
                             result.submitted = True
                             result.needs_user = False
                             result.meta["linkedin_confirm"] = True
+                        else:
+                            result.meta["linkedin_confirm_ignored"] = "no_clicked_submit"
+                    elif "applied" in text and (result.meta.get("submit") or {}).get("action") == "clicked_submit":
+                        # Ambiguous — do NOT mark submitted
+                        result.needs_user = True
+                        result.meta["submit_uncertain"] = True
+                        result.meta["blocked_reason"] = "submit_unconfirmed"
+                        result.meta["linkedin_confirm_ignored"] = "weak_applied_only"
                 except Exception:
                     pass
         else:

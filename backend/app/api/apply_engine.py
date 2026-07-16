@@ -335,14 +335,21 @@ async def headless_batch_status(
     current_user: User = Depends(get_current_user),
 ):
     """Aggregate ApplyRun outcomes for a batch_id (DB-backed, not Redis TTL)."""
+    # Prefer SQL like-filter so high-volume users don't miss batches beyond "last 500"
+    needle = f'%"{batch_id}"%'
     rows = (
         db.query(ApplyRun)
-        .filter(ApplyRun.user_id == current_user.id)
+        .filter(
+            ApplyRun.user_id == current_user.id,
+            ApplyRun.meta_json.isnot(None),
+            ApplyRun.meta_json.like(needle),
+        )
         .order_by(ApplyRun.created_at.desc())
-        .limit(500)
+        .limit(300)
         .all()
     )
     matched = []
+    metas = []
     for r in rows:
         try:
             meta = json.loads(r.meta_json or "{}")
@@ -350,7 +357,15 @@ async def headless_batch_status(
             meta = {}
         if meta.get("batch_id") == batch_id:
             matched.append(r)
+            metas.append(meta)
     by_status = Counter(r.status for r in matched)
+    needs_reconnect = sum(
+        1
+        for m in metas
+        if m.get("blocked_reason") == "login_required"
+        or m.get("session_invalidated")
+        or m.get("connect_hint")
+    )
     return {
         "batch_id": batch_id,
         "total": len(matched),
@@ -358,7 +373,20 @@ async def headless_batch_status(
         "submitted": by_status.get("submitted", 0),
         "failed": by_status.get("failed", 0) + by_status.get("stale", 0),
         "needs_user": by_status.get("needs_user", 0),
-        "running": by_status.get("running", 0),
+        "running": by_status.get("running", 0) + by_status.get("queued", 0),
+        "needs_reconnect": needs_reconnect,
+        "done": sum(
+            by_status.get(s, 0)
+            for s in (
+                "submitted",
+                "filled",
+                "failed",
+                "stale",
+                "needs_user",
+                "deferred",
+                "skipped",
+            )
+        ),
         "runs": [
             {
                 "id": r.id,
@@ -367,8 +395,17 @@ async def headless_batch_status(
                 "ats_type": r.ats_type,
                 "fields_filled": r.fields_filled,
                 "error": r.error,
+                # Dashboard reconnect UX depends on meta (blocked_reason / connect_hint)
+                "meta": {
+                    "blocked_reason": metas[i].get("blocked_reason"),
+                    "connect_hint": metas[i].get("connect_hint"),
+                    "session_invalidated": metas[i].get("session_invalidated"),
+                    "submit_uncertain": metas[i].get("submit_uncertain"),
+                    "already_applied": metas[i].get("already_applied"),
+                    "session_used": metas[i].get("session_used"),
+                },
             }
-            for r in matched[:100]
+            for i, r in enumerate(matched[:100])
         ],
     }
 

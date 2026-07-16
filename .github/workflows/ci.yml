@@ -73,6 +73,8 @@ jobs:
             tests/test_wave5_monitor.py \
             tests/test_google_oauth.py \
             tests/test_workday_ashby_fixtures.py \
+            tests/test_auto_apply_edge_matrix.py \
+            tests/test_genuine_auto_apply.py \
             tests/test_billing_webhooks.py \
             tests/test_alembic_baseline.py \
             tests/test_world_class_saas_honesty.py \
