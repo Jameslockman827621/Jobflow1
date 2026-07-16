@@ -226,11 +226,15 @@ class GreenhouseAdapter(BaseATSAdapter):
 
         result.steps_completed = 1
         if auto_submit:
-            action = await self.click_submit_or_next(
-                page, ["submit application", "submit", "send application"]
-            )
-            result.submitted = action == "submitted"
-            result.needs_user = not result.submitted
+            # Block submit if CAPTCHA present and unsolved — don't fake-submit live boards
+            if result.captcha_present and not result.captcha_solved:
+                result.needs_user = True
+                result.meta["blocked_reason"] = "captcha_unsolved"
+            else:
+                submit_result = await self.genuine_submit(page)
+                result.submitted = bool(submit_result.get("submitted") or submit_result.get("confirmed"))
+                result.needs_user = not result.submitted
+                result.meta["submit"] = submit_result
         else:
             result.needs_user = True
             if result.captcha_present and not result.captcha_solved:

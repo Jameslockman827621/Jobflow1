@@ -24,6 +24,8 @@ class User(Base, TimestampMixin):
     alert_frequency = Column(String, default="daily")
     current_salary = Column(Integer, nullable=True)
     is_employed = Column(Boolean, default=False)
+    # Genuine auto-apply: when True, headless worker may SUBMIT forms for the user
+    auto_apply_submit = Column(Boolean, default=False)
     
     # Relationships
     profile = relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")

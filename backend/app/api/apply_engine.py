@@ -71,6 +71,54 @@ class ApplyReportRequest(BaseModel):
     error: Optional[str] = None
 
 
+class AutoApplySettingsUpdate(BaseModel):
+    auto_apply_submit: bool
+
+
+@router.get("/settings")
+async def get_auto_apply_settings(
+    current_user: User = Depends(get_current_user),
+):
+    """User opt-in status for genuine (submit) auto-apply."""
+    from app.core.config import settings
+
+    return {
+        "auto_apply_submit": bool(getattr(current_user, "auto_apply_submit", False)),
+        "platform_allows_submit": bool(getattr(settings, "HEADLESS_APPLY_AUTO_SUBMIT", True)),
+        "headless_enabled": bool(getattr(settings, "HEADLESS_APPLY_ENABLED", True)),
+        "captcha_available": captcha_service.available,
+        "message": (
+            "Genuine auto-apply is ON — JobScale will submit applications for you."
+            if getattr(current_user, "auto_apply_submit", False)
+            else "Enable auto_apply_submit to let JobScale submit forms on your behalf."
+        ),
+    }
+
+
+@router.patch("/settings")
+async def update_auto_apply_settings(
+    body: AutoApplySettingsUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Opt in/out of genuine submit auto-apply (required for world-class unattended apply)."""
+    user = db.query(User).filter(User.id == current_user.id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.auto_apply_submit = bool(body.auto_apply_submit)
+    db.commit()
+    db.refresh(user)
+    return {
+        "ok": True,
+        "auto_apply_submit": user.auto_apply_submit,
+        "message": (
+            "Genuine auto-apply enabled. Headless runs with auto_submit will submit for you."
+            if user.auto_apply_submit
+            else "Genuine auto-apply disabled. Forms will be filled but not submitted."
+        ),
+    }
+
+
 @router.get("/package/{job_id}")
 async def get_apply_package(
     job_id: int,

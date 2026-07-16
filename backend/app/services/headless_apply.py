@@ -68,7 +68,13 @@ async def run_headless_apply(
 
     package = build_apply_package(db, user, job, application)
     applicant = dict(package["applicant"])
+    # Prefer URL ATS, but fall back to job source name (local fixtures / custom domains)
     ats = package.get("ats") or detect_ats(job.external_url or "")
+    if ats in ("generic", "", None) and job.source is not None:
+        src = (getattr(job.source, "name", None) or "").lower()
+        if src in ("greenhouse", "lever", "ashby", "workday", "workable"):
+            ats = src
+            package["ats"] = ats
 
     cv = None
     if application.cv_id:
@@ -134,6 +140,11 @@ async def run_headless_apply(
         db.commit()
         return {"ok": False, "error": "headless_disabled", "apply_run_id": run.id}
 
+    # Genuine submit requires: request auto_submit + user opt-in + platform kill-switch ON
+    platform_allows_submit = bool(getattr(settings, "HEADLESS_APPLY_AUTO_SUBMIT", True))
+    user_allows_submit = bool(getattr(user, "auto_apply_submit", False))
+    should_submit = bool(auto_submit) and platform_allows_submit and user_allows_submit
+
     try:
         from playwright.async_api import async_playwright  # noqa: F401
     except ImportError:
@@ -177,7 +188,7 @@ async def run_headless_apply(
                 result = await adapter.fill(
                     page,
                     applicant,
-                    auto_submit=auto_submit and getattr(settings, "HEADLESS_APPLY_AUTO_SUBMIT", False),
+                    auto_submit=should_submit,
                 )
                 await browser.close()
                 browser = None
@@ -246,6 +257,18 @@ async def run_headless_apply(
 
     meta = result.to_dict()
     meta["resume_local_path"] = applicant.get("resume_local_path")
+    meta["submit_policy"] = {
+        "requested_auto_submit": bool(auto_submit),
+        "user_auto_apply_submit": user_allows_submit,
+        "platform_allows_submit": platform_allows_submit,
+        "should_submit": should_submit,
+    }
+    if auto_submit and not should_submit:
+        meta["submit_blocked_reason"] = (
+            "user_opt_in_required"
+            if not user_allows_submit
+            else "platform_submit_disabled"
+        )
     if screenshot_path:
         meta["screenshot_path"] = screenshot_path
 
@@ -277,6 +300,8 @@ async def run_headless_apply(
         "page_url": result.page_url,
         "resume_local_path": applicant.get("resume_local_path"),
         "screenshot_path": screenshot_path,
+        "genuine_apply": bool(result.submitted),
+        "submit_policy": meta["submit_policy"],
     }
 
 

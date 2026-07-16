@@ -37,7 +37,10 @@ class Settings(BaseSettings):
 
     # Headless apply
     HEADLESS_APPLY_ENABLED: bool = True
-    HEADLESS_APPLY_AUTO_SUBMIT: bool = False
+    # Platform kill-switch for genuine submits (user must ALSO opt in via auto_apply_submit)
+    HEADLESS_APPLY_AUTO_SUBMIT: bool = True
+    # Allow tests/CI to hit local fixture pages
+    ALLOW_FIXTURE_SUBMIT: bool = True
 
     # Messaging bots
     TWILIO_ACCOUNT_SID: Optional[str] = None

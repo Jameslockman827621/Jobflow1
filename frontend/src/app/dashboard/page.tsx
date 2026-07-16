@@ -160,6 +160,7 @@ function DashboardPage() {
   const [applyQuota, setApplyQuota] = useState<ApplyQuota | null>(null);
   const [lastApplyRun, setLastApplyRun] = useState<ApplyRunSummary | null>(null);
   const [queueHeadless, setQueueHeadless] = useState(false);
+  const [genuineSubmit, setGenuineSubmit] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -179,11 +180,17 @@ function DashboardPage() {
 
   async function loadAutomationMetrics() {
     try {
-      const [covRes, quotaRes, runsRes] = await Promise.all([
+      const [covRes, quotaRes, runsRes, settingsRes] = await Promise.all([
         authFetch('/api/v1/companies/coverage'),
         authFetch('/api/v1/apply-engine/quota'),
         authFetch('/api/v1/apply-engine/runs?limit=5'),
+        authFetch('/api/v1/apply-engine/settings'),
       ]);
+      if (settingsRes.ok) {
+        const st = await settingsRes.json();
+        setGenuineSubmit(!!st.auto_apply_submit);
+        if (st.auto_apply_submit) setQueueHeadless(true);
+      }
       if (covRes.ok) {
         const cov = await covRes.json();
         setCoverage({
@@ -326,13 +333,21 @@ function DashboardPage() {
           .filter((id: number | undefined): id is number => typeof id === 'number');
         if (applicationIds.length > 0) {
           try {
+            // Persist opt-in before genuine submit queue
+            if (genuineSubmit) {
+              await authFetch('/api/v1/apply-engine/settings', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ auto_apply_submit: true }),
+              });
+            }
             const hlRes = await authFetch('/api/v1/apply-engine/headless/batch', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 application_ids: applicationIds,
                 dry_run: false,
-                auto_submit: false,
+                auto_submit: genuineSubmit,
               }),
             });
             if (!hlRes.ok) {
@@ -344,7 +359,9 @@ function DashboardPage() {
               toast.error(`Applications started, but headless queue failed: ${detail}`);
             } else {
               toast.success(
-                `${data.total} applications started — headless apply queued (${applicationIds.length})`
+                genuineSubmit
+                  ? `${data.total} queued for genuine auto-apply (fill + submit)`
+                  : `${data.total} applications started — headless fill queued (${applicationIds.length})`
               );
             }
           } catch {
@@ -587,6 +604,28 @@ function DashboardPage() {
                   className="w-4 h-4 text-teal-500 border-slate-300 rounded focus:ring-teal-500 cursor-pointer"
                 />
                 <span>Queue headless apply (server-side)</span>
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={genuineSubmit}
+                  onChange={async (e) => {
+                    const on = e.target.checked;
+                    setGenuineSubmit(on);
+                    if (on) setQueueHeadless(true);
+                    try {
+                      await authFetch('/api/v1/apply-engine/settings', {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ auto_apply_submit: on }),
+                      });
+                    } catch {
+                      /* non-blocking */
+                    }
+                  }}
+                  className="w-4 h-4 text-teal-500 border-slate-300 rounded focus:ring-teal-500 cursor-pointer"
+                />
+                <span>Genuinely submit for me</span>
               </label>
               <button
                 onClick={() => setSelectedJobs(new Set())}

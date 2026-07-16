@@ -212,8 +212,13 @@ class AshbyAdapter(BaseATSAdapter):
         if not result.steps_completed:
             result.steps_completed = 1
         if auto_submit and not result.submitted:
-            action = await self.click_submit_or_next(page, ["submit application", "submit"])
-            result.submitted = action == "submitted"
+            if result.captcha_present and not result.captcha_solved:
+                result.needs_user = True
+                result.meta["blocked_reason"] = "captcha_unsolved"
+            else:
+                submit_result = await self.genuine_submit(page)
+                result.submitted = bool(submit_result.get("submitted") or submit_result.get("confirmed"))
+                result.meta["submit"] = submit_result
         result.needs_user = not result.submitted
         if result.captcha_present and not result.captcha_solved:
             result.needs_user = True

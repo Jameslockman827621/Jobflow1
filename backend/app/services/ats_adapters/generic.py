@@ -62,10 +62,16 @@ class GenericAdapter(BaseATSAdapter):
         result.fields_filled += await self.answer_unlabeled_textareas(page, applicant, _ans)
         result.captcha_present = await self.detect_captcha(page)
         result.steps_completed = 1
-        result.needs_user = True
         if auto_submit:
-            action = await self.click_submit_or_next(page)
-            result.submitted = action == "submitted"
-            result.needs_user = not result.submitted
+            if result.captcha_present and not result.captcha_solved:
+                result.needs_user = True
+                result.meta["blocked_reason"] = "captcha_unsolved"
+            else:
+                submit_result = await self.genuine_submit(page)
+                result.submitted = bool(submit_result.get("submitted") or submit_result.get("confirmed"))
+                result.needs_user = not result.submitted
+                result.meta["submit"] = submit_result
+        else:
+            result.needs_user = True
         result.page_url = page.url
         return result

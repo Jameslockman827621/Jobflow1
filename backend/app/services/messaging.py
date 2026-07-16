@@ -142,7 +142,11 @@ class MessagingService:
             application.status = "ready_to_apply"
             db.commit()
 
-        task = apply_one.delay(user_id, application.id, auto_submit=False, dry_run=False)
+        from app.models.user import User
+
+        user = db.query(User).filter(User.id == user_id).first()
+        submit = bool(user and getattr(user, "auto_apply_submit", False))
+        task = apply_one.delay(user_id, application.id, auto_submit=submit, dry_run=False)
         return {
             "ok": True,
             "job_id": job_id,

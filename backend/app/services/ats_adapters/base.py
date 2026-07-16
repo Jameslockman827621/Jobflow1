@@ -154,43 +154,29 @@ class BaseATSAdapter(ABC):
         return filled
 
     async def click_submit_or_next(self, page, labels: Optional[List[str]] = None) -> str:
-        """Returns 'submitted' | 'next' | 'none'."""
-        labels = labels or [
-            "submit application",
-            "submit",
-            "send application",
-            "next",
-            "continue",
-            "save and continue",
-            "review",
-        ]
-        # Prefer explicit submit
-        for text in labels:
-            try:
-                btn = page.get_by_role("button", name=lambda v: text in (v or "").lower())
-                if await btn.count():
-                    await btn.first.click(timeout=2500)
-                    await page.wait_for_timeout(1200)
-                    return "submitted" if "submit" in text or "send" in text else "next"
-            except Exception:
-                pass
-        for sel in [
-            "button[type='submit']",
-            "input[type='submit']",
-            "#submit_app",
-            "[data-automation-id='bottom-navigation-next-button']",
-            "button.application-button",
-        ]:
-            try:
-                loc = page.locator(sel).first
-                if await loc.count() and await loc.is_enabled():
-                    txt = (await loc.inner_text()).lower() if await loc.evaluate("el => el.tagName") == "BUTTON" else ""
-                    await loc.click(timeout=2000)
-                    await page.wait_for_timeout(1000)
-                    return "submitted" if "submit" in txt else "next"
-            except Exception:
-                continue
+        """Returns 'submitted' | 'next' | 'none' (legacy string API)."""
+        from .submit import attempt_submit_and_confirm, click_genuine_submit
+
+        # If labels look like next/continue only, don't treat as final submit
+        if labels and all(
+            any(x in (t or "").lower() for x in ("next", "continue", "review", "save"))
+            for t in labels
+        ) and not any("submit" in (t or "").lower() for t in labels):
+            action = await click_genuine_submit(page, labels)
+            return "next" if action != "none" else "none"
+
+        result = await attempt_submit_and_confirm(page)
+        if result.get("submitted") or result.get("confirmed"):
+            return "submitted"
+        if result.get("action") in ("clicked_submit", "clicked_next"):
+            return "submitted" if result.get("action") == "clicked_submit" else "next"
         return "none"
+
+    async def genuine_submit(self, page) -> Dict[str, Any]:
+        """Click submit and verify confirmation — used for world-class auto-apply."""
+        from .submit import attempt_submit_and_confirm
+
+        return await attempt_submit_and_confirm(page)
 
 
 def get_adapter(ats: str) -> BaseATSAdapter:
