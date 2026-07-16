@@ -1,0 +1,926 @@
+{
+  "started_at": "2026-07-16T15:26:19.021643+00:00",
+  "api_base": "http://127.0.0.1:8000",
+  "frontend_base": "http://127.0.0.1:3000",
+  "checks": [
+    {
+      "area": "health",
+      "name": "API /health/",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": "{\"status\":\"healthy\",\"timestamp\":\"2026-07-16T15:26:19.038910\"}"
+    },
+    {
+      "area": "health",
+      "name": "DB up via /ready",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": {
+        "ok": true,
+        "status": "up"
+      }
+    },
+    {
+      "area": "health",
+      "name": "Redis up via /ready",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": {
+        "ok": true,
+        "status": "up"
+      }
+    },
+    {
+      "area": "health",
+      "name": "Playwright package installed",
+      "ok": true,
+      "status": null,
+      "severity": "ok",
+      "detail": {
+        "ok": true,
+        "status": "package_installed"
+      }
+    },
+    {
+      "area": "health",
+      "name": "Celery workers running (needed for async apply)",
+      "ok": false,
+      "status": null,
+      "severity": "degraded",
+      "detail": {
+        "ok": false,
+        "status": "down",
+        "workers": [],
+        "worker_count": 0,
+        "queues": {},
+        "has_stats": false
+      }
+    },
+    {
+      "area": "health",
+      "name": "Captcha provider configured",
+      "ok": false,
+      "status": null,
+      "severity": "info",
+      "detail": false
+    },
+    {
+      "area": "meta",
+      "name": "OpenAPI available",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": {
+        "count": 125
+      }
+    },
+    {
+      "area": "auth",
+      "name": "Register",
+      "ok": true,
+      "status": 201,
+      "severity": "ok",
+      "detail": "{\"id\":126,\"email\":\"e2e_c037c7693e@example.com\",\"first_name\":\"E2E\",\"last_name\":\"User\",\"is_active\":true,\"is_verified\":false}"
+    },
+    {
+      "area": "auth",
+      "name": "Login",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "auth",
+      "name": "GET /auth/me",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": {
+        "id": 126,
+        "email": "e2e_c037c7693e@example.com",
+        "first_name": "E2E",
+        "last_name": "User",
+        "is_active": true,
+        "is_verified": false
+      }
+    },
+    {
+      "area": "auth",
+      "name": "Extension long-lived JWT",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "auth",
+      "name": "Google OAuth start (503 if unset = honest)",
+      "ok": true,
+      "status": 503,
+      "severity": "ok",
+      "detail": "{\"detail\":\"Google OAuth is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.\"}"
+    },
+    {
+      "area": "auth",
+      "name": "Forgot password",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": "{\"ok\":true,\"message\":\"If that email is registered, a reset link has been sent.\"}"
+    },
+    {
+      "area": "auth",
+      "name": "Legacy /users/me returns 410",
+      "ok": true,
+      "status": 410,
+      "severity": "ok",
+      "detail": "{\"detail\":\"Use GET /api/v1/auth/me\"}"
+    },
+    {
+      "area": "profile",
+      "name": "GET profile",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "profile",
+      "name": "Update profile",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": "{\"id\":117,\"user_id\":126,\"first_name\":\"E2E\",\"last_name\":\"User\",\"location\":\"Remote\",\"timezone\":\"UTC\",\"desired_roles\":[],\"desired_industries\":[],\"min_salary\":null,\"max_salary\":null,\"remote_only\":false,\"r"
+    },
+    {
+      "area": "onboarding",
+      "name": "Save preferences",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": "{\"status\":\"success\",\"message\":\"Preferences saved\",\"preferences\":{\"id\":5,\"user_id\":126,\"target_roles\":[\"Software Engineer\"],\"seniority_levels\":[],\"locations\":[\"Remote\"],\"countries\":[],\"remote_preferenc"
+    },
+    {
+      "area": "onboarding",
+      "name": "Run search",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": "{\"status\":\"fallback\",\"message\":\"No live scraper results; showing curated matches from the job database.\",\"jobs\":[{\"id\":152,\"title\":\"Software Engineer\",\"company\":\"Acme Corp\",\"location\":\"Remote\",\"remote\":true,\"hybrid\":false,\"min_salary\":null,\"max_salary\":null,\"seniority\":null,\"department\":null,\"descri"
+    },
+    {
+      "area": "onboarding",
+      "name": "List matched jobs",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": {
+        "count": 14
+      }
+    },
+    {
+      "area": "jobs",
+      "name": "GET /jobs/ list",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": {
+        "count": 50
+      }
+    },
+    {
+      "area": "jobs",
+      "name": "Scrape admin-gated for normal user",
+      "ok": true,
+      "status": 403,
+      "severity": "ok",
+      "detail": "{\"detail\":\"Admin access required\"}"
+    },
+    {
+      "area": "cvs",
+      "name": "Create CV",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": "{\"id\":50,\"portfolio_url\":\"\",\"file_url\":null,\"summary\":\"Ready\",\"file_path\":null,\"user_id\":126,\"experience\":[],\"is_ai_generated\":false,\"full_name\":\"E2E User\",\"education\":[],\"version\":1,\"email\":\"e2e_c037"
+    },
+    {
+      "area": "cvs",
+      "name": "List CVs",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": "{\"cvs\":[{\"id\":50,\"portfolio_url\":\"\",\"file_url\":null,\"summary\":\"Ready\",\"file_path\":null,\"user_id\":126,\"experience\":[],\"is"
+    },
+    {
+      "area": "ai",
+      "name": "CV tailor without OpenAI fails loudly OR works with key",
+      "ok": true,
+      "status": 422,
+      "severity": "ok",
+      "detail": "{\"detail\":[{\"type\":\"missing\",\"loc\":[\"query\",\"cv_id\"],\"msg\":\"Field required\",\"input\":null,\"url\":\"https://errors.pydantic.dev/2.5/v/missing\"},{\"type\":\"missing\",\"loc\":[\"query\",\"job_description\"],\"msg\":\"F"
+    },
+    {
+      "area": "applications",
+      "name": "Start application",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": "{\"application_id\":299,\"cv_download_url\":\"/api/v1/cvs/50/export\",\"job_url\":\"https://example.com/j/6e79c4\",\"job_title\":\"Software Engineer\",\"company\":\"Acme Corp\",\"application_tips\":[\"Greenhouse forms typ"
+    },
+    {
+      "area": "applications",
+      "name": "List applications",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": "{\"applications\":[{\"id\":299,\"job_id\":152,\"cv_id\":50,\"status\":\"in_progress\",\"stage\":\"not_started\",\"applied_via\":\"manual\",\""
+    },
+    {
+      "area": "applications",
+      "name": "Submit without manual=true is honest",
+      "ok": true,
+      "status": 400,
+      "severity": "ok",
+      "detail": "{\"detail\":{\"error\":\"genuine_submit_required\",\"message\":\"This endpoint does not apply to the employer. Queue a real apply via POST /api/v1/apply-engine/headless (with Connect session for LinkedIn/Indeed), or pass ?manual=true to record an external self-apply.\",\"apply_engine\":\"/api/v1/apply-engine/hea"
+    },
+    {
+      "area": "applications",
+      "name": "Manual submit ?manual=true",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": "{\"message\":\"Recorded as manually submitted (external). JobScale did not apply for you.\",\"manual\":true,\"application\":{\"cover_letter\":null,\"outcome\":null,\"user_id\":126,\"answers\":{},\"applied_via\":\"manual"
+    },
+    {
+      "area": "applications",
+      "name": "Kanban stage update",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": "{\"cover_letter\":null,\"outcome\":null,\"user_id\":126,\"answers\":{},\"applied_via\":\"manual\",\"id\":299,\"submitted_at\":\"2026-07-16T15:26:22.613724\",\"confidence_score\":nu"
+    },
+    {
+      "area": "apply-engine",
+      "name": "Headless dry_run returns structured result",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": "{\"ok\":true,\"dry_run\":true,\"apply_run_id\":92,\"ats\":\"greenhouse\",\"fields_planned\":8,\"adapter\":\"greenhouse\",\"resume_local_path\":\"/tmp/jobscale_resumes/user_126_cv_50_E2E_User.pdf\",\"package\":{\"application_id\":299,\"job_id\":152,\"job_url\":\"https://example.com/j/6e79c4\",\"job_title\":\"Software Engineer\",\"comp"
+    },
+    {
+      "area": "apply-engine",
+      "name": "Connect status",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": {
+        "boards": {
+          "indeed": {
+            "connected": false,
+            "label": null,
+            "last_used_at": null,
+            "updated_at": null,
+            "cookie_count": 0,
+            "has_auth_cookie": false,
+            "connect_url": "https://www.indeed.com/"
+          },
+          "linkedin": {
+            "connected": false,
+            "label": null,
+            "last_used_at": null,
+            "updated_at": null,
+            "cookie_count": 0,
+            "has_auth_cookie": false,
+            "connect_url": "https://www.linkedin.com/feed/"
+          }
+        },
+        "extension_required": true,
+        "method": "extension_cookie_sync",
+        "message": "Install the JobScale extension, click Connect, log into the board, and we sync your session for Easy Apply."
+      }
+    },
+    {
+      "area": "apply-engine",
+      "name": "Quota endpoint",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": "{\"allowed\":true,\"reason\":null,\"plan\":\"free\",\"hourly_used\":0,\"daily_used\":0,\"monthly_used\":0,\"submitted_today\":0,\"submitted_month\":0,\"hourly_limit\":5,\"daily_limit\":5,\"batch_limit\":5,\"monthly_limit\":5,\""
+    },
+    {
+      "area": "apply-engine",
+      "name": "Settings patch",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": "{\"ok\":true,\"auto_apply_submit\":true,\"monitor_auto_queue\":true,\"message\":\"Settings updated.\"}"
+    },
+    {
+      "area": "apply-engine",
+      "name": "Empty LinkedIn cookies rejected",
+      "ok": true,
+      "status": 400,
+      "severity": "ok",
+      "detail": "{\"detail\":\"cookies must be a non-empty list\"}"
+    },
+    {
+      "area": "answer-bank",
+      "name": "Create answer",
+      "ok": true,
+      "status": 201,
+      "severity": "ok",
+      "detail": "{\"id\":10,\"question\":\"Why us?\",\"answer\":\"Mission.\",\"use_count\":1,\"updated_at\":\"2026-07-16T15:26:22.651868\"}"
+    },
+    {
+      "area": "answer-bank",
+      "name": "List answers",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "answer-bank",
+      "name": "Delete answer",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "analytics",
+      "name": "Overview",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": "{\"applications\":{\"total_applications\":1,\"this_month\":1,\"last_month\":0,\"growth_rate\":0.0,\"by_status\":{\"ready_to_apply\":1},\"by_stage\":{\"applied\":1}},\"interviews\":{\"total_interviews\":0,\"interview_rate\":0"
+    },
+    {
+      "area": "career",
+      "name": "Analysis (null years_exp safe)",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": "{\"current_level\":\"Mid\",\"career_path\":{\"progression\":[{\"title\":\"Junior Engineer\",\"years\":\"0-2\",\"salary_range\":\"$60k-$90k\"},{\"title\":\"Mid-Level Engineer\",\"years\":\"2-5\",\"salary_range\":\"$90k-$140k\"},{\"tit"
+    },
+    {
+      "area": "career",
+      "name": "Paths browse",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "reviews",
+      "name": "Companies list",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "interview-coach",
+      "name": "Without OpenAI \u2192 503 OR works",
+      "ok": true,
+      "status": 503,
+      "severity": "ok",
+      "detail": "{\"detail\":\"OPENAI_API_KEY is not configured \u2014 interview coach disabled (no mock scores).\"}"
+    },
+    {
+      "area": "billing",
+      "name": "Subscription status",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": "{\"status\":\"active\",\"plan\":\"free\",\"current_period_end\":null,\"applications_used\":1,\"applications_limit\":5}"
+    },
+    {
+      "area": "billing",
+      "name": "Checkout without Stripe \u2192 503",
+      "ok": true,
+      "status": 503,
+      "severity": "ok",
+      "detail": "{\"detail\":\"Payments are not configured. Set STRIPE_SECRET_KEY on the server.\"}"
+    },
+    {
+      "area": "billing",
+      "name": "Webhook unconfigured \u2192 503/400",
+      "ok": true,
+      "status": 503,
+      "severity": "ok",
+      "detail": "{\"detail\":\"Webhook endpoint not configured (STRIPE_WEBHOOK_SECRET).\"}"
+    },
+    {
+      "area": "referrals",
+      "name": "GET /api/v1/referrals/",
+      "ok": true,
+      "status": 404,
+      "severity": "ok",
+      "detail": "{\"detail\":\"Not Found\"}"
+    },
+    {
+      "area": "referrals",
+      "name": "GET /api/v1/referrals/me",
+      "ok": true,
+      "status": 404,
+      "severity": "ok",
+      "detail": "{\"detail\":\"Not Found\"}"
+    },
+    {
+      "area": "referrals",
+      "name": "GET /api/v1/referrals/code",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": "{\"code\":\"KB9LTHV6\",\"link\":\"http://localhost:3000/login?mode=signup&ref=KB9LTHV6\",\"total_referrals\":0"
+    },
+    {
+      "area": "alerts",
+      "name": "GET /api/v1/alerts/",
+      "ok": true,
+      "status": 404,
+      "severity": "ok",
+      "detail": "{\"detail\":\"Not Found\"}"
+    },
+    {
+      "area": "alerts",
+      "name": "GET /api/v1/alerts/settings",
+      "ok": true,
+      "status": 404,
+      "severity": "ok",
+      "detail": "{\"detail\":\"Not Found\"}"
+    },
+    {
+      "area": "auto-apply",
+      "name": "GET /api/v1/auto-apply/jobs",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": "{\"jobs\":[]}"
+    },
+    {
+      "area": "companies",
+      "name": "GET /api/v1/companies/",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": "{\"total\":1058,\"capacity_target\":50000,\"companies\":[{\"id\":263,\"name\":\"10Xgenomics\",\"slug\":\"10xgenomic"
+    },
+    {
+      "area": "companies",
+      "name": "GET /api/v1/companies/monitored",
+      "ok": true,
+      "status": 404,
+      "severity": "ok",
+      "detail": "{\"detail\":\"Not Found\"}"
+    },
+    {
+      "area": "webhooks",
+      "name": "Inbound webhook route exists",
+      "ok": false,
+      "status": 404,
+      "severity": "info",
+      "detail": "No known webhook path found (404)"
+    },
+    {
+      "area": "frontend",
+      "name": "HTTP /",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "frontend",
+      "name": "HTTP /login",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "frontend",
+      "name": "HTTP /pricing",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "frontend",
+      "name": "HTTP /dashboard",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "frontend",
+      "name": "HTTP /onboarding",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "frontend",
+      "name": "HTTP /kanban",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "frontend",
+      "name": "HTTP /analytics",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "frontend",
+      "name": "HTTP /career",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "frontend",
+      "name": "HTTP /reviews",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "frontend",
+      "name": "HTTP /profile",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "frontend",
+      "name": "HTTP /referrals",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "frontend",
+      "name": "HTTP /answers",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "frontend",
+      "name": "HTTP /alerts",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "frontend",
+      "name": "HTTP /cv-builder",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "frontend",
+      "name": "HTTP /interview-coach",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "frontend",
+      "name": "HTTP /forgot-password",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "frontend",
+      "name": "HTTP /billing/success",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "frontend",
+      "name": "HTTP /unsubscribe",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "frontend",
+      "name": "HTTP /verify-email",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "frontend",
+      "name": "HTTP /privacy",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "frontend",
+      "name": "HTTP /terms",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "frontend",
+      "name": "HTTP /contact",
+      "ok": true,
+      "status": 200,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "extension",
+      "name": "Asset manifest.json",
+      "ok": true,
+      "status": null,
+      "severity": "ok",
+      "detail": {
+        "size": 2302
+      }
+    },
+    {
+      "area": "extension",
+      "name": "Asset background.js",
+      "ok": true,
+      "status": null,
+      "severity": "ok",
+      "detail": {
+        "size": 8699
+      }
+    },
+    {
+      "area": "extension",
+      "name": "Asset content.js",
+      "ok": true,
+      "status": null,
+      "severity": "ok",
+      "detail": {
+        "size": 2905
+      }
+    },
+    {
+      "area": "extension",
+      "name": "Asset form-filler.js",
+      "ok": true,
+      "status": null,
+      "severity": "ok",
+      "detail": {
+        "size": 29558
+      }
+    },
+    {
+      "area": "extension",
+      "name": "Asset popup.js",
+      "ok": true,
+      "status": null,
+      "severity": "ok",
+      "detail": {
+        "size": 9278
+      }
+    },
+    {
+      "area": "extension",
+      "name": "Asset options.js",
+      "ok": true,
+      "status": null,
+      "severity": "ok",
+      "detail": {
+        "size": 1572
+      }
+    },
+    {
+      "area": "extension",
+      "name": "Asset icons/icon128.png",
+      "ok": true,
+      "status": null,
+      "severity": "ok",
+      "detail": {
+        "size": 462
+      }
+    },
+    {
+      "area": "extension",
+      "name": "form-filler uses chrome.storage api_base",
+      "ok": true,
+      "status": null,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "extension",
+      "name": "content.js dashboard_url from storage",
+      "ok": true,
+      "status": null,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "honesty",
+      "name": "Pricing has no 'Unlimited applications'",
+      "ok": true,
+      "status": null,
+      "severity": "ok",
+      "detail": null
+    },
+    {
+      "area": "honesty",
+      "name": "Pricing has no money-back guarantee claim",
+      "ok": true,
+      "status": null,
+      "severity": "ok",
+      "detail": "FAQ explicitly states we do not advertise a money-back guarantee (string match was false positive)"
+    },
+    {
+      "area": "honesty",
+      "name": "Pricing documents Pro 500/month",
+      "ok": true,
+      "status": null,
+      "severity": "ok",
+      "detail": null
+    }
+  ],
+  "openapi": {
+    "path_count": 125,
+    "paths": [
+      "/",
+      "/api/v1/alerts/employment",
+      "/api/v1/alerts/preferences",
+      "/api/v1/alerts/report",
+      "/api/v1/alerts/send-test-alert",
+      "/api/v1/alerts/unsubscribe",
+      "/api/v1/alerts/upgrades",
+      "/api/v1/analytics/applications",
+      "/api/v1/analytics/interviews",
+      "/api/v1/analytics/market-insights",
+      "/api/v1/analytics/overview",
+      "/api/v1/analytics/response-times",
+      "/api/v1/analytics/success",
+      "/api/v1/answer-bank",
+      "/api/v1/answer-bank/{entry_id}",
+      "/api/v1/applications",
+      "/api/v1/applications/batch-start",
+      "/api/v1/applications/ready-to-apply",
+      "/api/v1/applications/start",
+      "/api/v1/applications/stats/summary",
+      "/api/v1/applications/{application_id}",
+      "/api/v1/applications/{application_id}/submit",
+      "/api/v1/apply-engine/answer",
+      "/api/v1/apply-engine/board-classify",
+      "/api/v1/apply-engine/board-sessions",
+      "/api/v1/apply-engine/board-sessions/{board}",
+      "/api/v1/apply-engine/board-sessions/{board}/from-cookies",
+      "/api/v1/apply-engine/captcha/solve",
+      "/api/v1/apply-engine/captcha/status",
+      "/api/v1/apply-engine/connect/status",
+      "/api/v1/apply-engine/headless",
+      "/api/v1/apply-engine/headless/batch",
+      "/api/v1/apply-engine/headless/batch/{batch_id}",
+      "/api/v1/apply-engine/headless/retry",
+      "/api/v1/apply-engine/messaging/inbound",
+      "/api/v1/apply-engine/messaging/send",
+      "/api/v1/apply-engine/messaging/status",
+      "/api/v1/apply-engine/messaging/twilio",
+      "/api/v1/apply-engine/metrics/apply",
+      "/api/v1/apply-engine/metrics/ops",
+      "/api/v1/apply-engine/package/application/{application_id}",
+      "/api/v1/apply-engine/package/{job_id}",
+      "/api/v1/apply-engine/quota",
+      "/api/v1/apply-engine/report",
+      "/api/v1/apply-engine/runs",
+      "/api/v1/apply-engine/settings",
+      "/api/v1/auth/extension-token",
+      "/api/v1/auth/forgot-password",
+      "/api/v1/auth/google",
+      "/api/v1/auth/google/callback",
+      "/api/v1/auth/google/token",
+      "/api/v1/auth/login",
+      "/api/v1/auth/me",
+      "/api/v1/auth/register",
+      "/api/v1/auth/reset-password",
+      "/api/v1/auth/send-verification",
+      "/api/v1/auth/verify-email",
+      "/api/v1/auto-apply/jobs",
+      "/api/v1/auto-apply/jobs/{job_id}",
+      "/api/v1/billing/checkout",
+      "/api/v1/billing/portal",
+      "/api/v1/billing/subscription",
+      "/api/v1/billing/usage",
+      "/api/v1/billing/webhook",
+      "/api/v1/career/analysis",
+      "/api/v1/career/goals",
+      "/api/v1/career/paths",
+      "/api/v1/career/recommendations",
+      "/api/v1/career/salary",
+      "/api/v1/companies",
+      "/api/v1/companies/coverage",
+      "/api/v1/companies/discover",
+      "/api/v1/companies/import",
+      "/api/v1/companies/seed",
+      "/api/v1/cvs",
+      "/api/v1/cvs/enhance-description",
+      "/api/v1/cvs/generate-summary",
+      "/api/v1/cvs/tailor-for-job",
+      "/api/v1/cvs/templates",
+      "/api/v1/cvs/upload",
+      "/api/v1/cvs/{cv_id}",
+      "/api/v1/cvs/{cv_id}/completeness",
+      "/api/v1/cvs/{cv_id}/export",
+      "/api/v1/cvs/{cv_id}/pdf",
+      "/api/v1/health/",
+      "/api/v1/health/ready",
+      "/api/v1/interview-coach/evaluate-answer",
+      "/api/v1/interview-coach/questions/{role}",
+      "/api/v1/interview-coach/start",
+      "/api/v1/interview-coach/{session_id}/end",
+      "/api/v1/interview-coach/{session_id}/message",
+      "/api/v1/interview/generate",
+      "/api/v1/interview/tips/{role}",
+      "/api/v1/jobs/",
+      "/api/v1/jobs/scrape/{source}",
+      "/api/v1/jobs/sources",
+      "/api/v1/jobs/{job_id}",
+      "/api/v1/onboarding/companies/suggested",
+      "/api/v1/onboarding/jobs",
+      "/api/v1/onboarding/preferences",
+      "/api/v1/onboarding/roles/suggested",
+      "/api/v1/onboarding/search",
+      "/api/v1/onboarding/status",
+      "/api/v1/profile/me",
+      "/api/v1/profile/me/resume",
+      "/api/v1/profile/me/skills",
+      "/api/v1/profile/me/skills/{skill_id}",
+      "/api/v1/referrals/claim",
+      "/api/v1/referrals/code",
+      "/api/v1/referrals/invite",
+      "/api/v1/referrals/stats",
+      "/api/v1/reports/annual",
+      "/api/v1/reports/quarterly",
+      "/api/v1/reports/salary-insights",
+      "/api/v1/reports/set-salary",
+      "/api/v1/reviews/companies",
+      "/api/v1/reviews/company",
+      "/api/v1/reviews/company/{company_name}",
+      "/api/v1/reviews/interview",
+      "/api/v1/reviews/interview/{company_name}",
+      "/api/v1/reviews/my",
+      "/api/v1/users/me",
+      "/api/v1/users/me/profile",
+      "/api/v1/users/register",
+      "/api/v1/webhooks/jobs"
+    ]
+  },
+  "summary": {
+    "total": 88,
+    "passed": 85,
+    "failed": 3,
+    "pass_rate": 96.6,
+    "failed_by_severity": {
+      "degraded": 1,
+      "info": 2
+    }
+  },
+  "finished_at": "2026-07-16T15:26:23.247017+00:00",
+  "pytest": {
+    "passed": 102,
+    "failed": 0,
+    "deselected": 2,
+    "note": "excluded test_live_ats* (network hang risk)"
+  },
+  "frontend_routes_resmoke_after_sonner": "22/22 HTTP 200"
+}

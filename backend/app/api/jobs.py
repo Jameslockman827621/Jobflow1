@@ -16,9 +16,9 @@ class JobResponse(BaseModel):
     id: int
     title: str
     company: str
-    location: str
-    remote: bool
-    hybrid: bool
+    location: Optional[str] = None
+    remote: bool = False
+    hybrid: bool = False
     external_url: str
     min_salary: Optional[int] = None
     max_salary: Optional[int] = None
