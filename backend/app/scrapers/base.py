@@ -67,18 +67,29 @@ class BaseScraper(ABC):
     
     def __init__(self):
         self.ua = UserAgent()
-        self.headers = {
-            "User-Agent": self.ua.random,
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5",
-        }
+        try:
+            from app.services.proxy_pool import fingerprint_headers
+            self.headers = fingerprint_headers()
+        except Exception:
+            self.headers = {
+                "User-Agent": self.ua.random,
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.5",
+            }
     
     async def fetch(self, url: str, params: Optional[Dict] = None) -> Optional[str]:
-        """Fetch URL with basic rate limiting"""
+        """Fetch URL with fingerprint headers + optional proxy rotation."""
+        proxies = None
+        try:
+            from app.services.proxy_pool import httpx_proxies
+            proxies = httpx_proxies()
+        except Exception:
+            proxies = None
         async with httpx.AsyncClient(
             headers=self.headers,
             timeout=30.0,
             follow_redirects=True,
+            proxies=proxies,
         ) as client:
             try:
                 response = await client.get(url, params=params)

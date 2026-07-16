@@ -40,10 +40,11 @@ class CareerAnalysisResponse(BaseModel):
 
 
 class CareerGoal(BaseModel):
-    target_role: str
+    target_role: Optional[str] = None
+    target_roles: Optional[List[str]] = None
     target_company: Optional[str] = None
     target_salary: Optional[int] = None
-    timeline_months: int
+    timeline_months: Optional[int] = 12
     notes: Optional[str] = ""
 
 
@@ -123,29 +124,36 @@ async def set_career_goals(
     current_user: User = Depends(get_current_user),
     db = Depends(get_db),
 ):
-    """Set career goals"""
+    """Persist career goals onto the user profile (desired_roles / max_salary)."""
     from app.models.profile import UserProfile
-    from sqlalchemy import JSON
-    
+
     profile = db.query(UserProfile).filter(UserProfile.user_id == current_user.id).first()
-    
+
     if not profile:
         profile = UserProfile(user_id=current_user.id)
         db.add(profile)
-    
-    # Store goals in a JSON field (would add proper model in production)
-    if not hasattr(profile, "career_goals"):
-        profile.desired_roles = [goal.target_role]
-    
+
+    roles = list(goal.target_roles or [])
+    if goal.target_role:
+        roles = [goal.target_role] + [r for r in roles if r != goal.target_role]
+    if roles:
+        profile.desired_roles = roles
+
     if goal.target_salary:
         profile.max_salary = goal.target_salary
-    
+
     db.commit()
-    
+    db.refresh(profile)
+
     return {
         "status": "saved",
-        "goal": goal.dict(),
-        "message": f"Goal set: {goal.target_role} in {goal.timeline_months} months",
+        "goals": {
+            "target_roles": profile.desired_roles,
+            "target_salary": profile.max_salary,
+            "current_title": profile.current_title,
+            "current_company": profile.current_company,
+        },
+        "message": "Career goals saved to your profile",
     }
 
 

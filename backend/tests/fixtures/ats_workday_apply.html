@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Workday Fixture Apply — Software Engineer</title>
+</head>
+<body>
+  <h1>Software Engineer — JobScaleTest</h1>
+  <a data-automation-id="adventureButton" href="#apply">Apply</a>
+
+  <div id="step1">
+    <h2>My Information</h2>
+    <label>First Name
+      <input data-automation-id="legalNameSection_firstName" aria-label="First Name" type="text" />
+    </label>
+    <label>Last Name
+      <input data-automation-id="legalNameSection_lastName" aria-label="Last Name" type="text" />
+    </label>
+    <label>Email
+      <input data-automation-id="email" aria-label="Email" type="email" />
+    </label>
+    <label>Phone
+      <input data-automation-id="phone" aria-label="Phone" type="tel" />
+    </label>
+    <label>City
+      <input data-automation-id="addressSection_city" aria-label="City" type="text" />
+    </label>
+    <button type="button" data-automation-id="bottom-navigation-next-button" id="next1">Next</button>
+  </div>
+
+  <div id="step2" style="display:none">
+    <h2>Application Questions</h2>
+    <label>LinkedIn
+      <input data-automation-id="linkedinQuestion" aria-label="LinkedIn Profile" type="text" />
+    </label>
+    <label>Are you legally authorized to work in the United States?
+      <select data-automation-id="fgl-workAuth" aria-label="Are you legally authorized to work in the United States?">
+        <option value="">Select</option>
+        <option value="Yes">Yes</option>
+        <option value="No">No</option>
+      </select>
+    </label>
+    <button type="button" data-automation-id="bottom-navigation-next-button" id="next2">Next</button>
+  </div>
+
+  <div id="step3" style="display:none">
+    <h2>Voluntary Disclosures</h2>
+    <label>
+      <input type="checkbox" data-automation-id="agreementCheckbox" id="agree" />
+      I agree to the terms
+    </label>
+    <button type="button" data-automation-id="bottom-navigation-next-button" id="next3">Review</button>
+  </div>
+
+  <div id="step4" style="display:none">
+    <h2>Review and Submit</h2>
+    <button type="button" data-automation-id="bottom-navigation-submit-button" id="submit_wd">Submit</button>
+  </div>
+
+  <div id="confirmation" style="display:none">
+    <h2>Thank you for applying</h2>
+    <p>We've received your application. Application successfully submitted.</p>
+  </div>
+
+  <script>
+    document.getElementById('next1').onclick = () => {
+      document.getElementById('step1').style.display = 'none';
+      document.getElementById('step2').style.display = 'block';
+    };
+    document.getElementById('next2').onclick = () => {
+      document.getElementById('step2').style.display = 'none';
+      document.getElementById('step3').style.display = 'block';
+    };
+    document.getElementById('next3').onclick = () => {
+      document.getElementById('step3').style.display = 'none';
+      document.getElementById('step4').style.display = 'block';
+    };
+    document.getElementById('submit_wd').onclick = () => {
+      document.getElementById('step4').style.display = 'none';
+      document.getElementById('confirmation').style.display = 'block';
+      history.pushState({}, '', location.pathname + '?submitted=true');
+    };
+  </script>
+</body>
+</html>

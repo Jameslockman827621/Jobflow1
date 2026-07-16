@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Software Engineer | JobScaleTest | LinkedIn</title>
+</head>
+<body>
+  <h1>Software Engineer</h1>
+  <p>JobScaleTest · Remote</p>
+  <button id="jobscale-easy-apply" class="jobs-apply-button" onclick="openModal()">Easy Apply</button>
+  <a id="jobscale-external-apply" href="#" style="display:none">Apply on company website</a>
+
+  <div id="jobscale-easy-apply-modal" class="jobs-easy-apply-modal" style="display:none">
+    <h2>Easy Apply</h2>
+    <div id="li-step1">
+      <label>First name</label>
+      <input id="jobscale-li-first" autocomplete="given-name" />
+      <label>Last name</label>
+      <input id="jobscale-li-last" autocomplete="family-name" />
+      <label>Email</label>
+      <input id="jobscale-li-email" type="email" />
+      <label>Phone</label>
+      <input id="jobscale-li-phone" type="tel" />
+      <button type="button" onclick="liNext()">Next</button>
+    </div>
+    <div id="li-step2" style="display:none">
+      <label>Why are you interested?</label>
+      <textarea id="jobscale-li-why"></textarea>
+      <button type="button" onclick="liBack()">Back</button>
+      <button type="button" id="jobscale-li-submit" onclick="liSubmit()">Submit application</button>
+    </div>
+  </div>
+
+  <div id="confirmation" style="display:none">
+    <h2>Application sent</h2>
+    <p>Your application was sent to JobScaleTest.</p>
+  </div>
+
+  <script>
+    function openModal() {
+      document.getElementById('jobscale-easy-apply-modal').style.display = 'block';
+    }
+    function liNext() {
+      document.getElementById('li-step1').style.display = 'none';
+      document.getElementById('li-step2').style.display = 'block';
+    }
+    function liBack() {
+      document.getElementById('li-step2').style.display = 'none';
+      document.getElementById('li-step1').style.display = 'block';
+    }
+    function liSubmit() {
+      document.getElementById('jobscale-easy-apply-modal').style.display = 'none';
+      document.getElementById('confirmation').style.display = 'block';
+      history.pushState({}, '', location.pathname + '?submitted=true');
+    }
+  </script>
+</body>
+</html>

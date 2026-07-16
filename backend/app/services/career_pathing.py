@@ -90,7 +90,8 @@ class CareerPathingService:
     def analyze_profile(self, user_profile: Dict) -> Dict:
         """Analyze user's profile and generate career recommendations"""
         role = (user_profile.get("current_title") or "").lower()
-        years_exp = user_profile.get("years_of_experience", 0)
+        years_raw = user_profile.get("years_of_experience")
+        years_exp = float(years_raw) if years_raw is not None else 0.0
         skills = [s.get("name", "").lower() for s in user_profile.get("skills", [])]
         
         # Find matching career path
@@ -130,13 +131,17 @@ class CareerPathingService:
     
     def _determine_level(self, years_exp: float, career_path: Dict) -> str:
         """Determine current career level based on experience"""
-        if years_exp < 2:
+        try:
+            years = float(years_exp) if years_exp is not None else 0.0
+        except (TypeError, ValueError):
+            years = 0.0
+        if years < 2:
             return "Junior"
-        elif years_exp < 5:
+        elif years < 5:
             return "Mid"
-        elif years_exp < 8:
+        elif years < 8:
             return "Senior"
-        elif years_exp < 12:
+        elif years < 12:
             return "Staff"
         else:
             return "Principal"

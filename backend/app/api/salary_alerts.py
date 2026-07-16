@@ -128,9 +128,39 @@ async def update_alert_preferences(
         if body["alert_frequency"] in ("daily", "weekly", "off"):
             user.alert_frequency = body["alert_frequency"]
     db.commit()
+    db.refresh(user)
     return {
         "email_alerts_enabled": user.email_alerts_enabled,
-        "alert_frequency": current_user.alert_frequency,
+        "alert_frequency": user.alert_frequency,
+        "current_salary": user.current_salary,
+        "is_employed": user.is_employed,
+    }
+
+
+@router.get("/unsubscribe")
+async def unsubscribe_alerts(
+    token: str,
+    db: Session = Depends(get_db),
+):
+    """One-click unsubscribe from alert emails (signed token, no login)."""
+    from app.services.unsubscribe import parse_unsubscribe_token
+
+    try:
+        user_id = parse_unsubscribe_token(token)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid or expired unsubscribe link")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.email_alerts_enabled = False
+    user.alert_frequency = "off"
+    db.commit()
+    return {
+        "ok": True,
+        "message": "You have been unsubscribed from JobScale alert emails.",
+        "email_alerts_enabled": False,
+        "alert_frequency": "off",
     }
 
 
@@ -153,12 +183,12 @@ async def send_test_alert(
         })
 
     if not jobs_for_email:
-        jobs_for_email = [{
-            "title": "Senior Software Engineer (+£15,000)",
-            "company": "Example Corp",
-            "location": "London, UK",
-            "url": "#",
-        }]
+        raise HTTPException(
+            status_code=404,
+            detail="No matching upgrade jobs to include in a test alert. Set current salary and ensure jobs exist.",
+        )
 
-    email_service.send_job_alert(current_user.email, jobs_for_email)
-    return {"message": "Test alert sent! Check your email (or console in dev mode)."}
+    ok = email_service.send_job_alert(current_user.email, jobs_for_email, user_id=current_user.id)
+    if not ok:
+        raise HTTPException(status_code=503, detail="Email delivery failed — configure SendGrid or SMTP")
+    return {"message": "Test alert sent", "jobs": len(jobs_for_email)}

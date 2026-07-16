@@ -12,9 +12,11 @@ class User(Base, TimestampMixin):
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=False)
+    hashed_password = Column(String, nullable=True)  # null for OAuth-only accounts
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
+    is_admin = Column(Boolean, default=False)
+    google_sub = Column(String, unique=True, nullable=True, index=True)
     
     stripe_customer_id = Column(String, nullable=True)
     subscription_plan = Column(String, default="free")
@@ -24,6 +26,10 @@ class User(Base, TimestampMixin):
     alert_frequency = Column(String, default="daily")
     current_salary = Column(Integer, nullable=True)
     is_employed = Column(Boolean, default=False)
+    # Genuine auto-apply: when True, headless worker may SUBMIT forms for the user
+    auto_apply_submit = Column(Boolean, default=False)
+    # Opt-in: when monitored career pages post new jobs, auto-add high-match ones to auto-apply list
+    monitor_auto_queue = Column(Boolean, default=False)
     
     # Relationships
     profile = relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
@@ -40,4 +46,6 @@ class User(Base, TimestampMixin):
         self.hashed_password = pwd_context.hash(plaintext)
     
     def verify_password(self, plaintext: str) -> bool:
+        if not self.hashed_password:
+            return False
         return pwd_context.verify(plaintext, self.hashed_password)

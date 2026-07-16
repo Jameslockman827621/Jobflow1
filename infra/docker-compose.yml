@@ -42,6 +42,8 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
       - ../backend:/app
+      - apply_tmp:/tmp/jobscale_screenshots
+      - resume_tmp:/tmp/jobscale_resumes
     ports:
       - "8000:8000"
     environment:
@@ -49,19 +51,63 @@ services:
       - DATABASE_ASYNC_URL=postgresql+asyncpg://postgres:postgres@db:5432/jobscale
       - REDIS_URL=redis://redis:6379/0
       - DEBUG=true
+      - HEADLESS_APPLY_ENABLED=true
+      - HEADLESS_APPLY_AUTO_SUBMIT=true
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
 
-  # Celery Worker (background jobs)
+  # Celery Worker — scrape/alerts on default queue
   worker:
     build:
       context: ../backend
       dockerfile: Dockerfile
     container_name: jobscale-worker
-    command: celery -A app.tasks.celery_app worker --loglevel=info
+    command: celery -A app.tasks.celery_app worker -Q celery --concurrency=2 --loglevel=info
+    volumes:
+      - ../backend:/app
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/jobscale
+      - REDIS_URL=redis://redis:6379/0
+      - HEADLESS_APPLY_ENABLED=true
+    depends_on:
+      - db
+      - redis
+
+  # Dedicated apply worker — one Chromium at a time for reliability at scale
+  apply-worker:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: jobscale-apply-worker
+    command: celery -A app.tasks.celery_app worker -Q apply --concurrency=1 --loglevel=info
+    volumes:
+      - ../backend:/app
+      - apply_tmp:/tmp/jobscale_screenshots
+      - resume_tmp:/tmp/jobscale_resumes
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/jobscale
+      - REDIS_URL=redis://redis:6379/0
+      - HEADLESS_APPLY_ENABLED=true
+      - HEADLESS_APPLY_AUTO_SUBMIT=true
+      - CAPTCHA_MOCK=false
+      - PROXY_POOL=
+    depends_on:
+      - db
+      - redis
+      - worker
+    # Scale horizontally with: docker compose up --scale apply-worker=3
+    # Keep --concurrency=1 per replica (Playwright memory)
+
+  # Celery Beat (schedules near-real-time + 2h monitoring + stale apply sweeper)
+  beat:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: jobscale-beat
+    command: celery -A app.tasks.celery_app beat --loglevel=info
     volumes:
       - ../backend:/app
     environment:
@@ -70,6 +116,7 @@ services:
     depends_on:
       - db
       - redis
+      - worker
 
   # Frontend (Next.js)
   frontend:
@@ -90,3 +137,5 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  apply_tmp:
+  resume_tmp:

@@ -8,8 +8,13 @@ const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: 'grid' },
   { href: '/cv-builder', label: 'CV Builder', icon: 'document' },
   { href: '/kanban', label: 'Tracker', icon: 'columns' },
+  { href: '/interview-coach', label: 'Coach', icon: 'trending' },
+  { href: '/answers', label: 'Answers', icon: 'document' },
   { href: '/analytics', label: 'Analytics', icon: 'chart' },
-  { href: '/alerts', label: 'Career Growth', icon: 'trending' },
+  { href: '/career', label: 'Career', icon: 'trending' },
+  { href: '/reviews', label: 'Reviews', icon: 'chart' },
+  { href: '/referrals', label: 'Referrals', icon: 'trending' },
+  { href: '/alerts', label: 'Alerts', icon: 'trending' },
   { href: '/pricing', label: 'Plans', icon: 'credit-card' },
 ];
 

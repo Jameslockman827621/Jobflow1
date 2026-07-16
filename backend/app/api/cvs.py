@@ -274,6 +274,51 @@ async def export_cv(
     })
 
 
+@router.get("/{cv_id}/pdf")
+async def export_cv_pdf(
+    cv_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Export a real PDF resume for ATS file uploads (extension + headless)."""
+    from app.models.profile import UserProfile
+    from app.services.apply_engine import build_applicant_payload
+    from app.services.resume_files import build_minimal_pdf, ensure_resume_local_path, is_real_pdf
+
+    cv = db.query(CV).filter(CV.id == cv_id, CV.user_id == current_user.id).first()
+    if not cv:
+        raise HTTPException(status_code=404, detail="CV not found")
+
+    # Prefer an uploaded real PDF on disk
+    if cv.file_path and os.path.isfile(cv.file_path) and is_real_pdf(cv.file_path):
+        with open(cv.file_path, "rb") as f:
+            data = f.read()
+        filename = os.path.basename(cv.file_path) or f"cv_{cv_id}.pdf"
+        return Response(
+            content=data,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    profile = db.query(UserProfile).filter(UserProfile.user_id == current_user.id).first()
+    payload = build_applicant_payload(current_user, profile, cv)
+    path = ensure_resume_local_path(current_user.id, payload, cv)
+    if path and os.path.isfile(path) and is_real_pdf(path):
+        with open(path, "rb") as f:
+            data = f.read()
+    else:
+        from app.services.resume_files import _format_resume_text
+
+        data = build_minimal_pdf(_format_resume_text(payload, cv))
+
+    safe_name = (cv.full_name or f"cv_{cv_id}").replace(" ", "_")
+    return Response(
+        content=data,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}.pdf"'},
+    )
+
+
 def _resolve_conditionals(html: str, data: dict) -> str:
     """Resolve Mustache-style conditional blocks {{#field}}...{{/field}}."""
     import re
