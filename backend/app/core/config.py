@@ -73,12 +73,17 @@ class Settings(BaseSettings):
     # CORS — comma-separated origins in env, e.g. "https://app.example.com,http://localhost:3000"
     CORS_ORIGINS: Union[str, List[str]] = "http://localhost:3000"
 
-    # When no scrapers return jobs, seed curated demo rows once (disable in real production)
+    # When no scrapers return jobs, seed curated demo rows once (never in production)
     AUTO_SEED_DEMO_JOBS: bool = True
-    
+
     class Config:
         env_file = ".env"
         case_sensitive = True
+
+    def model_post_init(self, __context) -> None:
+        # Pydantic v2 hook — force-disable demo seed in production
+        if str(self.ENVIRONMENT).lower() == "production":
+            object.__setattr__(self, "AUTO_SEED_DEMO_JOBS", False)
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod

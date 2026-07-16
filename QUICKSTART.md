@@ -53,13 +53,22 @@ uvicorn app.main:app --reload
 
 Backend API: http://localhost:8000
 
-### 3. Start Celery Worker (optional, for background jobs)
+### 3. Start Celery Worker (required for genuine headless apply)
 
 ```bash
 cd backend
 source venv/bin/activate
-celery -A app.tasks.celery_app worker --loglevel=info
+# Dedicated apply queue — keep concurrency=1 for Playwright stability
+celery -A app.tasks.celery_app worker -Q apply,celery --concurrency=1 --loglevel=info
 ```
+
+Readiness (DB / Redis / Celery / Playwright package):
+
+```bash
+curl -s http://localhost:8000/api/v1/health/ready | python -m json.tool
+```
+
+> `ENVIRONMENT=production` disables demo job seeding. Extension Options must point at your HTTPS API/dashboard.
 
 ### 4. Frontend Setup
 

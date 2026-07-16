@@ -67,22 +67,18 @@ const PLANS: {
     price: 79,
     yearlyPrice: 63,
     period: 'per month',
-    description: 'Full-service job search support',
+    description: 'Higher apply volume + coaching tools',
     features: [
       'Everything in Pro',
-      'Interview coaching',
-      'Resume review by experts',
-      'Salary negotiation guidance',
+      'Higher daily/monthly apply quotas',
+      'Interview coaching (requires OpenAI key on server)',
       'Career path recommendations',
-      'Recruiter network access',
-      'Monthly 1-on-1 coaching',
-      'Dedicated support',
+      'Priority support',
     ],
-    cta: 'Contact sales',
+    cta: 'Subscribe to Premium',
     highlighted: false,
     checkoutPlanMonthly: 'premium_monthly',
     checkoutPlanYearly: 'premium_yearly',
-    contactOnly: true,
   },
 ];
 
@@ -140,10 +136,6 @@ export default function PricingPage() {
   const startCheckout = async (plan: (typeof PLANS)[number]) => {
     if (plan.key === 'free') {
       router.push('/login?mode=signup');
-      return;
-    }
-    if (plan.contactOnly) {
-      router.push('/contact');
       return;
     }
     const priceKey = billingPeriod === 'yearly' ? plan.checkoutPlanYearly : plan.checkoutPlanMonthly;

@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { href: '/analytics', label: 'Analytics', icon: 'chart' },
   { href: '/career', label: 'Career', icon: 'trending' },
   { href: '/reviews', label: 'Reviews', icon: 'chart' },
+  { href: '/referrals', label: 'Referrals', icon: 'trending' },
   { href: '/alerts', label: 'Alerts', icon: 'trending' },
   { href: '/pricing', label: 'Plans', icon: 'credit-card' },
 ];

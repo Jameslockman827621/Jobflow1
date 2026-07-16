@@ -12,8 +12,8 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 ### P0.1 Job inventory & dashboard load
 - [x] **Dashboard always loads matched jobs** — was gated on `has_cached_jobs`, leaving empty dashboards after onboarding (`frontend/.../dashboard/page.tsx`)
 - [x] Show error toast when `/onboarding/search` fails (no silent empty)
-- [ ] Disable `AUTO_SEED_DEMO_JOBS` in production env by default; keep only for empty-dev bootstrap
-- [ ] Finish ATS `scrape_all_jobs` stubs (Greenhouse/Lever/Ashby/Workable return `[]`)
+- [x] Disable `AUTO_SEED_DEMO_JOBS` in production env by default; keep only for empty-dev bootstrap
+- [x] Finish ATS `scrape_all_jobs` stubs (Greenhouse/Lever/Ashby/Workable use curated company lists)
 - [ ] Authenticate + admin-gate `POST /jobs/scrape/{source}` (was open; now auth-required — still needs role/admin)
 - [ ] Apify LinkedIn company/all scrapes: replace `NotImplementedError` with real actors or remove from API surface
 
@@ -21,7 +21,7 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 - [x] `POST /applications/{id}/submit` no longer pretends it applied — requires `?manual=true` for external self-report, otherwise points to apply-engine
 - [x] Headless batch: dashboard **polls** `/apply-engine/headless/batch/{id}` and surfaces submitted / needs_user / connect_hint
 - [x] Live LinkedIn/Indeed without Connect → `login_required` + connect hint (prior)
-- [ ] Celery apply worker must be documented as required process in QUICKSTART (running check in health)
+- [x] Celery apply worker documented in QUICKSTART + health `/ready` reports workers
 - [ ] Live employer submit smoke (manual, ToS) for Greenhouse + LinkedIn Easy Apply
 
 ### P0.3 Connect boards (session)

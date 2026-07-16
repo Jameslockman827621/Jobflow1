@@ -62,9 +62,19 @@ class WorkableScraper(BaseScraper):
         return []
 
     async def scrape_all_jobs(self, limit: int = 100) -> List[JobData]:
-        """Workable doesn't have global search - needs company list"""
-        print("Workable: scrape_all_jobs not implemented - needs company list")
-        return []
+        from app.scrapers.companies import WORKABLE_COMPANIES
+
+        jobs: List[JobData] = []
+        for company in WORKABLE_COMPANIES:
+            if len(jobs) >= limit:
+                break
+            try:
+                batch = await self.scrape_company_jobs(company)
+                jobs.extend(batch)
+            except Exception as exc:
+                print(f"Workable scrape_all skip {company}: {exc}")
+                continue
+        return jobs[:limit]
 
     def _extract_jobs(self, data: Any) -> List[Dict]:
         if isinstance(data, list):

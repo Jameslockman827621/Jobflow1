@@ -43,8 +43,19 @@ class AshbyScraper(BaseScraper):
                 return []
 
     async def scrape_all_jobs(self, limit: int = 100) -> List[JobData]:
-        print("Ashby: scrape_all_jobs not implemented - needs company list")
-        return []
+        from app.scrapers.companies import ASHBY_COMPANIES
+
+        jobs: List[JobData] = []
+        for company in ASHBY_COMPANIES:
+            if len(jobs) >= limit:
+                break
+            try:
+                batch = await self.scrape_company_jobs(company)
+                jobs.extend(batch)
+            except Exception as exc:
+                print(f"Ashby scrape_all skip {company}: {exc}")
+                continue
+        return jobs[:limit]
 
     def _parse_job(self, job: Dict, company: str) -> JobData:
         title = job.get("title") or job.get("jobTitle") or ""

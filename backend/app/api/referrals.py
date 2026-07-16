@@ -87,7 +87,7 @@ async def get_referral_code(
     
     return ReferralCodeResponse(
         code=referral_code.code,
-        link=f"http://localhost:3000/signup?ref={referral_code.code}",
+        link=f"{__import__('app.core.config', fromlist=['settings']).settings.APP_URL.rstrip('/')}/login?mode=signup&ref={referral_code.code}",
         total_referrals=referral_code.total_referrals,
         successful_referrals=referral_code.successful_referrals,
         earnings=referral_code.successful_referrals * 10,  # $10 per signup

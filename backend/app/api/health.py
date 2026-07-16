@@ -83,6 +83,40 @@ def _messaging_configured() -> dict:
         return {"configured": False, "whatsapp": False, "imessage": False}
 
 
+def _celery_workers() -> dict:
+    try:
+        from app.tasks import celery_app
+
+        inspector = celery_app.control.inspect(timeout=1.0)
+        ping = inspector.ping() or {}
+        stats = inspector.stats() or {}
+        workers = list(ping.keys())
+        queues = {}
+        active = inspector.active_queues() or {}
+        for name, qs in active.items():
+            queues[name] = [q.get("name") for q in (qs or []) if isinstance(q, dict)]
+        return {
+            "ok": bool(workers),
+            "status": "up" if workers else "down",
+            "workers": workers,
+            "worker_count": len(workers),
+            "queues": queues,
+            "has_stats": bool(stats),
+        }
+    except Exception as exc:
+        return {"ok": False, "status": "down", "error": str(exc)[:200], "workers": []}
+
+
+def _playwright_browsers() -> dict:
+    try:
+        import importlib
+
+        importlib.import_module("playwright")
+        return {"ok": True, "status": "package_installed"}
+    except Exception as exc:
+        return {"ok": False, "status": "missing", "error": str(exc)[:200]}
+
+
 @router.get("/ready")
 async def readiness_check():
     db = _check_db()
@@ -91,10 +125,11 @@ async def readiness_check():
     proxy_count = _proxy_pool_count()
     messaging = _messaging_configured()
     headless_enabled = bool(getattr(settings, "HEADLESS_APPLY_ENABLED", True))
+    celery = _celery_workers()
+    playwright = _playwright_browsers()
 
-    # Hard-fail only when DB is down. Redis outage → degraded but still ready.
     ready = bool(db.get("ok"))
-    if ready and not redis_info.get("ok"):
+    if ready and (not redis_info.get("ok") or not celery.get("ok")):
         overall = "degraded"
     elif ready:
         overall = "ready"
@@ -105,12 +140,20 @@ async def readiness_check():
         "ready": ready,
         "status": overall,
         "timestamp": datetime.utcnow().isoformat(),
+        "environment": settings.ENVIRONMENT,
+        "auto_seed_demo_jobs": bool(settings.AUTO_SEED_DEMO_JOBS),
         "checks": {
             "database": db,
             "redis": redis_info,
+            "celery_workers": celery,
+            "playwright": playwright,
             "captcha_available": captcha,
             "proxy_pool_count": proxy_count,
             "messaging": messaging,
             "headless_apply_enabled": headless_enabled,
         },
+        "ops_hint": (
+            "For genuine auto-apply at scale run: "
+            "celery -A app.tasks.celery_app worker -Q apply,celery --loglevel=info"
+        ),
     }

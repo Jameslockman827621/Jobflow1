@@ -48,7 +48,11 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     payload = verify_token(token)
     if payload is None:
         raise credentials_exception
-    
+
+    # Reject purpose-scoped tokens (password reset / email verify) as session tokens
+    if payload.get("purpose"):
+        raise credentials_exception
+
     email: str = payload.get("sub")
     if email is None:
         raise credentials_exception

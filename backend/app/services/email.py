@@ -400,6 +400,32 @@ class EmailService:
         """
         return self.send_email(to, subject, html)
 
+    def send_password_reset_email(self, to: str, token: str) -> bool:
+        reset_url = f"{settings.APP_URL.rstrip('/')}/reset-password?token={token}"
+        subject = "Reset your JobScale password"
+        html = f"""
+        <html><body style="font-family:Arial,sans-serif;line-height:1.5;color:#0f172a">
+          <h2>Password reset</h2>
+          <p>We received a request to reset your JobScale password.</p>
+          <p><a href="{reset_url}" style="background:#0f172a;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;display:inline-block">Reset password</a></p>
+          <p style="color:#64748b;font-size:13px">This link expires in 60 minutes. If you did not request this, ignore this email.</p>
+        </body></html>
+        """
+        return self.send_email(to, subject, html)
+
+    def send_verification_email(self, to: str, name: str, token: str) -> bool:
+        verify_url = f"{settings.APP_URL.rstrip('/')}/verify-email?token={token}"
+        subject = "Verify your JobScale email"
+        html = f"""
+        <html><body style="font-family:Arial,sans-serif;line-height:1.5;color:#0f172a">
+          <h2>Hi {name or 'there'},</h2>
+          <p>Confirm your email to secure your JobScale account.</p>
+          <p><a href="{verify_url}" style="background:#0d9488;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;display:inline-block">Verify email</a></p>
+          <p style="color:#64748b;font-size:13px">Link expires in 24 hours.</p>
+        </body></html>
+        """
+        return self.send_email(to, subject, html)
+
 
 # Singleton
 email_service = EmailService()
