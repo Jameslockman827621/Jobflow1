@@ -136,3 +136,4 @@ This is the product-truth checklist. Items marked **DONE** were closed in this p
 | Nav | Career + Reviews |
 | Wave 3 | Admin scrape gate; Apify LinkedIn wrappers; rate limit MW; Alembic board/answer/admin; Kanban apply_run badges; reconnect UX; answer-bank CRUD; extension long-lived JWT |
 | Wave 4 | Real referral Pro trial + Stripe credit; unsubscribe tokens; interview coach UI; Kanban DnD; prod CORS/email honesty; structlog JSON; ops metrics; extension host_permissions |
+| Wave 5 | Monitor auto-queue opt-in; fingerprint concurrency test; cookie/token log redaction; optional SENTRY_DSN hook |
