@@ -10,9 +10,10 @@ Priority tiers:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import time
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 from app.database import SessionLocal
 from app.models.company import MonitoredCompany
@@ -23,7 +24,7 @@ from app.scrapers.greenhouse import GreenhouseScraper
 from app.scrapers.lever import LeverScraper
 from app.scrapers.workable import WorkableScraper
 from app.services.company_directory import companies_by_priority, mark_scraped, seed_monitored_companies
-from app.services.proxy_pool import fingerprint_headers, httpx_proxies
+from app.services.proxy_pool import fingerprint_headers
 from app.tasks import celery_app
 
 
@@ -47,6 +48,37 @@ def _get_scraper(ats_type: str):
     if ats_type == "ashby":
         return AshbyScraper()
     return None
+
+
+def _jobs_fingerprint(jobs: List[JobData]) -> str:
+    """Stable hash of sorted external_ids for change detection."""
+    ids = sorted({(j.external_id or "").strip() for j in jobs if j.external_id})
+    payload = "|".join(ids)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _on_new_jobs_detected(
+    company: MonitoredCompany,
+    saved: int,
+    fingerprint: str,
+    previous_fingerprint: Optional[str],
+) -> None:
+    """Lightweight hook when new jobs are persisted for a monitored company."""
+    meta = {
+        "company": company.slug,
+        "ats_type": company.ats_type,
+        "new_jobs": saved,
+        "fingerprint": fingerprint[:12],
+        "previous": (previous_fingerprint or "")[:12] or None,
+        "changed": previous_fingerprint is not None and previous_fingerprint != fingerprint,
+    }
+    print(f"[monitor] new jobs detected: {meta}")
+    try:
+        from app.tasks.alerts import send_daily_job_alerts
+        # Queue a lightweight alert refresh when boards change (best-effort)
+        send_daily_job_alerts.delay()
+    except Exception as exc:
+        print(f"[monitor] alert queue skipped: {exc}")
 
 
 def _ensure_source(db, name: str, base_url: str = "") -> JobSource:
@@ -111,7 +143,14 @@ def _scrape_priority(priority: str, limit: int = 50) -> dict:
             seed_monitored_companies(db)
 
         companies = companies_by_priority(db, priority, limit=limit)
-        totals = {"companies": 0, "jobs_found": 0, "jobs_saved": 0, "failures": 0, "priority": priority}
+        totals = {
+            "companies": 0,
+            "jobs_found": 0,
+            "jobs_saved": 0,
+            "failures": 0,
+            "priority": priority,
+            "fingerprint_changes": 0,
+        }
 
         for company in companies:
             scraper = _get_scraper(company.ats_type)
@@ -128,9 +167,16 @@ def _scrape_priority(priority: str, limit: int = 50) -> dict:
                 jobs = _run_async(scraper.scrape_company_jobs(company.slug))
                 source = _ensure_source(db, company.ats_type, getattr(scraper, "base_url", ""))
                 saved = _persist_jobs(db, source, jobs)
+                fingerprint = _jobs_fingerprint(jobs)
+                previous = company.last_fingerprint
+                if previous != fingerprint:
+                    totals["fingerprint_changes"] += 1
+                company.last_fingerprint = fingerprint
                 elapsed_ms = (time.time() - started) * 1000
                 mark_scraped(db, company, len(jobs), elapsed_ms=elapsed_ms, failed=False)
                 db.commit()
+                if saved > 0:
+                    _on_new_jobs_detected(company, saved, fingerprint, previous)
                 totals["companies"] += 1
                 totals["jobs_found"] += len(jobs)
                 totals["jobs_saved"] += saved

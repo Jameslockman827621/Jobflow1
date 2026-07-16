@@ -21,6 +21,7 @@ from app.models.search_cache import SearchCache
 from app.models.referral import ReferralCode, Referral
 from app.models.review import CompanyReview, InterviewReview
 from app.models.auto_apply import UserAutoApplyJob
+from app.models.company import MonitoredCompany, ApplyRun  # noqa: F401
 from app.core.config import settings
 
 # this is the Alembic Config object, which provides

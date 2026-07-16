@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.api import health, auth, jobs, users, applications, profile, interview, billing, referrals, interview_coach, career, analytics, reviews, onboarding, cvs, auto_apply, career_report, salary_alerts, companies, apply_engine
+from app.api import health, auth, jobs, users, applications, profile, interview, billing, referrals, interview_coach, career, analytics, reviews, onboarding, cvs, auto_apply, career_report, salary_alerts, companies, apply_engine, webhooks
 
 
 @asynccontextmanager
@@ -48,6 +48,7 @@ app.include_router(career_report.router, prefix=f"{settings.API_V1_PREFIX}/repor
 app.include_router(salary_alerts.router, prefix=f"{settings.API_V1_PREFIX}/alerts", tags=["Salary Alerts"])
 app.include_router(companies.router, prefix=f"{settings.API_V1_PREFIX}/companies", tags=["Companies"])
 app.include_router(apply_engine.router, prefix=f"{settings.API_V1_PREFIX}/apply-engine", tags=["Apply Engine"])
+app.include_router(webhooks.router, prefix=f"{settings.API_V1_PREFIX}/webhooks", tags=["Webhooks"])
 app.include_router(cvs.router, tags=["CVs"])
 
 

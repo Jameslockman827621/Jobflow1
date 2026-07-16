@@ -23,6 +23,7 @@ class MonitoredCompany(Base, TimestampMixin):
     is_active = Column(Boolean, default=True, index=True)
     last_scraped_at = Column(DateTime, nullable=True)
     last_job_count = Column(Integer, default=0)
+    last_fingerprint = Column(String(64), nullable=True)  # hash of external_ids from last scrape
     scrape_failures = Column(Integer, default=0)
     avg_scrape_ms = Column(Float, nullable=True)
     notes = Column(Text, nullable=True)

@@ -10,6 +10,8 @@ Monitoring tiers (vs previous 6h cadence):
 
 from celery.schedules import crontab
 
+from app.scrapers.companies import WORKABLE_COMPANIES
+
 # Celery Beat schedule
 beat_schedule = {
     # Near-real-time hot career pages
@@ -59,6 +61,13 @@ beat_schedule = {
             "duolingo", "wealthfront", "samsara", "anduril", "replit",
             "linear", "mercury", "deel", "remote", "gong",
         ],),
+    },
+
+    # Workable every 2 hours (first 30 curated boards)
+    "scrape-workable-every-2h": {
+        "task": "app.tasks.jobs.scrape_workable_companies",
+        "schedule": crontab(minute=45, hour="*/2"),
+        "args": (list(WORKABLE_COMPANIES[:30]),),
     },
 
     # Daily job cleanup - remove old/inactive jobs
