@@ -55,9 +55,6 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: Optional[str] = None
     FROM_EMAIL: str = "noreply@jobscale.local"
     SENDGRID_API_KEY: Optional[str] = None
-    
-    # Ingest webhook shared secret (X-JobScale-Webhook-Secret)
-    WEBHOOK_SECRET: Optional[str] = None
 
     # Stripe (set price IDs from Stripe Dashboard → Products → Price API IDs)
     STRIPE_SECRET_KEY: Optional[str] = None
