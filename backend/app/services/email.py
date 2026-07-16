@@ -33,41 +33,68 @@ class EmailService:
         text_content: Optional[str] = None,
     ) -> bool:
         """Send an email"""
-        if settings.DEBUG:
-            # In development, just print
-            print(f"\n📧 EMAIL (DEV MODE)")
+        sg_key = (self.sendgrid_api_key or "").strip()
+        if sg_key and sg_key.lower() not in ("mock", "placeholder", "your-key"):
+            try:
+                import httpx
+
+                resp = httpx.post(
+                    "https://api.sendgrid.com/v3/mail/send",
+                    headers={
+                        "Authorization": f"Bearer {sg_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "personalizations": [{"to": [{"email": to}]}],
+                        "from": {"email": self.from_email, "name": self.from_name},
+                        "subject": subject,
+                        "content": [
+                            {
+                                "type": "text/plain",
+                                "value": text_content
+                                or __import__("re").sub(r"<[^>]+>", "", html_content),
+                            },
+                            {"type": "text/html", "value": html_content},
+                        ],
+                    },
+                    timeout=20.0,
+                )
+                if resp.status_code in (200, 202):
+                    return True
+                print(f"SendGrid failed: {resp.status_code} {resp.text[:300]}")
+            except Exception as e:
+                print(f"SendGrid error: {e}")
+
+        if settings.DEBUG and not (self.smtp_user and self.smtp_password):
+            print(f"\nEMAIL (DEV MODE — no SMTP/SendGrid)")
             print(f"To: {to}")
             print(f"Subject: {subject}")
             print(f"Content: {html_content[:200]}...")
             print()
             return True
-        
-        # Production: Use SMTP (SendGrid integration coming)
+
         try:
             msg = MIMEMultipart("alternative")
             msg["Subject"] = subject
             msg["From"] = f"{self.from_name} <{self.from_email}>"
             msg["To"] = to
-            
-            # Text version
+
             if text_content:
                 msg.attach(MIMEText(text_content, "plain"))
             else:
-                # Strip HTML for text version
                 import re
-                text = re.sub(r'<[^>]+>', '', html_content)
+
+                text = re.sub(r"<[^>]+>", "", html_content)
                 msg.attach(MIMEText(text, "plain"))
-            
-            # HTML version
+
             msg.attach(MIMEText(html_content, "html"))
-            
-            # Send via SMTP
+
             with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
                 server.starttls()
                 if self.smtp_user and self.smtp_password:
                     server.login(self.smtp_user, self.smtp_password)
                 server.send_message(msg)
-            
+
             return True
         except Exception as e:
             print(f"Failed to send email: {e}")
@@ -91,7 +118,7 @@ class EmailService:
             </ol>
             
             <p style="margin-top: 30px;">
-                <a href="http://localhost:3000/profile" 
+                <a href="{settings.APP_URL}/profile" 
                    style="background-color: #2563eb; color: white; padding: 12px 24px; 
                           text-decoration: none; border-radius: 6px; display: inline-block;">
                     Complete Your Profile
@@ -136,7 +163,7 @@ class EmailService:
             </ol>
             
             <p style="margin-top: 30px;">
-                <a href="http://localhost:3000/dashboard" 
+                <a href="{settings.APP_URL}/dashboard" 
                    style="background-color: #2563eb; color: white; padding: 12px 24px; 
                           text-decoration: none; border-radius: 6px; display: inline-block;">
                     View Your Applications
@@ -186,7 +213,7 @@ class EmailService:
             </ul>
             
             <p style="margin-top: 30px;">
-                <a href="http://localhost:3000/dashboard" 
+                <a href="{settings.APP_URL}/dashboard" 
                    style="background-color: #16a34a; color: white; padding: 12px 24px; 
                           text-decoration: none; border-radius: 6px; display: inline-block;">
                     Update Application Status
@@ -228,7 +255,7 @@ class EmailService:
             {jobs_html}
             
             <p style="margin-top: 30px;">
-                <a href="http://localhost:3000/dashboard" 
+                <a href="{settings.APP_URL}/dashboard" 
                    style="background-color: #2563eb; color: white; padding: 12px 24px; 
                           text-decoration: none; border-radius: 6px; display: inline-block;">
                     See All Jobs
@@ -287,7 +314,7 @@ class EmailService:
                 {jobs_html}
                 
                 <p style="margin-top: 25px; text-align: center;">
-                    <a href="http://localhost:3000/dashboard" 
+                    <a href="{settings.APP_URL}/dashboard" 
                        style="background-color: #059669; color: white; padding: 14px 28px; 
                               text-decoration: none; border-radius: 8px; display: inline-block; font-weight: 600;">
                         View All Opportunities
@@ -300,14 +327,14 @@ class EmailService:
                     <p style="margin: 0; font-size: 14px;"><strong>📊 Unlock your Annual Career Report</strong></p>
                     <p style="margin: 5px 0 0 0; font-size: 13px; color: #666;">See your salary percentile, market trends, and personalized career recommendations.</p>
                     <p style="margin: 8px 0 0 0;">
-                        <a href="http://localhost:3000/pricing" style="color: #d97706; font-size: 13px; font-weight: 600;">Upgrade to Pro →</a>
+                        <a href="{settings.APP_URL}/pricing" style="color: #d97706; font-size: 13px; font-weight: 600;">Upgrade to Pro →</a>
                     </p>
                 </div>
             </div>
             
             <div style="padding: 15px; text-align: center; color: #9ca3af; font-size: 12px;">
                 <p>You're receiving this because you enabled salary alerts on JobScale.</p>
-                <p><a href="http://localhost:3000/profile" style="color: #9ca3af;">Manage preferences</a> | <a href="#" style="color: #9ca3af;">Unsubscribe</a></p>
+                <p><a href="{settings.APP_URL}/profile" style="color: #9ca3af;">Manage preferences</a> | <a href="#" style="color: #9ca3af;">Unsubscribe</a></p>
             </div>
         </body>
         </html>
@@ -350,7 +377,7 @@ class EmailService:
             {salary_info}
             
             <p style="margin-top: 25px; text-align: center;">
-                <a href="http://localhost:3000/analytics"
+                <a href="{settings.APP_URL}/analytics"
                    style="background-color: #2563eb; color: white; padding: 12px 24px;
                           text-decoration: none; border-radius: 8px; display: inline-block;">
                     View Full Report
@@ -362,11 +389,11 @@ class EmailService:
             <div style="background: #faf5ff; padding: 15px; border-radius: 8px; text-align: center;">
                 <p style="margin: 0; font-weight: 600;">🔓 Unlock Annual Career Report</p>
                 <p style="margin: 5px 0; font-size: 13px; color: #666;">Detailed salary analysis, career trajectory, and personalized growth plan.</p>
-                <a href="http://localhost:3000/pricing" style="color: #7c3aed; font-weight: 600; font-size: 14px;">Upgrade to Pro →</a>
+                <a href="{settings.APP_URL}/pricing" style="color: #7c3aed; font-weight: 600; font-size: 14px;">Upgrade to Pro →</a>
             </div>
             
             <p style="color: #9ca3af; font-size: 12px; margin-top: 20px; text-align: center;">
-                <a href="http://localhost:3000/profile" style="color: #9ca3af;">Manage preferences</a>
+                <a href="{settings.APP_URL}/profile" style="color: #9ca3af;">Manage preferences</a>
             </p>
         </body>
         </html>

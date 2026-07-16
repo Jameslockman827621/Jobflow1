@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>JobScale Extension Settings</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 480px; margin: 24px; color: #0f172a; }
+    label { display: block; font-size: 13px; font-weight: 600; margin-top: 16px; }
+    input { width: 100%; padding: 10px; margin-top: 6px; border: 1px solid #e2e8f0; border-radius: 8px; }
+    button { margin-top: 20px; padding: 10px 16px; background: #0f172a; color: #fff; border: 0; border-radius: 8px; font-weight: 600; cursor: pointer; }
+    p { font-size: 13px; color: #64748b; line-height: 1.5; }
+    #status { margin-top: 12px; font-size: 13px; color: #0f766e; }
+  </style>
+</head>
+<body>
+  <h1>JobScale settings</h1>
+  <p>Point the extension at your JobScale API and dashboard (required for production HTTPS).</p>
+  <label>API base (include /api/v1)
+    <input id="api_base" placeholder="https://api.example.com/api/v1" />
+  </label>
+  <label>Dashboard URL
+    <input id="dashboard_url" placeholder="https://app.example.com" />
+  </label>
+  <button id="save">Save</button>
+  <div id="status"></div>
+  <script src="options.js"></script>
+</body>
+</html>

@@ -1,9 +1,6 @@
 // JobScale Extension Popup
 // User selects jobs in extension → clicks Apply → extension opens each URL and starts application
 
-const DASHBOARD_URL = 'http://localhost:3000';
-const API_BASE = 'http://localhost:8000/api/v1';
-
 document.addEventListener('DOMContentLoaded', async () => {
   const loadingEl = document.getElementById('loading');
   const loggedOutEl = document.getElementById('logged-out');
@@ -18,12 +15,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   const statInterviews = document.getElementById('stat-interviews');
   const statOffers = document.getElementById('stat-offers');
 
+  const stored = await chrome.storage.local.get(['jobscale_token', 'api_base', 'dashboard_url']);
+  const API_BASE = (stored.api_base || 'http://localhost:8000/api/v1').replace(/\/$/, '');
+  const DASHBOARD_URL = (stored.dashboard_url || 'http://localhost:3000').replace(/\/$/, '');
+
   loadingEl.style.display = 'flex';
   loggedOutEl.classList.add('hidden');
   loggedInEl.classList.add('hidden');
 
-  const { jobscale_token } = await chrome.storage.local.get('jobscale_token');
-  const token = jobscale_token;
+  const token = stored.jobscale_token;
 
   if (!token) {
     loadingEl.style.display = 'none';

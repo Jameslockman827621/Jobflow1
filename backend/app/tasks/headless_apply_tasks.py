@@ -95,6 +95,7 @@ def apply_batch(
     auto_submit: bool = False,
     dry_run: bool = True,
     max_per_batch: int = 50,
+    batch_id: Optional[str] = None,
 ):
     """
     Scale path: fan out one Celery task per application onto the apply queue.
@@ -104,7 +105,7 @@ def apply_batch(
     requested = len(ids)
     capped = ids[:max_per_batch]
     deferred_ids = ids[max_per_batch:]
-    batch_id = str(uuid.uuid4())
+    batch_id = batch_id or str(uuid.uuid4())
     task_ids = []
     for app_id in capped:
         async_result = apply_one.apply_async(

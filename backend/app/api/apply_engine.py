@@ -259,7 +259,7 @@ async def headless_apply(
     current_user: User = Depends(get_current_user),
 ):
     if not body.dry_run:
-        quota = check_apply_quota(db, current_user.id, requested=1)
+        quota = check_apply_quota(db, current_user.id, requested=1, user=current_user)
         if not quota["allowed"]:
             raise HTTPException(status_code=429, detail=quota)
     if body.async_queue:
@@ -293,19 +293,24 @@ async def headless_batch(
     requested = len(body.application_ids)
     to_queue = body.application_ids[:max_per]
     if not body.dry_run:
-        quota = check_apply_quota(db, current_user.id, requested=len(to_queue))
+        quota = check_apply_quota(db, current_user.id, requested=len(to_queue), user=current_user)
         if not quota["allowed"]:
             raise HTTPException(status_code=429, detail=quota)
+    import uuid as _uuid
+
+    batch_id = str(_uuid.uuid4())
     task = apply_batch.delay(
         current_user.id,
         body.application_ids,
         auto_submit=body.auto_submit,
         dry_run=body.dry_run,
         max_per_batch=max_per,
+        batch_id=batch_id,
     )
     return {
         "ok": True,
         "queued": True,
+        "batch_id": batch_id,
         "task_id": task.id,
         "requested": requested,
         "queued_count": len(to_queue),
@@ -313,7 +318,7 @@ async def headless_batch(
         "fan_out": True,
         "message": (
             f"Batch headless apply queued: {len(to_queue)}/{requested} "
-            "(one Celery task per application on apply queue)"
+            f"(batch {batch_id})"
         ),
     }
 
@@ -422,7 +427,7 @@ async def headless_retry(
         return {"ok": True, "queued": 0, "application_ids": [], "message": "Nothing to retry"}
 
     if body.auto_submit:
-        quota = check_apply_quota(db, current_user.id, requested=len(app_ids))
+        quota = check_apply_quota(db, current_user.id, requested=len(app_ids), user=current_user)
         if not quota["allowed"]:
             raise HTTPException(status_code=429, detail=quota)
 
@@ -447,7 +452,7 @@ async def apply_quota(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return check_apply_quota(db, current_user.id, requested=0)
+    return check_apply_quota(db, current_user.id, requested=0, user=current_user)
 
 
 @router.get("/runs")

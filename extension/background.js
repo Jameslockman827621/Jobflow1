@@ -1,7 +1,17 @@
 // JobScale Background Service Worker
 
-const DASHBOARD_URL = 'http://localhost:3000';
-const API_BASE = 'http://localhost:8000/api/v1';
+const DEFAULT_DASHBOARD_URL = 'http://localhost:3000';
+const DEFAULT_API_BASE = 'http://localhost:8000/api/v1';
+
+async function getDashboardUrl() {
+  const data = await chrome.storage.local.get('dashboard_url');
+  return (data.dashboard_url || DEFAULT_DASHBOARD_URL).replace(/\/$/, '');
+}
+
+async function getApiBase() {
+  const data = await chrome.storage.local.get('api_base');
+  return (data.api_base || DEFAULT_API_BASE).replace(/\/$/, '');
+}
 
 const BOARD_URLS = {
   linkedin: 'https://www.linkedin.com/feed/',
@@ -33,7 +43,7 @@ chrome.runtime.onInstalled.addListener(() => {
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === 'apply-with-jobscale') {
-    chrome.tabs.create({ url: `${DASHBOARD_URL}/dashboard` });
+    getDashboardUrl().then((url) => chrome.tabs.create({ url: `${url}/dashboard` }));
   } else if (info.menuItemId === 'connect-linkedin') {
     startConnect('linkedin');
   } else if (info.menuItemId === 'connect-indeed') {
@@ -43,7 +53,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'openDashboard') {
-    chrome.tabs.create({ url: `${DASHBOARD_URL}/dashboard` });
+    getDashboardUrl().then((url) => chrome.tabs.create({ url: `${url}/dashboard` }));
   } else if (request.action === 'syncToken') {
     chrome.storage.local.set({ jobscale_token: request.token }, () => {
       sendResponse({ ok: true });
@@ -166,6 +176,7 @@ async function syncBoardSession(board) {
       error: `No ${board} cookies yet — open ${board}.com and log in, then try again`,
     };
   }
+  const API_BASE = await getApiBase();
   const res = await fetch(`${API_BASE}/apply-engine/board-sessions/${board}/from-cookies`, {
     method: 'POST',
     headers: {
@@ -204,6 +215,7 @@ async function startConnect(board) {
     last = await syncBoardSession(board);
     if (last.ok) {
       // Notify dashboard tabs
+      const DASHBOARD_URL = await getDashboardUrl();
       const dashTabs = await chrome.tabs.query({ url: `${DASHBOARD_URL}/*` });
       for (const t of dashTabs) {
         try {
@@ -226,6 +238,7 @@ async function startConnect(board) {
 async function getConnectStatus() {
   const token = await getToken();
   if (!token) return { ok: false, error: 'not_authenticated' };
+  const API_BASE = await getApiBase();
   const res = await fetch(`${API_BASE}/apply-engine/connect/status`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -242,6 +255,7 @@ async function handleAutoApply(sendResponse) {
       return;
     }
 
+    const API_BASE = await getApiBase();
     const res = await fetch(`${API_BASE}/applications/ready-to-apply`, {
       headers: { Authorization: `Bearer ${token}` },
     });

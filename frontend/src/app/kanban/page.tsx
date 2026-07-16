@@ -136,6 +136,21 @@ export default function KanbanPage() {
     }
   }
 
+  async function moveStage(appId: number, stage: string) {
+    const prev = applications;
+    setApplications((apps) =>
+      apps.map((a) => (a.id === appId ? { ...a, stage, status: stage === 'applied' ? 'submitted' : a.status } : a))
+    );
+    const res = await authFetch(`/api/v1/applications/${appId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stage }),
+    });
+    if (!res.ok) {
+      setApplications(prev);
+    }
+  }
+
   if (authLoading || loading) {
     return (
       <AppShell>
@@ -213,7 +228,7 @@ export default function KanbanPage() {
                   {stageApps.map((app) => (
                     <div
                       key={app.id}
-                      className="bg-white rounded-lg p-3.5 shadow-sm hover:shadow-md transition-shadow cursor-pointer border border-slate-100"
+                      className="bg-white rounded-lg p-3.5 shadow-sm hover:shadow-md transition-shadow border border-slate-100"
                     >
                       <h3 className="font-semibold text-slate-900 text-sm leading-snug">{app.job?.title || 'Untitled'}</h3>
                       <p className="text-sm text-slate-500 mt-1">{app.job?.company || 'Unknown'}</p>
@@ -221,6 +236,20 @@ export default function KanbanPage() {
                         <LocationIcon className="w-3 h-3" />
                         <span>{app.job?.location || ''}</span>
                       </p>
+                      <label className="block mt-2 text-[10px] uppercase tracking-wide text-slate-400">
+                        Move to
+                        <select
+                          className="mt-0.5 w-full text-xs rounded border border-slate-200 bg-white px-2 py-1 text-slate-700"
+                          value={app.stage || 'not_started'}
+                          onChange={(e) => moveStage(app.id, e.target.value)}
+                        >
+                          {STAGES.map((s) => (
+                            <option key={s.id} value={s.id === 'wishlist' ? 'not_started' : s.id}>
+                              {s.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
                     </div>
                   ))}
 

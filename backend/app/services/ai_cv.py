@@ -12,10 +12,20 @@ from openai import OpenAI
 from app.core.config import settings
 
 
+class AINotConfiguredError(RuntimeError):
+    """Raised when OPENAI_API_KEY is missing — never return fake CV/letter content."""
+
+
 class AICVService:
     def __init__(self):
         self.client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
         self.model = settings.LLM_MODEL
+
+    def _require_client(self) -> None:
+        if not self.client:
+            raise AINotConfiguredError(
+                "OPENAI_API_KEY is not configured. AI CV/cover letter features are disabled."
+            )
     
     def tailor_cv(self, resume_text: str, job_description: str, user_profile: Dict) -> str:
         """
@@ -24,8 +34,7 @@ class AICVService:
         Highlights relevant skills and experience.
         Uses keywords from job description.
         """
-        if not self.client:
-            return self._mock_tailor_cv(resume_text, job_description)
+        self._require_client()
         
         prompt = f"""You are an expert resume writer. Tailor this CV to the job description below.
 
@@ -58,9 +67,10 @@ Output only the tailored CV, no explanations."""
                 temperature=0.3,
             )
             return response.choices[0].message.content
+        except AINotConfiguredError:
+            raise
         except Exception as e:
-            print(f"AI CV tailoring error: {e}")
-            return self._mock_tailor_cv(resume_text, job_description)
+            raise RuntimeError(f"AI CV tailoring failed: {e}") from e
     
     def generate_cover_letter(
         self, 
@@ -69,8 +79,7 @@ Output only the tailored CV, no explanations."""
         user_profile: Dict
     ) -> str:
         """Generate a targeted cover letter"""
-        if not self.client:
-            return self._mock_cover_letter(job_description, company, user_profile)
+        self._require_client()
         
         prompt = f"""Write a compelling cover letter for this job application.
 
@@ -104,9 +113,10 @@ Output only the cover letter, no explanations."""
                 temperature=0.5,
             )
             return response.choices[0].message.content
+        except AINotConfiguredError:
+            raise
         except Exception as e:
-            print(f"Cover letter generation error: {e}")
-            return self._mock_cover_letter(job_description, company, user_profile)
+            raise RuntimeError(f"Cover letter generation failed: {e}") from e
     
     def answer_application_questions(
         self, 
@@ -114,8 +124,7 @@ Output only the cover letter, no explanations."""
         user_profile: Dict
     ) -> Dict[str, str]:
         """Generate answers to application-specific questions"""
-        if not self.client:
-            return {q: f"[Answer to: {q}]" for q in questions.keys()}
+        self._require_client()
         
         answers = {}
         for question_id, question_text in questions.items():
@@ -137,39 +146,9 @@ Provide a concise, professional answer (2-3 sentences max). Be honest and specif
                 )
                 answers[question_id] = response.choices[0].message.content
             except Exception as e:
-                print(f"Error answering question: {e}")
-                answers[question_id] = f"[Manual answer needed for: {question_text}]"
+                raise RuntimeError(f"AI question answer failed: {e}") from e
         
         return answers
-    
-    def _mock_tailor_cv(self, resume: str, job_desc: str) -> str:
-        """Fallback when AI is not available"""
-        return f"""[AI Not Configured - Original CV]
-
-{resume}
-
----
-Note: Configure OPENAI_API_KEY to enable AI-powered CV tailoring.
-"""
-    
-    def _mock_cover_letter(self, job_desc: str, company: str, profile: Dict) -> str:
-        """Fallback when AI is not available"""
-        return f"""Dear Hiring Manager,
-
-I am writing to express my interest in the position at {company}.
-
-[AI Not Configured - This is a placeholder cover letter]
-
-With my background and skills, I believe I would be a great fit for this role.
-
-Thank you for considering my application.
-
-Best regards,
-{profile.get('first_name', '')} {profile.get('last_name', '')}
-
----
-Note: Configure OPENAI_API_KEY to enable AI-powered cover letter generation.
-"""
 
 
 # Singleton instance

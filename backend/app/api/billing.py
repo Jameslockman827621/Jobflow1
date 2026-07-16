@@ -200,6 +200,53 @@ async def stripe_webhook(request: Request):
             finally:
                 db.close()
 
+    elif event["type"] in (
+        "customer.subscription.updated",
+        "customer.subscription.created",
+    ):
+        sub = event["data"]["object"]
+        cust_id = sub.get("customer")
+        status = sub.get("status") or "active"
+        # Infer plan from price nickname / metadata / product name
+        plan = "pro"
+        items = (sub.get("items") or {}).get("data") or []
+        if items:
+            price = items[0].get("price") or {}
+            meta = price.get("metadata") or {}
+            nickname = (price.get("nickname") or meta.get("plan") or "").lower()
+            if "premium" in nickname:
+                plan = "premium"
+            elif "free" in nickname:
+                plan = "free"
+            elif "pro" in nickname:
+                plan = "pro"
+            # Match configured price IDs
+            pid = price.get("id") or ""
+            if pid and pid == (settings.STRIPE_PRICE_PREMIUM_MONTHLY or settings.STRIPE_PRICE_PREMIUM_YEARLY):
+                plan = "premium"
+            elif pid and pid in (
+                settings.STRIPE_PRICE_PRO_MONTHLY,
+                settings.STRIPE_PRICE_PRO_YEARLY,
+            ):
+                plan = "pro"
+        if status in ("canceled", "unpaid", "incomplete_expired"):
+            plan = "free"
+        if cust_id:
+            db = SessionLocal()
+            try:
+                user = db.query(User).filter(User.stripe_customer_id == cust_id).first()
+                if user:
+                    user.subscription_plan = plan
+                    user.subscription_status = status
+                    period_end = sub.get("current_period_end")
+                    if period_end:
+                        from datetime import datetime
+
+                        user.subscription_end = datetime.utcfromtimestamp(period_end)
+                    db.commit()
+            finally:
+                db.close()
+
     return {"status": "success"}
 
 

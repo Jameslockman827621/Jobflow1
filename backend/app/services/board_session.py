@@ -11,6 +11,10 @@ from typing import Any, Dict, Optional
 from sqlalchemy.orm import Session
 
 from app.models.board_session import BoardSession
+from app.services.session_crypto import (
+    decrypt_storage_state_dict,
+    encrypt_storage_state,
+)
 
 SUPPORTED_BOARDS = frozenset({"linkedin", "indeed"})
 
@@ -145,7 +149,7 @@ def upsert_board_session(
         .filter(BoardSession.user_id == user_id, BoardSession.board == board)
         .first()
     )
-    payload = json.dumps(storage_state)
+    payload = encrypt_storage_state(storage_state)
     if row:
         row.storage_state_json = payload
         row.label = label or row.label
@@ -216,11 +220,7 @@ def list_board_sessions(db: Session, user_id: int) -> list:
 def storage_state_dict(row: BoardSession) -> Optional[Dict[str, Any]]:
     if not row or not row.storage_state_json:
         return None
-    try:
-        data = json.loads(row.storage_state_json)
-        return data if isinstance(data, dict) else None
-    except Exception:
-        return None
+    return decrypt_storage_state_dict(row.storage_state_json)
 
 
 def write_storage_state_file(row: BoardSession) -> Optional[str]:

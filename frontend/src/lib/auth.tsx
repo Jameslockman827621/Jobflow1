@@ -198,7 +198,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         target = `${base}${pathOrUrl.startsWith('/') ? pathOrUrl : `/${pathOrUrl}`}`;
       }
     }
-    return fetch(target, { ...options, headers });
+    const res = await fetch(target, { ...options, headers });
+    if (res.status === 401 && !pathOrUrl.includes('/auth/login')) {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
+      localStorage.removeItem(LEGACY_TOKEN_KEY);
+      syncTokenToExtension(null);
+      setUser(null);
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+        router.push('/login');
+      }
+    }
+    return res;
   }
 
   return (

@@ -168,6 +168,12 @@ function DashboardPage() {
     message?: string;
   } | null>(null);
   const [connectingBoard, setConnectingBoard] = useState<string | null>(null);
+  const [applyBatchId, setApplyBatchId] = useState<string | null>(null);
+  const [applyBatchStatus, setApplyBatchStatus] = useState<{
+    total?: number;
+    by_status?: Record<string, number>;
+    runs?: Array<{ status?: string; error?: string; meta?: any }>;
+  } | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -304,12 +310,14 @@ function DashboardPage() {
           router.push('/onboarding');
           return;
         }
-        if (status.has_cached_jobs) {
-          const searchRes = await authFetch('/api/v1/onboarding/search', { method: 'POST' });
-          if (searchRes.ok) {
-            const searchData = await searchRes.json();
-            setJobs(searchData.jobs || []);
-          }
+        // Always re-search — do not gate on has_cached_jobs (empty dashboard bug)
+        const searchRes = await authFetch('/api/v1/onboarding/search', { method: 'POST' });
+        if (searchRes.ok) {
+          const searchData = await searchRes.json();
+          setJobs(searchData.jobs || []);
+        } else {
+          setError('Could not load matched jobs — try Refresh');
+          toast.error('Failed to load matched jobs');
         }
         const autoApplyRes = await authFetch('/api/v1/auto-apply/jobs');
         if (autoApplyRes.ok) {
@@ -434,6 +442,29 @@ function DashboardPage() {
                   : hlErr.detail?.reason || 'Headless queue failed';
               toast.error(`Applications started, but headless queue failed: ${detail}`);
             } else {
+              const hlData = await hlRes.json().catch(() => ({}));
+              const batchId = hlData.batch_id as string | undefined;
+              if (batchId) {
+                setApplyBatchId(batchId);
+                setApplyBatchStatus({ total: applicationIds.length, by_status: { queued: applicationIds.length } });
+                // Poll real ApplyRun outcomes (not mock)
+                for (let i = 0; i < 24; i++) {
+                  await new Promise((r) => setTimeout(r, 2500));
+                  const stRes = await authFetch(`/api/v1/apply-engine/headless/batch/${batchId}`);
+                  if (!stRes.ok) continue;
+                  const st = await stRes.json();
+                  setApplyBatchStatus(st);
+                  const by = st.by_status || {};
+                  const done =
+                    (by.submitted || 0) +
+                    (by.filled || 0) +
+                    (by.needs_user || 0) +
+                    (by.failed || 0) +
+                    (by.stale || 0);
+                  const total = st.total || applicationIds.length;
+                  if (done >= total && total > 0) break;
+                }
+              }
               toast.success(
                 genuineSubmit
                   ? `${data.total} queued for genuine auto-apply (fill + submit)`
@@ -562,6 +593,28 @@ function DashboardPage() {
             </span>
           </div>
         </div>
+
+        {applyBatchId && applyBatchStatus && (
+          <div className="mb-6 px-4 py-3 border border-slate-200 rounded-lg bg-white">
+            <p className="text-xs font-semibold text-slate-900 uppercase tracking-wide">Apply progress</p>
+            <p className="text-xs text-slate-500 mt-0.5">Batch {applyBatchId.slice(0, 8)}…</p>
+            <div className="flex flex-wrap gap-3 mt-2 text-sm text-slate-700">
+              {Object.entries(applyBatchStatus.by_status || {}).map(([k, v]) => (
+                <span key={k}>
+                  <span className="text-slate-400 text-xs uppercase mr-1">{k}</span>
+                  <span className="font-medium tabular-nums">{v as number}</span>
+                </span>
+              ))}
+            </div>
+            {(applyBatchStatus.runs || []).some(
+              (r) => r.status === 'needs_user' || (r.meta && (r.meta.blocked_reason === 'login_required' || r.meta.connect_hint))
+            ) && (
+              <p className="text-xs text-amber-700 mt-2">
+                Some applies need you — Connect LinkedIn/Indeed above, or complete CAPTCHA/profile gaps.
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Connect LinkedIn / Indeed */}
         <div className="mb-8 px-4 py-4 border border-slate-200 rounded-lg bg-white">
@@ -800,7 +853,9 @@ function DashboardPage() {
             </div>
             <div className="px-6 py-4">
               <p className="text-sm text-slate-600 mb-4">
-                Extension fills forms; optional headless queue runs server-side. You can also apply manually using the links below.
+                {genuineSubmit
+                  ? 'JobScale queues genuine headless apply (fill + submit when opted in). Status updates above as runs finish.'
+                  : 'Headless fill is queued without submit unless “Genuine submit” is checked. Manual links below are optional.'}
               </p>
               <div className="space-y-2">
                 {batchResults.map((result, i) => (

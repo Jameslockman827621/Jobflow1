@@ -3,6 +3,8 @@
 **Created:** 2026-03-07  
 **Priority:** Critical gaps first, then enhancements
 
+> **World-class SaaS gap tracker (detailed, living):** [`WORLD-CLASS-SAAS-TODO.md`](./WORLD-CLASS-SAAS-TODO.md)
+
 ---
 
 ## ✅ Connect LinkedIn / Indeed → Easy Apply (E2E) — 2026-07-16

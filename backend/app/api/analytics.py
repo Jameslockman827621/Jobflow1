@@ -151,8 +151,20 @@ async def get_interview_stats(
         Application.stage.in_(["phone_screen", "technical", "onsite"]),
     ).group_by(Application.stage).all()
     
-    # Avg days to interview (estimate)
-    avg_days = 7.0  # Would calculate from submitted_at to stage change in production
+    # Avg days: submitted_at → updated_at for interview-stage apps (0 if unknown)
+    interview_apps = db.query(Application).filter(
+        Application.user_id == current_user.id,
+        Application.stage.in_(["phone_screen", "technical", "onsite"]),
+        Application.submitted_at.isnot(None),
+        Application.updated_at.isnot(None),
+    ).all()
+    deltas = []
+    for app in interview_apps:
+        try:
+            deltas.append(max((app.updated_at - app.submitted_at).total_seconds() / 86400.0, 0))
+        except Exception:
+            pass
+    avg_days = round(sum(deltas) / len(deltas), 1) if deltas else 0.0
     
     return InterviewStats(
         total_interviews=interviews,
@@ -186,12 +198,25 @@ async def get_response_time_stats(
     # Response rate
     response_rate = (responded / total * 100) if total > 0 else 0
     
-    # Avg response time (estimate)
-    avg_response = 5.5  # Would calculate from timestamps in production
+    responded_apps = db.query(Application).filter(
+        Application.user_id == current_user.id,
+        Application.submitted_at.isnot(None),
+        Application.updated_at.isnot(None),
+        Application.status.notin_(["draft", "submitted"]),
+    ).all()
+    deltas = []
+    for app in responded_apps:
+        try:
+            deltas.append(max((app.updated_at - app.submitted_at).total_seconds() / 86400.0, 0))
+        except Exception:
+            pass
+    deltas.sort()
+    avg_response = round(sum(deltas) / len(deltas), 1) if deltas else 0.0
+    median_response = round(deltas[len(deltas) // 2], 1) if deltas else 0.0
     
     return ResponseTimeStats(
         avg_response_days=avg_response,
-        median_response_days=4.0,
+        median_response_days=median_response,
         response_rate=round(response_rate, 1),
     )
 
@@ -218,13 +243,30 @@ async def get_success_metrics(
     # Offer rate
     offer_rate = (offers / total * 100) if total > 0 else 0
     
-    # Acceptance rate (estimate)
-    acceptance_rate = 50.0  # Would track in production
+    accepted = db.query(Application).filter(
+        Application.user_id == current_user.id,
+        Application.status == "accepted",
+    ).count()
+    acceptance_rate = round((accepted / offers * 100), 1) if offers > 0 else 0.0
+
+    offer_apps = db.query(Application).filter(
+        Application.user_id == current_user.id,
+        Application.status.in_(["offered", "accepted"]),
+        Application.submitted_at.isnot(None),
+        Application.updated_at.isnot(None),
+    ).all()
+    offer_deltas = []
+    for app in offer_apps:
+        try:
+            offer_deltas.append(max((app.updated_at - app.submitted_at).total_seconds() / 86400.0, 0))
+        except Exception:
+            pass
+    avg_time_to_offer = round(sum(offer_deltas) / len(offer_deltas), 1) if offer_deltas else 0.0
     
     return SuccessMetrics(
         offers_received=offers,
         offer_rate=round(offer_rate, 2),
-        avg_time_to_offer=45.0,  # Days
+        avg_time_to_offer=avg_time_to_offer,
         acceptance_rate=acceptance_rate,
     )
 
@@ -319,6 +361,14 @@ async def get_dashboard_overview(
         "applications": apps_stats.dict(),
         "interviews": interview_stats.dict(),
         "success": success_metrics.dict(),
+        # Flat fields for dashboard UI (real zeros — never fabricated)
+        "total_applications": apps_stats.total_applications,
+        "interview_rate": interview_stats.interview_rate,
+        "offer_rate": success_metrics.offer_rate,
+        "response_rate": (
+            await get_response_time_stats(current_user, db)
+        ).response_rate,
+        "by_stage": apps_stats.by_stage,
         "profile_completeness": profile_completeness,
         "last_updated": datetime.utcnow().isoformat(),
     }

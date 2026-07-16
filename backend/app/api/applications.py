@@ -257,10 +257,20 @@ async def update_application(
 @router.post("/{application_id}/submit")
 async def submit_application(
     application_id: int,
+    manual: bool = Query(
+        False,
+        description="Set true only to record that YOU applied externally. "
+        "JobScale does not contact the employer on this path.",
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Mark application as submitted"""
+    """
+    Honest submit endpoint.
+
+    - Default: refuses status-only “fake apply”. Use POST /apply-engine/headless for genuine submit.
+    - manual=true: records that the user applied outside JobScale (tracker only).
+    """
     application = db.query(Application).filter(
         Application.id == application_id,
         Application.user_id == current_user.id
@@ -268,23 +278,38 @@ async def submit_application(
     
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
+
+    if not manual:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "genuine_submit_required",
+                "message": (
+                    "This endpoint does not apply to the employer. "
+                    "Queue a real apply via POST /api/v1/apply-engine/headless "
+                    "(with Connect session for LinkedIn/Indeed), "
+                    "or pass ?manual=true to record an external self-apply."
+                ),
+                "apply_engine": "/api/v1/apply-engine/headless",
+            },
+        )
     
     application.status = "submitted"
     application.stage = "applied"
     application.submitted_at = datetime.utcnow()
+    application.applied_via = "manual"
     
     db.commit()
     try:
-        job = db.query(Job).filter(Job.id == application.job_id).first()
-        if job:
-            send_application_confirmation_task.delay(application.id)
+        send_application_confirmation_task.delay(application.id)
     except Exception:
-        pass  # Don't fail submission if email fails
+        pass
     db.refresh(application)
     
     return {
-        "message": "Application marked as submitted",
-        "application": application
+        "message": "Recorded as manually submitted (external). JobScale did not apply for you.",
+        "manual": True,
+        "application": application,
     }
 
 

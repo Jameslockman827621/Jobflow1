@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models.job import Job, JobSource
+from app.models.user import User
+from app.core.security import get_current_user
 
 router = APIRouter()
 
@@ -97,13 +99,19 @@ async def get_job(job_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/scrape/{source}")
-async def trigger_scrape(source: str, db: Session = Depends(get_db)):
+async def trigger_scrape(
+    source: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
-    Trigger job scraping for a source.
+    Trigger job scraping for a source (authenticated).
     Sources: greenhouse, lever, workable
     """
     from app.tasks.jobs import scrape_greenhouse_companies, scrape_lever_companies
     from app.scrapers.companies import GREENHOUSE_COMPANIES, LEVER_COMPANIES
+
+    _ = current_user  # auth required — admin role gate can tighten later
     
     if source == "greenhouse":
         scrape_greenhouse_companies.delay(GREENHOUSE_COMPANIES)

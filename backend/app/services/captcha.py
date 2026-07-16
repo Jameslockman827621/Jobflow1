@@ -31,6 +31,9 @@ class CaptchaService:
 
     @property
     def mock_mode(self) -> bool:
+        # Never allow mock captcha tokens in production
+        if (getattr(settings, "ENVIRONMENT", "") or "").lower() == "production":
+            return False
         key = (self.api_key or "").strip().lower()
         return key == "mock" or bool(getattr(settings, "CAPTCHA_MOCK", False))
 

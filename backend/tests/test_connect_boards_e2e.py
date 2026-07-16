@@ -161,7 +161,12 @@ def test_connect_status_and_from_cookies(client):
         user = db.query(User).filter(User.email == email).first()
         row = get_board_session(db, user.id, "linkedin")
         assert row is not None
-        assert "li_at" in (row.storage_state_json or "")
+        # At rest must be encrypted (not raw li_at in column)
+        assert not (row.storage_state_json or "").startswith("{")
+        from app.services.board_session import storage_state_dict
+
+        state = storage_state_dict(row)
+        assert state and any(c.get("name") == "li_at" for c in state.get("cookies") or [])
     finally:
         db.close()
 
