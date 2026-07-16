@@ -75,21 +75,54 @@ class AutoApplySettingsUpdate(BaseModel):
     auto_apply_submit: bool
 
 
+class HeadlessRetryRequest(BaseModel):
+    application_ids: Optional[List[int]] = None
+    statuses: List[str] = Field(default_factory=lambda: ["failed", "needs_user"])
+    auto_submit: bool = True
+    limit: int = 20
+
+
 @router.get("/settings")
 async def get_auto_apply_settings(
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """User opt-in status for genuine (submit) auto-apply."""
     from app.core.config import settings
+    from app.services.ats_adapters.form_helpers import profile_completeness
+    from app.services.apply_engine import build_applicant_payload
+    from app.services.resume_files import ensure_resume_local_path
+
+    profile = db.query(UserProfile).filter(UserProfile.user_id == current_user.id).first()
+    cv = (
+        db.query(CV)
+        .filter(CV.user_id == current_user.id)
+        .order_by(CV.is_primary.desc(), CV.created_at.desc())
+        .first()
+    )
+    payload = build_applicant_payload(current_user, profile, cv)
+    if cv or payload.get("email"):
+        try:
+            ensure_resume_local_path(current_user.id, payload, cv)
+        except Exception:
+            pass
+    completeness = profile_completeness(payload)
+    opted_in = bool(getattr(current_user, "auto_apply_submit", False))
 
     return {
-        "auto_apply_submit": bool(getattr(current_user, "auto_apply_submit", False)),
+        "auto_apply_submit": opted_in,
         "platform_allows_submit": bool(getattr(settings, "HEADLESS_APPLY_AUTO_SUBMIT", True)),
         "headless_enabled": bool(getattr(settings, "HEADLESS_APPLY_ENABLED", True)),
         "captcha_available": captcha_service.available,
+        "profile_completeness": completeness,
+        "genuine_ready": bool(
+            opted_in
+            and getattr(settings, "HEADLESS_APPLY_AUTO_SUBMIT", True)
+            and not [m for m in completeness.get("missing", []) if m in ("first_name", "last_name", "email", "resume")]
+        ),
         "message": (
             "Genuine auto-apply is ON — JobScale will submit applications for you."
-            if getattr(current_user, "auto_apply_submit", False)
+            if opted_in
             else "Enable auto_apply_submit to let JobScale submit forms on your behalf."
         ),
     }
@@ -248,7 +281,56 @@ async def headless_batch(
         "queued": True,
         "task_id": task.id,
         "count": len(body.application_ids),
-        "message": "Batch headless apply queued for scale processing",
+        "fan_out": True,
+        "message": "Batch headless apply queued (one Celery task per application)",
+    }
+
+
+@router.post("/headless/retry")
+async def headless_retry(
+    body: HeadlessRetryRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Re-queue failed / needs_user apply runs for genuine retry."""
+    statuses = body.statuses or ["failed", "needs_user"]
+    q = (
+        db.query(ApplyRun)
+        .filter(ApplyRun.user_id == current_user.id, ApplyRun.status.in_(statuses))
+        .order_by(ApplyRun.created_at.desc())
+    )
+    if body.application_ids:
+        q = q.filter(ApplyRun.application_id.in_(body.application_ids))
+    rows = q.limit(min(body.limit, 50)).all()
+    # Deduplicate by application_id (latest run wins)
+    seen = set()
+    app_ids = []
+    for r in rows:
+        if r.application_id in seen:
+            continue
+        seen.add(r.application_id)
+        app_ids.append(r.application_id)
+    if not app_ids:
+        return {"ok": True, "queued": 0, "application_ids": [], "message": "Nothing to retry"}
+
+    if body.auto_submit:
+        quota = check_apply_quota(db, current_user.id, requested=len(app_ids))
+        if not quota["allowed"]:
+            raise HTTPException(status_code=429, detail=quota)
+
+    task = apply_batch.delay(
+        current_user.id,
+        app_ids,
+        auto_submit=body.auto_submit,
+        dry_run=False,
+        max_per_batch=min(len(app_ids), 50),
+    )
+    return {
+        "ok": True,
+        "queued": len(app_ids),
+        "application_ids": app_ids,
+        "task_id": task.id,
+        "auto_submit": body.auto_submit,
     }
 
 

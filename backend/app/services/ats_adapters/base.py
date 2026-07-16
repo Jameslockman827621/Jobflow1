@@ -153,23 +153,35 @@ class BaseATSAdapter(ABC):
                 continue
         return filled
 
+    async def click_next(self, page) -> bool:
+        """Advance wizard without submitting."""
+        from .form_helpers import click_next_only
+
+        return await click_next_only(page)
+
     async def click_submit_or_next(self, page, labels: Optional[List[str]] = None) -> str:
         """Returns 'submitted' | 'next' | 'none' (legacy string API)."""
-        from .submit import attempt_submit_and_confirm, click_genuine_submit
+        from .form_helpers import click_next_only
+        from .submit import attempt_submit_and_confirm
 
-        # If labels look like next/continue only, don't treat as final submit
-        if labels and all(
-            any(x in (t or "").lower() for x in ("next", "continue", "review", "save"))
-            for t in labels
-        ) and not any("submit" in (t or "").lower() for t in labels):
-            action = await click_genuine_submit(page, labels)
-            return "next" if action != "none" else "none"
+        labels = labels or []
+        next_only = labels and not any("submit" in (t or "").lower() for t in labels)
+        if next_only or (
+            labels
+            and all(
+                any(x in (t or "").lower() for x in ("next", "continue", "review", "save"))
+                for t in labels
+            )
+            and not any("submit" in (t or "").lower() for t in labels)
+        ):
+            advanced = await click_next_only(page, labels)
+            return "next" if advanced else "none"
 
         result = await attempt_submit_and_confirm(page)
-        if result.get("submitted") or result.get("confirmed"):
+        if result.get("confirmed"):
             return "submitted"
-        if result.get("action") in ("clicked_submit", "clicked_next"):
-            return "submitted" if result.get("action") == "clicked_submit" else "next"
+        if result.get("action") == "clicked_next":
+            return "next"
         return "none"
 
     async def genuine_submit(self, page) -> Dict[str, Any]:
@@ -177,6 +189,11 @@ class BaseATSAdapter(ABC):
         from .submit import attempt_submit_and_confirm
 
         return await attempt_submit_and_confirm(page)
+
+    async def solve_captcha(self, page, result: "AdapterResult") -> None:
+        from .form_helpers import detect_and_solve_captcha
+
+        await detect_and_solve_captcha(page, result)
 
 
 def get_adapter(ats: str) -> BaseATSAdapter:

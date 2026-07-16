@@ -626,6 +626,7 @@ function DashboardPage() {
                   className="w-4 h-4 text-teal-500 border-slate-300 rounded focus:ring-teal-500 cursor-pointer"
                 />
                 <span>Genuinely submit for me</span>
+                <span className="text-xs text-slate-400 font-normal">(fills + submits when confirmed)</span>
               </label>
               <button
                 onClick={() => setSelectedJobs(new Set())}

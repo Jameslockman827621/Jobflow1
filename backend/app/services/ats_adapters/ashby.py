@@ -187,10 +187,12 @@ class AshbyAdapter(BaseATSAdapter):
                 result.filled_keys.append(k)
                 result.fields_filled += 1
 
-        # Multi-step Ashby: keep Next until no progress
+        # Multi-step Ashby: Next only — never submit during fill loop
+        from .form_helpers import attempt_genuine_submit_gated, click_next_only, core_fields_ok
+
         for step in range(self.max_steps - 1):
-            action = await self.click_submit_or_next(page, ["next", "continue", "submit application", "submit"])
-            if action == "none":
+            advanced = await click_next_only(page)
+            if not advanced:
                 break
             result.steps_completed += 1
             await page.wait_for_timeout(1000)
@@ -200,28 +202,19 @@ class AshbyAdapter(BaseATSAdapter):
             label_more, label_keys = await self._fill_by_label_contains(page, label_pairs)
             result.fields_filled += label_more
             result.filled_keys.extend(label_keys)
-            if action == "submitted":
-                result.submitted = True
-                break
 
         async def _ans(q):
             return await answer_open_ended(q, applicant, None)
 
         result.fields_filled += await self.answer_unlabeled_textareas(page, applicant, _ans)
-        result.captcha_present = await self.detect_captcha(page)
         if not result.steps_completed:
             result.steps_completed = 1
-        if auto_submit and not result.submitted:
-            if result.captcha_present and not result.captcha_solved:
-                result.needs_user = True
-                result.meta["blocked_reason"] = "captcha_unsolved"
-            else:
-                submit_result = await self.genuine_submit(page)
-                result.submitted = bool(submit_result.get("submitted") or submit_result.get("confirmed"))
-                result.meta["submit"] = submit_result
-        result.needs_user = not result.submitted
-        if result.captcha_present and not result.captcha_solved:
+        result.meta["core_ok"] = core_fields_ok(result.filled_keys) or bool(
+            set(result.filled_keys) & {"email", "label_email", "full_name"}
+        )
+        if auto_submit:
+            await attempt_genuine_submit_gated(page, result, applicant)
+        else:
             result.needs_user = True
         result.page_url = page.url
-        result.meta["core_ok"] = bool(set(result.filled_keys) & {"email", "first_name", "full_name", "label_email", "label_first name"})
         return result

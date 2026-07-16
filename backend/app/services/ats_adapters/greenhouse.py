@@ -5,8 +5,14 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from app.services.apply_engine import answer_open_ended
-from app.services.captcha import captcha_service
 from .base import AdapterResult, BaseATSAdapter
+from .form_helpers import (
+    attempt_genuine_submit_gated,
+    click_next_only,
+    collect_validation_errors,
+    core_fields_ok,
+    detect_and_solve_captcha,
+)
 
 # Prefer-not-to-say / decline labels for EEO voluntary fields
 _DECLINE_LABELS = (
@@ -24,7 +30,7 @@ _DECLINE_LABELS = (
 
 class GreenhouseAdapter(BaseATSAdapter):
     name = "greenhouse"
-    max_steps = 3
+    max_steps = 4
 
     async def _fill_eeo_selects(self, page, result: AdapterResult) -> None:
         """Fill gender / veteran / disability selects with Prefer not to say / Decline."""
@@ -69,41 +75,7 @@ class GreenhouseAdapter(BaseATSAdapter):
             except Exception as exc:
                 result.errors.append(f"eeo_select:{exc}")
 
-    async def _detect_sitekey(self, page) -> str | None:
-        """Wait for reCAPTCHA iframe hydration, then extract sitekey."""
-        try:
-            await page.wait_for_selector(
-                'iframe[src*="recaptcha"], iframe[src*="hcaptcha"], [data-sitekey], .g-recaptcha',
-                timeout=8000,
-            )
-        except Exception:
-            pass
-        await page.wait_for_timeout(500)
-        return await page.evaluate(
-            """() => {
-              const el = document.querySelector('[data-sitekey]');
-              if (el) return el.getAttribute('data-sitekey');
-              const iframes = document.querySelectorAll(
-                'iframe[src*="recaptcha"], iframe[src*="hcaptcha"]'
-              );
-              for (const iframe of iframes) {
-                const src = iframe.getAttribute('src') || '';
-                const m = src.match(/[?&]k=([^&]+)/);
-                if (m) return decodeURIComponent(m[1]);
-              }
-              const grecaptcha = document.querySelector('.g-recaptcha');
-              if (grecaptcha && grecaptcha.getAttribute('data-sitekey')) {
-                return grecaptcha.getAttribute('data-sitekey');
-              }
-              return null;
-            }"""
-        )
-
-    async def fill(self, page, applicant: Dict[str, Any], *, auto_submit: bool = False) -> AdapterResult:
-        result = AdapterResult(ats=self.name, page_url=page.url)
-        await self.ensure_application_form(page)
-        await page.wait_for_timeout(800)
-
+    async def _fill_core_and_questions(self, page, applicant: Dict[str, Any], result: AdapterResult) -> None:
         mapping = {
             "first_name": {
                 "value": applicant.get("first_name"),
@@ -141,7 +113,6 @@ class GreenhouseAdapter(BaseATSAdapter):
             },
         }
 
-        # Resume file if local path provided
         if applicant.get("resume_local_path"):
             mapping["resume"] = {
                 "value": applicant["resume_local_path"],
@@ -149,14 +120,15 @@ class GreenhouseAdapter(BaseATSAdapter):
                 "selectors": ["#resume", "input[type='file'][id*='resume' i]", "input[type='file']"],
             }
 
-        result.fields_attempted = len([k for k, v in mapping.items() if v.get("value")])
+        result.fields_attempted += len([k for k, v in mapping.items() if v.get("value")])
         filled, keys = await self.fill_by_selectors(page, mapping)
         result.fields_filled += filled
-        result.filled_keys.extend(keys)
+        for k in keys:
+            if k not in result.filled_keys:
+                result.filled_keys.append(k)
 
         await self._fill_eeo_selects(page, result)
 
-        # Custom Greenhouse questions (id^=question_)
         question_inputs = page.locator("input[id^='question_'], textarea[id^='question_']")
         qcount = await question_inputs.count()
         for i in range(min(qcount, 20)):
@@ -193,54 +165,43 @@ class GreenhouseAdapter(BaseATSAdapter):
             except Exception as exc:
                 result.errors.append(str(exc)[:200])
 
-        # reCAPTCHA iframes often hydrate after fields — wait then extract sitekey
-        result.captcha_present = await self.detect_captcha(page)
-        if not result.captcha_present:
-            # Give iframe a chance to appear
-            try:
-                await page.wait_for_selector(
-                    'iframe[src*="recaptcha"], iframe[src*="hcaptcha"], [data-sitekey]',
-                    timeout=5000,
-                )
-                result.captcha_present = True
-            except Exception:
-                result.captcha_present = await self.detect_captcha(page)
+    async def fill(self, page, applicant: Dict[str, Any], *, auto_submit: bool = False) -> AdapterResult:
+        result = AdapterResult(ats=self.name, page_url=page.url)
+        await self.ensure_application_form(page)
+        await page.wait_for_timeout(800)
 
-        if result.captcha_present and captcha_service.available:
-            try:
-                sitekey = await self._detect_sitekey(page)
-                if sitekey:
-                    solved = await captcha_service.solve_recaptcha_v2(sitekey, page.url)
-                    if solved.get("ok") and solved.get("token"):
-                        await page.evaluate(
-                            """(token) => {
-                              document.querySelectorAll(
-                                '#g-recaptcha-response, [name="g-recaptcha-response"], textarea[name="g-recaptcha-response"]'
-                              ).forEach(el => { el.value = token; el.dispatchEvent(new Event('input', {bubbles:true})); });
-                            }""",
-                            solved["token"],
-                        )
-                        result.captcha_solved = True
-            except Exception as exc:
-                result.errors.append(f"captcha:{exc}")
+        for step in range(self.max_steps):
+            await self._fill_core_and_questions(page, applicant, result)
+            result.steps_completed = step + 1
+            result.meta["core_ok"] = core_fields_ok(result.filled_keys)
+            result.meta["resume_uploaded"] = "resume" in result.filled_keys
 
-        result.steps_completed = 1
+            # Last step or single-page: try submit / stop
+            if step == self.max_steps - 1:
+                break
+
+            advanced = await click_next_only(page)
+            if not advanced:
+                break
+            await page.wait_for_timeout(800)
+            # If Next caused validation errors, re-fill once
+            errors = await collect_validation_errors(page)
+            if errors:
+                result.meta["validation_errors"] = errors
+                await self._fill_core_and_questions(page, applicant, result)
+
+        await detect_and_solve_captcha(page, result)
+        result.meta["required_core"] = ["first_name", "last_name", "email"]
+        result.meta["core_ok"] = core_fields_ok(result.filled_keys)
+        result.meta["resume_uploaded"] = "resume" in result.filled_keys
+        result.meta["multi_step"] = result.steps_completed > 1
+
         if auto_submit:
-            # Block submit if CAPTCHA present and unsolved — don't fake-submit live boards
-            if result.captcha_present and not result.captcha_solved:
-                result.needs_user = True
-                result.meta["blocked_reason"] = "captcha_unsolved"
-            else:
-                submit_result = await self.genuine_submit(page)
-                result.submitted = bool(submit_result.get("submitted") or submit_result.get("confirmed"))
-                result.needs_user = not result.submitted
-                result.meta["submit"] = submit_result
+            await attempt_genuine_submit_gated(page, result, applicant)
         else:
             result.needs_user = True
             if result.captcha_present and not result.captcha_solved:
                 result.needs_user = True
 
         result.page_url = page.url
-        result.meta["required_core"] = ["first_name", "last_name", "email"]
-        result.meta["core_ok"] = all(k in result.filled_keys for k in ("first_name", "last_name", "email"))
         return result

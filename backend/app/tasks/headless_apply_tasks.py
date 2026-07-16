@@ -19,7 +19,12 @@ def _run_async(coro):
         return loop.run_until_complete(coro)
 
 
-@celery_app.task(name="app.tasks.headless_apply_tasks.apply_one")
+@celery_app.task(
+    name="app.tasks.headless_apply_tasks.apply_one",
+    soft_time_limit=240,
+    time_limit=300,
+    acks_late=True,
+)
 def apply_one(user_id: int, application_id: int, auto_submit: bool = False, dry_run: bool = False):
     db = SessionLocal()
     try:
@@ -47,12 +52,21 @@ def apply_batch(
     dry_run: bool = True,
     max_per_batch: int = 50,
 ):
-    """Scale path: queue many applies for one user (rate-limited per batch)."""
+    """
+    Scale path: fan out one Celery task per application (not sequential in-process).
+    Avoids the 5-minute batch time-limit killing mid-queue runs.
+    """
     ids = list(application_ids or [])[:max_per_batch]
-    results = []
+    task_ids = []
     for app_id in ids:
-        results.append(
-            apply_one(user_id, app_id, auto_submit=auto_submit, dry_run=dry_run)
+        async_result = apply_one.delay(
+            user_id, app_id, auto_submit=auto_submit, dry_run=dry_run
         )
-    ok = sum(1 for r in results if r.get("ok"))
-    return {"ok": True, "total": len(results), "succeeded": ok, "results": results}
+        task_ids.append({"application_id": app_id, "task_id": async_result.id})
+    return {
+        "ok": True,
+        "total": len(task_ids),
+        "fan_out": True,
+        "tasks": task_ids,
+        "message": f"Queued {len(task_ids)} headless apply tasks",
+    }

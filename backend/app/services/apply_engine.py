@@ -118,7 +118,8 @@ def build_applicant_payload(
         "work_auth": True,
         "needs_sponsorship": False,
         "cv_id": cv.id if cv else None,
-        "cv_download_url": f"/api/v1/cvs/{cv.id}/export" if cv else None,
+        "cv_download_url": f"/api/v1/cvs/{cv.id}/pdf" if cv else None,
+        "cv_html_export_url": f"/api/v1/cvs/{cv.id}/export" if cv else None,
     }
 
 
@@ -261,13 +262,18 @@ def build_fill_plan(payload: Dict[str, Any], ats: str) -> Dict[str, Any]:
             "remote_ok": True,
         },
         "next_button_selectors": [
-            "button[type='submit']",
             "button:has-text('Next')",
             "button:has-text('Continue')",
-            "input[type='submit']",
+            "button:has-text('Save and Continue')",
             "[data-automation-id='bottom-navigation-next-button']",  # Workday
-            "button.application-button",
+        ],
+        "submit_button_selectors": [
+            "button:has-text('Submit application')",
+            "button:has-text('Submit Application')",
             "#submit_app",
+            "button[type='submit']",
+            "input[type='submit']",
+            "button.application-button",
         ],
         "captcha_selectors": [
             "iframe[src*='recaptcha']",
@@ -299,8 +305,22 @@ def build_apply_package(
             )
 
     payload = build_applicant_payload(user, profile, cv)
+    # Materialize resume path for headless + expose download URL for extension
+    try:
+        from app.services.resume_files import ensure_resume_local_path
+
+        ensure_resume_local_path(user.id, payload, cv)
+    except Exception as exc:
+        logger.warning("resume materialize failed: %s", exc)
+
+    from app.services.ats_adapters.form_helpers import profile_completeness
+
+    completeness = profile_completeness(payload)
     ats = detect_ats(job.external_url or "")
     plan = build_fill_plan(payload, ats)
+    # Extension may genuinely submit when user opted in
+    plan["auto_submit"] = bool(getattr(user, "auto_apply_submit", False))
+    plan["genuine_submit"] = bool(getattr(user, "auto_apply_submit", False))
 
     return {
         "application_id": application.id if application else None,
@@ -311,6 +331,7 @@ def build_apply_package(
         "ats": ats,
         "applicant": payload,
         "fill_plan": plan,
+        "profile_completeness": completeness,
         "capabilities": {
             "text": True,
             "select": True,
@@ -324,5 +345,6 @@ def build_apply_package(
                 or getattr(settings, "TWOCAPTCHA_API_KEY", None)
             ),
             "headless": True,
+            "genuine_submit": bool(getattr(user, "auto_apply_submit", False)),
         },
     }

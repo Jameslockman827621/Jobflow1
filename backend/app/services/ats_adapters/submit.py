@@ -16,6 +16,8 @@ CONFIRMATION_PATTERNS = [
     r"your application was sent",
     r"application complete",
     r"you applied",
+    r"thanks for your interest",
+    r"your application has been received",
 ]
 
 SUBMIT_BUTTON_TEXTS = [
@@ -47,18 +49,33 @@ async def detect_submission_success(page) -> Dict[str, Any]:
 
         url_hint = any(
             x in url_l
-            for x in ("/confirmation", "/thanks", "submitted=true", "application_complete", "/thank")
+            for x in (
+                "/confirmation",
+                "/thanks",
+                "submitted=true",
+                "application_complete",
+                "/thank",
+                "application-submitted",
+            )
         )
 
-        # Form gone + confirmation-ish heading
-        form_count = await page.locator("form").count()
-        submit_still = await page.locator(
-            "button:has-text('Submit application'), button:has-text('Submit Application'), #submit_app"
-        ).count()
+        # Strict success: confirmation pattern preferred; URL hint alone is weak
+        ok = bool(matched) or bool(url_hint and matched is None and "thank" in text_l)
 
-        ok = bool(matched or url_hint or (form_count == 0 and submit_still == 0 and "apply" not in text_l[:200]))
-        # Be stricter: require pattern or url_hint for true success
-        ok = bool(matched or url_hint)
+        # URL hint + form gone is acceptable secondary signal
+        form_count = 0
+        submit_still = 0
+        try:
+            form_count = await page.locator("form").count()
+            submit_still = await page.locator(
+                "button:has-text('Submit application'), button:has-text('Submit Application'), #submit_app"
+            ).count()
+        except Exception:
+            pass
+
+        if not ok and url_hint and form_count == 0 and submit_still == 0:
+            ok = True
+            matched = matched or "url_and_form_gone"
 
         return {
             "confirmed": ok,
@@ -78,14 +95,17 @@ async def click_genuine_submit(page, labels: Optional[List[str]] = None) -> str:
     """
     labels = labels or SUBMIT_BUTTON_TEXTS
 
-    # 1) Role-based with regex (Playwright Python)
     for text in labels:
         try:
             btn = page.get_by_role("button", name=re.compile(text, re.I))
             if await btn.count():
                 await btn.first.click(timeout=4000)
                 await page.wait_for_timeout(1500)
-                return "clicked_submit" if "submit" in text or "send" in text or "apply" in text else "clicked_next"
+                return (
+                    "clicked_submit"
+                    if "submit" in text or "send" in text or "apply" in text
+                    else "clicked_next"
+                )
         except Exception:
             pass
         try:
@@ -97,7 +117,6 @@ async def click_genuine_submit(page, labels: Optional[List[str]] = None) -> str:
         except Exception:
             pass
 
-    # 2) CSS / text selectors common on ATS
     selectors = [
         "button:has-text('Submit application')",
         "button:has-text('Submit Application')",
@@ -132,7 +151,12 @@ async def click_genuine_submit(page, labels: Optional[List[str]] = None) -> str:
 
 
 async def attempt_submit_and_confirm(page, *, wait_ms: int = 2500) -> Dict[str, Any]:
-    """Click submit then verify confirmation. Core of genuine auto-apply."""
+    """
+    Click submit then verify confirmation.
+
+    World-class rule: never mark submitted on URL change alone.
+    Requires confirmation pattern (or URL hint + form gone).
+    """
     before_url = page.url
     action = await click_genuine_submit(page)
     if action == "none":
@@ -144,22 +168,23 @@ async def attempt_submit_and_confirm(page, *, wait_ms: int = 2500) -> Dict[str, 
         }
 
     await page.wait_for_timeout(wait_ms)
-    # Allow navigation
     try:
         await page.wait_for_load_state("domcontentloaded", timeout=8000)
     except Exception:
         pass
 
     confirmation = await detect_submission_success(page)
-    submitted = action == "clicked_submit" and (
-        confirmation.get("confirmed") or page.url != before_url
-    )
-    # If we clicked submit but no confirmation yet, still mark attempted
+    confirmed = bool(confirmation.get("confirmed"))
+    url_changed = page.url != before_url
+
     return {
-        "submitted": bool(submitted or confirmation.get("confirmed")),
-        "confirmed": bool(confirmation.get("confirmed")),
+        # Strict: only true when confirmation detected
+        "submitted": confirmed,
+        "confirmed": confirmed,
         "action": action,
         "before_url": before_url,
         "after_url": page.url,
+        "url_changed": url_changed,
         "confirmation": confirmation,
+        "uncertain": bool(action == "clicked_submit" and not confirmed),
     }

@@ -92,9 +92,40 @@
       }
       return false;
     }
-    if (type === 'file') return false; // handled separately
+    if (type === 'file') return false; // handled via attachResumeFile
     setNativeValue(el, String(value));
     return true;
+  }
+
+  async function fetchResumeBlob(token, cvId) {
+    if (!token || !cvId) return null;
+    try {
+      const res = await fetch(`${API_BASE}/cvs/${cvId}/pdf`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      return new File([blob], `resume_${cvId}.pdf`, { type: 'application/pdf' });
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function attachResumeFile(file) {
+    if (!file) return 0;
+    let n = 0;
+    const inputs = Array.from(document.querySelectorAll("input[type='file']"));
+    for (const input of inputs) {
+      try {
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        input.files = dt.files;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        n += 1;
+      } catch (e) { /* ignore */ }
+    }
+    return n;
   }
 
   function fillSelect(el, value) {
@@ -177,16 +208,14 @@
   }
 
   function clickNext(plan) {
+    // Next-only — never click Submit here (genuine submit is separate)
     const selectors = (plan && plan.next_button_selectors) || [
-      "button[type='submit']",
-      "input[type='submit']",
-      "#submit_app",
-      "button.application-button",
       "[data-automation-id='bottom-navigation-next-button']",
     ];
     const textButtons = Array.from(document.querySelectorAll('button, a, input[type="button"]'));
     for (const el of textButtons) {
       const t = normalize(el.innerText || el.value || '');
+      if (t === 'submit' || t.includes('submit application') || t === 'apply now') continue;
       if (['next', 'continue', 'save and continue', 'review'].includes(t) || t.startsWith('next')) {
         el.click();
         return true;
@@ -196,12 +225,80 @@
       try {
         const el = document.querySelector(sel);
         if (el && !el.disabled) {
+          const t = normalize(el.innerText || el.value || '');
+          if (t.includes('submit') && !t.includes('next')) continue;
           el.click();
           return true;
         }
       } catch (e) { /* ignore invalid selectors from Playwright-style */ }
     }
     return false;
+  }
+
+  function detectConfirmation() {
+    const text = normalize(document.body ? document.body.innerText.slice(0, 4000) : '');
+    const patterns = [
+      'thank you for applying',
+      'thanks for applying',
+      'application submitted',
+      'application received',
+      'successfully submitted',
+      'weve received your application',
+      "we've received your application",
+      'your application was sent',
+      'application complete',
+    ];
+    const matched = patterns.find((p) => text.includes(p));
+    const urlHint = /confirmation|thanks|submitted=true|thank/i.test(location.href);
+    return { confirmed: !!(matched || (urlHint && text.includes('thank'))), matched: matched || null };
+  }
+
+  function clickGenuineSubmit(plan) {
+    const selectors = (plan && plan.submit_button_selectors) || [
+      "#submit_app",
+      "button[type='submit']",
+      "input[type='submit']",
+      "button.application-button",
+    ];
+    const textButtons = Array.from(document.querySelectorAll('button, a, input[type="submit"], input[type="button"]'));
+    for (const el of textButtons) {
+      const t = normalize(el.innerText || el.value || '');
+      if (
+        t === 'submit application' ||
+        t === 'submit' ||
+        t === 'send application' ||
+        t === 'apply now' ||
+        t.startsWith('submit')
+      ) {
+        if (!el.disabled) {
+          el.click();
+          return true;
+        }
+      }
+    }
+    for (const sel of selectors) {
+      try {
+        const el = document.querySelector(sel);
+        if (el && !el.disabled) {
+          el.click();
+          return true;
+        }
+      } catch (e) { /* ignore */ }
+    }
+    return false;
+  }
+
+  async function attemptGenuineSubmit(plan) {
+    const clicked = clickGenuineSubmit(plan);
+    if (!clicked) return { submitted: false, confirmed: false, error: 'submit_button_not_found' };
+    await sleep(2200);
+    const conf = detectConfirmation();
+    return {
+      submitted: !!conf.confirmed,
+      confirmed: !!conf.confirmed,
+      matched: conf.matched,
+      uncertain: !conf.confirmed,
+    };
   }
 
   function fillByIdOrSel(sel, value) {
@@ -389,6 +486,11 @@
   async function reportApply(token, applicationId, result) {
     if (!token || !applicationId) return null;
     try {
+      let status = 'filled';
+      if (result.submitted && result.confirmed) status = 'submitted';
+      else if ((result.captcha && result.captcha.ok === false) || result.needs_user) status = 'needs_user';
+      else if (result.uncertain) status = 'needs_user';
+
       const res = await fetch(`${API_BASE}/apply-engine/report`, {
         method: 'POST',
         headers: {
@@ -399,9 +501,10 @@
           application_id: applicationId,
           fields_filled: result.fields || 0,
           steps_completed: result.steps || 0,
-          status: (result.captcha && result.captcha.ok === false) ? 'needs_user' : 'filled',
+          status,
           ats: result.ats || detectATS(),
-          error: (result.captcha && result.captcha.error) || null,
+          error: (result.captcha && result.captcha.error)
+            || (result.uncertain ? 'submit_uncertain' : null),
         }),
       });
       if (!res.ok) return null;
@@ -421,6 +524,12 @@
     else if (ats === 'lever') filled += fillLever(applicant);
     else if (ats === 'ashby') filled += fillAshby(applicant);
     else if (ats === 'workday') filled += fillWorkday(applicant);
+
+    // Resume PDF upload (required by most ATS)
+    if (applicant.cv_id || applicant.cv_download_url) {
+      const file = await fetchResumeBlob(token, applicant.cv_id);
+      if (file) filled += await attachResumeFile(file);
+    }
 
     // Map planned fields first
     for (const field of (plan.fields || [])) {
@@ -497,6 +606,7 @@
     let steps = 0;
     let fields = 0;
     let lastCaptcha = null;
+    let submitResult = null;
 
     for (let i = 0; i < maxSteps; i += 1) {
       steps += 1;
@@ -504,14 +614,32 @@
       fields += result.filled;
       lastCaptcha = result.captcha;
       showToast(`JobScale: filled step ${steps} (${result.filled} fields)`);
-      if (!plan.multi_step && detectATS() !== 'workday') break;
+      if (!plan.multi_step && detectATS() !== 'workday' && detectATS() !== 'greenhouse') break;
       await sleep(800);
       const advanced = clickNext(plan);
       if (!advanced) break;
       await sleep(1400);
     }
 
-    return { steps, fields, captcha: lastCaptcha, ats: detectATS() };
+    const wantSubmit = !!(plan.genuine_submit || plan.auto_submit
+      || (packageData.capabilities && packageData.capabilities.genuine_submit));
+    const captchaBlocked = lastCaptcha && lastCaptcha.ok === false;
+    if (wantSubmit && !captchaBlocked) {
+      showToast('JobScale: submitting application…');
+      submitResult = await attemptGenuineSubmit(plan);
+    }
+
+    return {
+      steps,
+      fields,
+      captcha: lastCaptcha,
+      ats: detectATS(),
+      submitted: !!(submitResult && submitResult.submitted),
+      confirmed: !!(submitResult && submitResult.confirmed),
+      uncertain: !!(submitResult && submitResult.uncertain),
+      needs_user: !wantSubmit || captchaBlocked || !!(submitResult && submitResult.uncertain),
+      submit: submitResult,
+    };
   }
 
   function sleep(ms) {
@@ -564,7 +692,13 @@
     const packageData = await res.json();
     const result = await runMultiStep(packageData, token);
     const report = await reportApply(token, applicationId, result);
-    showToast(`JobScale: done — ${result.fields} fields across ${result.steps} step(s). Review & submit.`);
+    if (result.submitted && result.confirmed) {
+      showToast(`JobScale: applied — ${result.fields} fields, confirmed.`);
+    } else if (result.uncertain) {
+      showToast(`JobScale: submitted but unconfirmed — check the page.`);
+    } else {
+      showToast(`JobScale: filled ${result.fields} fields across ${result.steps} step(s).`);
+    }
     chrome.runtime.sendMessage({
       action: 'applyFillComplete',
       applicationId,
@@ -583,6 +717,8 @@
     runMultiStep,
     autoFillFromJobScale,
     reportApply,
+    attemptGenuineSubmit,
+    attachResumeFile,
     showToast,
   };
 

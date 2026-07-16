@@ -157,6 +157,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (startRes.ok) {
           const data = await startRes.json();
           if (data.job_url) {
+            await chrome.storage.local.set({
+              pending_application_id: data.application_id || data.id,
+              auto_fill_on_open: true,
+            });
             chrome.tabs.create({ url: data.job_url });
           }
         }

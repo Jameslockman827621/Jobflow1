@@ -91,6 +91,10 @@ async def run_headless_apply(
 
     ensure_resume_local_path(user.id, applicant, cv)
 
+    from app.services.ats_adapters.form_helpers import profile_completeness
+
+    completeness = profile_completeness(applicant)
+
     run = ApplyRun(
         user_id=user.id,
         application_id=application.id,
@@ -144,6 +148,32 @@ async def run_headless_apply(
     platform_allows_submit = bool(getattr(settings, "HEADLESS_APPLY_AUTO_SUBMIT", True))
     user_allows_submit = bool(getattr(user, "auto_apply_submit", False))
     should_submit = bool(auto_submit) and platform_allows_submit and user_allows_submit
+
+    # Soft profile gate: block genuine submit when identity incomplete
+    if should_submit and not completeness.get("complete"):
+        # Phone is recommended but not a hard block if name+email+resume present
+        hard_missing = [m for m in completeness.get("missing", []) if m in ("first_name", "last_name", "email", "resume")]
+        if hard_missing:
+            run.status = "needs_user"
+            run.finished_at = datetime.utcnow()
+            run.meta_json = json.dumps(
+                {
+                    "blocked_reason": "profile_incomplete",
+                    "missing": hard_missing,
+                    "profile_completeness": completeness,
+                }
+            )
+            run.error = "profile_incomplete:" + ",".join(hard_missing)
+            application.status = "in_progress"
+            db.commit()
+            return {
+                "ok": False,
+                "error": "profile_incomplete",
+                "missing": hard_missing,
+                "profile_completeness": completeness,
+                "apply_run_id": run.id,
+                "genuine_apply": False,
+            }
 
     try:
         from playwright.async_api import async_playwright  # noqa: F401

@@ -5,44 +5,56 @@
 | Capability | Evidence |
 |------------|----------|
 | Account register/login/me | Live API + pytest |
-| Greenhouse **live form fill** | Playwright filled `#first_name/#last_name/#email/#phone` + custom questions on real GitLab board; `core_ok=true`, **no submit** |
-| Lever **live form fill** | Playwright filled Wealthfront `/apply` (`name/email/phone/linkedin`); pytest green |
-| Headless apply via API | `POST /apply-engine/headless` on real Greenhouse URL → fields filled, status `needs_user` |
-| Headless **batch queue** | `POST /apply-engine/headless/batch` enqueues Celery `apply_batch` (dry_run / live) |
-| Dashboard Automation panel | Coverage + quota + last run; optional “Queue headless apply” after batch-start |
-| Company discovery | Probed boards → live directory; coverage API exposes monitored page count |
-| Scale packaging | Batch-start many applications + hourly/daily quotas; `scripts/scale_apply_smoke.py` |
-| Extension ATS selectors | Greenhouse/Lever/Workday-specific fill paths in `form-filler.js` |
-| Health `/ready` | DB hard check; Redis degraded-ok; captcha / proxy / messaging / `HEADLESS_APPLY_ENABLED` |
-| Deploy packaging | `backend/Dockerfile` installs Chromium via `playwright install --with-deps` |
-| Env template | `backend/.env.example` documents captcha, proxy, Twilio, iMessage, headless, `WEBHOOK_SECRET` |
+| Greenhouse **live form fill** | Playwright filled real GitLab board; `core_ok=true` |
+| Lever **live form fill** | Playwright filled Wealthfront `/apply`; pytest green |
+| **Genuine submit (fixture)** | Fill → Submit → “Thank you” confirmation; `status=submitted` (`test_genuine_auto_apply`, `test_world_class_apply`) |
+| **Multi-step genuine submit** | Greenhouse-like 2-step fixture advances Next then submits with confirmation |
+| User opt-in gate | `User.auto_apply_submit` + platform kill-switch; without opt-in, never submits |
+| Profile completeness gate | Hard-blocks genuine submit when name/email/resume missing |
+| Real PDF resumes | Minimal valid `%PDF-` generated; `GET /api/v1/cvs/{id}/pdf` |
+| Shared CAPTCHA helper | All adapters call `detect_and_solve_captcha` before gated submit |
+| Confirmation-strict submit | URL change alone ≠ submitted; requires thank-you / confirmation pattern |
+| Headless batch fan-out | `apply_batch` queues one Celery task per application |
+| Retry failed applies | `POST /apply-engine/headless/retry` re-queues `failed` / `needs_user` |
+| Extension genuine path | Resume PDF attach + Next-only multi-step + optional submit + `status=submitted` report |
+| Dashboard Automation panel | “Genuinely submit for me” opt-in + headless queue |
+| Company discovery / coverage | Monitored boards + coverage API |
+| Health `/ready` | DB hard check; Redis degraded-ok; captcha / proxy / messaging flags |
 
 ## Still not Tsenta-class
 
 | Gap | Reality |
 |-----|---------|
-| 50k career pages | Hundreds monitored + import/discovery pipeline — not 50k yet |
-| Seconds-after-posting | Hot poll **60s** via Celery beat, not webhooks / true push |
-| CAPTCHA solve in prod | Client + mock mode wired; real solves need `TWOCAPTCHA_API_KEY`; fills often stop at `needs_user` |
-| Auto-submit unattended | **Off by default** (`HEADLESS_APPLY_AUTO_SUBMIT=false`). Enable only with keys + legal sign-off |
-| Workday 3–4 step mastery | Adapter exists; listing/account walls still less reliable than Greenhouse/Lever |
-| Ashby SPA | Adapter waits for React inputs; less proven than GH/Lever |
-| WhatsApp / iMessage | Twilio + bridge adapters; need credentials / Mac host (`TWILIO_*`, `IMESSAGE_BRIDGE_URL`) |
-| Proxy evasion | Pool + fingerprints ready; empty without `PROXY_POOL` |
-| Hundreds of **successful submits**/user | Packaging + quotas + smoke script; live **submits** not load-tested (we don't spam employers) |
+| 50k career pages | ~1k seed catalog + discovery — not 50k yet |
+| Seconds-after-posting | Hot poll **60s** via Celery beat, not true push |
+| CAPTCHA solve in prod | Wired for all adapters; real boards need `TWOCAPTCHA_API_KEY` (mock won’t pass employers) |
+| Live employer auto-submit | Proven on fixtures; **not** load-tested against real boards (don’t spam) |
+| Workday account walls | Guest / Apply Manually heuristics improved; many boards still need user login |
+| WhatsApp / iMessage | Twilio + bridge adapters; need credentials |
+| Proxy evasion | Pool ready; empty without `PROXY_POOL` |
+| Hundreds of successful submits/user | Quotas + fan-out ready; measure after keys + worker deploy |
+
+## How genuine auto-apply works
+
+1. User enables **Genuinely submit for me** (sets `auto_apply_submit=true`)
+2. Profile needs name, email, resume (phone recommended)
+3. Queue headless with `auto_submit=true` (dashboard or `POST /apply-engine/headless/batch`)
+4. Celery worker runs Playwright → fill → solve CAPTCHA if keyed → submit → confirmation
+5. Application marked `submitted` only when confirmation detected
+6. Retry stuck runs via `POST /apply-engine/headless/retry`
 
 ## Tests
 
 ```bash
 cd backend
-python -m pytest tests/test_apply_engine.py tests/test_tsenta_e2e.py \
-  tests/test_scale_apply.py tests/test_live_ats_fill.py tests/test_smoke.py -v
+./venv/bin/pytest tests/test_genuine_auto_apply.py tests/test_world_class_apply.py -v
 ```
 
-Live ATS fills require network + Playwright Chromium. Scale smoke (API running):
+Broader suite:
 
 ```bash
-python scripts/scale_apply_smoke.py --users 5 --jobs 20
+./venv/bin/pytest tests/test_apply_engine.py tests/test_tsenta_e2e.py \
+  tests/test_scale_apply.py tests/test_live_ats_fill.py tests/test_smoke.py -v
 ```
 
 ## Env for production hardening
@@ -56,8 +68,9 @@ TWILIO_AUTH_TOKEN=
 TWILIO_WHATSAPP_FROM=whatsapp:+1...
 IMESSAGE_BRIDGE_URL=
 HEADLESS_APPLY_ENABLED=true
-HEADLESS_APPLY_AUTO_SUBMIT=false
+HEADLESS_APPLY_AUTO_SUBMIT=true
 WEBHOOK_SECRET=
 ```
 
 Deploy images need: `playwright install --with-deps chromium` and Celery worker **+ beat**.
+User must still opt in via dashboard; platform kill-switch alone is not enough.

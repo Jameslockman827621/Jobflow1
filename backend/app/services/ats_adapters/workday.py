@@ -78,8 +78,14 @@ class WorkdayAdapter(BaseATSAdapter):
         # Dismiss cookie / sign-in walls / apply as guest when present
         for sel in [
             "button:has-text('Accept')",
+            "button:has-text('Accept All')",
             "button:has-text('Apply Manually')",
             "a:has-text('Apply Manually')",
+            "button:has-text('Apply as Guest')",
+            "a:has-text('Apply as Guest')",
+            "button:has-text('Continue as Guest')",
+            "a:has-text('Continue as Guest')",
+            "button:has-text('Autofill with Resume')",
             "button:has-text('Create Account')",
             "button:has-text('Apply')",
             "button:has-text('Continue')",
@@ -93,21 +99,43 @@ class WorkdayAdapter(BaseATSAdapter):
                 pass
 
         # Workday often forces account creation before fields appear
-        email_login = page.locator("input[type='email'], input[data-automation-id*='email' i]")
-        if await email_login.count() and not await page.locator(
+        has_identity = await page.locator(
             "[data-automation-id='legalNameSection_firstName'], input[aria-label*='First Name' i]"
-        ).count():
+        ).count()
+        email_login = page.locator("input[type='email'], input[data-automation-id*='email' i]")
+        sign_in_wall = await page.locator(
+            "text=/sign in to your account/i, text=/create account/i, [data-automation-id*='signIn' i]"
+        ).count()
+        if await email_login.count() and not has_identity and sign_in_wall:
             try:
                 await email_login.first.fill(str(applicant.get("email") or ""))
                 result.fields_filled += 1
                 result.filled_keys.append("email_gate")
             except Exception:
                 pass
-            result.needs_user = True
-            result.meta["workday_account_wall"] = True
-            result.steps_completed = 1
-            result.page_url = page.url
-            return result
+            # Try guest one more time after email
+            for sel in [
+                "button:has-text('Apply as Guest')",
+                "a:has-text('Apply as Guest')",
+                "button:has-text('Continue')",
+            ]:
+                try:
+                    loc = page.locator(sel).first
+                    if await loc.count() and await loc.is_visible():
+                        await loc.click(timeout=2500)
+                        await page.wait_for_timeout(2000)
+                except Exception:
+                    pass
+            has_identity = await page.locator(
+                "[data-automation-id='legalNameSection_firstName'], input[aria-label*='First Name' i]"
+            ).count()
+            if not has_identity:
+                result.needs_user = True
+                result.meta["workday_account_wall"] = True
+                result.meta["blocked_reason"] = "workday_account_wall"
+                result.steps_completed = 1
+                result.page_url = page.url
+                return result
 
         for step in range(self.max_steps):
             result.steps_completed = step + 1
@@ -257,45 +285,28 @@ class WorkdayAdapter(BaseATSAdapter):
 
             result.fields_filled += await self.answer_unlabeled_textareas(page, applicant, _ans)
 
-            # Multi-step Next / Submit
-            next_clicked = False
-            for sel in [
-                "[data-automation-id='bottom-navigation-next-button']",
-                "button[data-automation-id='pageFooterNextButton']",
-                "button[data-automation-id='bottom-navigation-next-button']",
-                "button:has-text('Next')",
-                "button:has-text('Continue')",
-                "button:has-text('Save and Continue')",
-                "button:has-text('Submit')",
-            ]:
-                try:
-                    loc = page.locator(sel).first
-                    if await loc.count() and await loc.is_enabled() and await loc.is_visible():
-                        txt = ""
-                        try:
-                            txt = (await loc.inner_text()).lower()
-                        except Exception:
-                            txt = ""
-                        if "submit" in txt and not auto_submit:
-                            result.needs_user = True
-                            next_clicked = False
-                            break
-                        await loc.click(timeout=3000)
-                        await page.wait_for_timeout(1500)
-                        next_clicked = True
-                        if "submit" in txt:
-                            result.submitted = True
-                        break
-                except Exception:
-                    continue
+            # Multi-step Next only — submit happens after loop with confirmation
+            from .form_helpers import click_next_only
 
-            if result.submitted or not next_clicked:
+            next_clicked = await click_next_only(page)
+            if not next_clicked:
+                # Submit button may be visible on final step — stop advancing
                 break
 
-        result.captcha_present = await self.detect_captcha(page)
-        if not result.submitted:
+        from .form_helpers import attempt_genuine_submit_gated, core_fields_ok
+
+        result.meta["core_ok"] = core_fields_ok(result.filled_keys) or bool(
+            set(result.filled_keys) & {"email", "first_name", "last_name", "email_gate"}
+        )
+        result.meta["multi_step"] = True
+        if result.meta.get("workday_account_wall"):
+            result.needs_user = True
+            result.page_url = page.url
+            return result
+
+        if auto_submit:
+            await attempt_genuine_submit_gated(page, result, applicant)
+        else:
             result.needs_user = True
         result.page_url = page.url
-        result.meta["core_ok"] = bool(set(result.filled_keys) & {"email", "first_name", "last_name"})
-        result.meta["multi_step"] = True
         return result

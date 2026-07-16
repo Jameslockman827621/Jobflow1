@@ -184,20 +184,16 @@ class LeverAdapter(BaseATSAdapter):
             except Exception:
                 continue
 
-        result.captcha_present = await self.detect_captcha(page)
+        from .form_helpers import attempt_genuine_submit_gated
+
         result.steps_completed = 1
+        result.meta["core_ok"] = all(k in result.filled_keys for k in ("full_name", "email")) or (
+            "email" in result.filled_keys and bool(set(result.filled_keys) & {"full_name", "first_name"})
+        )
+        result.meta["resume_uploaded"] = "resume" in result.filled_keys
         if auto_submit:
-            if result.captcha_present and not result.captcha_solved:
-                result.needs_user = True
-                result.meta["blocked_reason"] = "captcha_unsolved"
-            else:
-                submit_result = await self.genuine_submit(page)
-                result.submitted = bool(submit_result.get("submitted") or submit_result.get("confirmed"))
-                result.needs_user = not result.submitted
-                result.meta["submit"] = submit_result
+            await attempt_genuine_submit_gated(page, result, applicant)
         else:
             result.needs_user = True
         result.page_url = page.url
-        result.meta["core_ok"] = all(k in result.filled_keys for k in ("full_name", "email"))
-        result.meta["resume_uploaded"] = "resume" in result.filled_keys
         return result
