@@ -16,6 +16,7 @@ from app.services.apply_engine import answer_open_ended, build_apply_package, bu
 from app.services.captcha import captcha_service
 from app.services.headless_apply import run_headless_apply
 from app.services.messaging import messaging_service
+from app.services.apply_limits import check_apply_quota
 from app.models.cv import CV
 from app.models.profile import UserProfile
 from app.tasks.headless_apply_tasks import apply_batch, apply_one
@@ -138,6 +139,10 @@ async def headless_apply(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if not body.dry_run:
+        quota = check_apply_quota(db, current_user.id, requested=1)
+        if not quota["allowed"]:
+            raise HTTPException(status_code=429, detail=quota)
     if body.async_queue:
         task = apply_one.delay(
             current_user.id,
@@ -158,12 +163,17 @@ async def headless_apply(
 @router.post("/headless/batch")
 async def headless_batch(
     body: HeadlessBatchRequest,
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     if not body.application_ids:
         raise HTTPException(status_code=400, detail="No application_ids")
     if len(body.application_ids) > 200:
         raise HTTPException(status_code=400, detail="Max 200 applications per batch")
+    if not body.dry_run:
+        quota = check_apply_quota(db, current_user.id, requested=len(body.application_ids))
+        if not quota["allowed"]:
+            raise HTTPException(status_code=429, detail=quota)
     task = apply_batch.delay(
         current_user.id,
         body.application_ids,
@@ -178,6 +188,14 @@ async def headless_batch(
         "count": len(body.application_ids),
         "message": "Batch headless apply queued for scale processing",
     }
+
+
+@router.get("/quota")
+async def apply_quota(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return check_apply_quota(db, current_user.id, requested=0)
 
 
 @router.get("/runs")

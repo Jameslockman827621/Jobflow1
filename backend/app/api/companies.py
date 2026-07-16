@@ -10,8 +10,9 @@ from app.api.auth import get_current_user
 from app.database import get_db
 from app.models.company import MonitoredCompany
 from app.models.user import User
-from app.scrapers.companies import DIRECTORY_CAPACITY_TARGET
+from app.scrapers.companies import DIRECTORY_CAPACITY_TARGET, all_seed_companies
 from app.services.company_directory import bulk_import, list_companies, seed_monitored_companies
+from app.services.company_discovery import discover_companies
 from app.services.proxy_pool import pool_status
 
 router = APIRouter()
@@ -96,3 +97,42 @@ async def import_companies(
     if len(body.companies) > 5000:
         raise HTTPException(status_code=400, detail="Max 5000 companies per import")
     return bulk_import(db, [c.model_dump() for c in body.companies])
+
+
+@router.post("/discover")
+async def discover_live_boards(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Probe public ATS APIs and import verified career pages into the directory."""
+    seed = seed_monitored_companies(db)
+    discovery = await discover_companies()
+    payload = [
+        {k: v for k, v in c.items() if k != "job_count"}
+        for c in discovery["companies"]
+    ]
+    imported = bulk_import(db, payload)
+    for c in discovery["companies"]:
+        row = (
+            db.query(MonitoredCompany)
+            .filter(MonitoredCompany.ats_type == c["ats_type"], MonitoredCompany.slug == c["slug"])
+            .first()
+        )
+        if row:
+            row.last_job_count = c.get("job_count") or 0
+            row.priority = c.get("priority") or row.priority
+            row.is_active = True
+    db.commit()
+    total = db.query(MonitoredCompany).filter(MonitoredCompany.is_active.is_(True)).count()
+    return {
+        "seed": seed,
+        "discovery": {
+            "probed": discovery["probed"],
+            "found": discovery["found"],
+            "by_ats": discovery["by_ats"],
+            "estimated_jobs": discovery["estimated_jobs"],
+        },
+        "imported": imported,
+        "monitored_total": total,
+        "seed_catalog_size": len(all_seed_companies()),
+    }

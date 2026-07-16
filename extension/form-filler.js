@@ -204,10 +204,103 @@
     return false;
   }
 
+  function fillByIdOrSel(sel, value) {
+    if (value == null || value === '') return false;
+    const el = document.querySelector(sel);
+    if (!el || el.disabled) return false;
+    if (el.tagName === 'SELECT') return fillSelect(el, value);
+    return fillInput(el, value);
+  }
+
+  function fillGreenhouse(applicant) {
+    let n = 0;
+    const pairs = [
+      ['#first_name', applicant.first_name],
+      ['#last_name', applicant.last_name],
+      ['#email', applicant.email],
+      ['#phone', applicant.phone],
+      ["input[autocomplete='given-name']", applicant.first_name],
+      ["input[autocomplete='family-name']", applicant.last_name],
+      ["input[aria-label='First Name']", applicant.first_name],
+      ["input[aria-label='Last Name']", applicant.last_name],
+      ["input[aria-label='Email']", applicant.email],
+      ["input[aria-label='Phone']", applicant.phone],
+      ["input[aria-label*='LinkedIn' i]", applicant.linkedin],
+    ];
+    const seen = new Set();
+    for (const [sel, val] of pairs) {
+      const el = document.querySelector(sel);
+      if (!el || seen.has(el)) continue;
+      if (fillByIdOrSel(sel, val)) {
+        seen.add(el);
+        n += 1;
+      }
+    }
+    // Custom questions
+    document.querySelectorAll("input[id^='question_'], textarea[id^='question_']").forEach((el) => {
+      if (el.value && el.value.trim()) return;
+      const label = normalize((el.getAttribute('aria-label') || labelFor(el) || ''));
+      if (label.includes('linkedin') && applicant.linkedin) {
+        setNativeValue(el, applicant.linkedin); n += 1;
+      } else if (label.includes('sponsor') || label.includes('visa')) {
+        setNativeValue(el, 'No'); n += 1;
+      } else if (label.includes('authorized') || label.includes('legally')) {
+        setNativeValue(el, 'Yes'); n += 1;
+      }
+    });
+    return n;
+  }
+
+  function fillLever(applicant) {
+    let n = 0;
+    const pairs = [
+      ["input[name='name']", applicant.full_name],
+      ["input[name='email']", applicant.email],
+      ["input[name='phone']", applicant.phone],
+      ["#location-input", applicant.location],
+      ["input[name='org']", applicant.current_company],
+      ["input[name=\"urls[LinkedIn]\"]", applicant.linkedin],
+      ["input[name=\"urls[Portfolio]\"]", applicant.portfolio],
+    ];
+    for (const [sel, val] of pairs) {
+      if (fillByIdOrSel(sel, val)) n += 1;
+    }
+    // Radios: leave to generic pass; selects: pick first meaningful
+    document.querySelectorAll('select').forEach((el) => {
+      if (el.value) return;
+      const opt = Array.from(el.options).find(o => o.value && !['', 'select...', 'select'].includes(normalize(o.text)));
+      if (opt) { el.value = opt.value; el.dispatchEvent(new Event('change', { bubbles: true })); n += 1; }
+    });
+    return n;
+  }
+
+  function fillWorkday(applicant) {
+    let n = 0;
+    const pairs = [
+      ["[data-automation-id='legalNameSection_firstName']", applicant.first_name],
+      ["[data-automation-id='legalNameSection_lastName']", applicant.last_name],
+      ["[data-automation-id='email']", applicant.email],
+      ["input[data-automation-id*='phone' i]", applicant.phone],
+      ["input[type='email']", applicant.email],
+      ["input[type='tel']", applicant.phone],
+      ["input[aria-label*='First Name' i]", applicant.first_name],
+      ["input[aria-label*='Last Name' i]", applicant.last_name],
+    ];
+    for (const [sel, val] of pairs) {
+      if (fillByIdOrSel(sel, val)) n += 1;
+    }
+    return n;
+  }
+
   async function fillPage(packageData, token) {
     const applicant = packageData.applicant || {};
     const plan = packageData.fill_plan || {};
     let filled = 0;
+    const ats = detectATS();
+
+    if (ats === 'greenhouse') filled += fillGreenhouse(applicant);
+    else if (ats === 'lever') filled += fillLever(applicant);
+    else if (ats === 'workday') filled += fillWorkday(applicant);
 
     // Map planned fields first
     for (const field of (plan.fields || [])) {

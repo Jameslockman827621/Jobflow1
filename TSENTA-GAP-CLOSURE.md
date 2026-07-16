@@ -1,31 +1,42 @@
-# Tsenta Gap Closure — Implementation Status
+# Tsenta Gap Closure — Honest Status
 
-Audit of JobScale vs world-class (Tsenta-class) apply automation, and what shipped in this branch.
+## Verified working (not scaffolding)
 
-| Gap | Before | After (this PR) |
-|-----|--------|-----------------|
-| Company coverage | ~52 Greenhouse constants | **382 seeded career pages** across Greenhouse/Lever/Workable/Ashby/custom + DB `MonitoredCompany` + bulk import toward **50k capacity** |
-| Monitoring frequency | Every 6h (Beat often not running) | **Hot 60s / warm 15m / cold 2h** + Celery Beat service in docker-compose |
-| Form filling | None (open tab only) | Extension `form-filler.js`: text, select, radio, checkbox, textarea, file hooks, open-ended answers |
-| CAPTCHA | None | **2Captcha** client + `/apply-engine/captcha/solve` + extension injection |
-| Bot evasion | UA only | **Proxy pool rotation** + fingerprint headers (Playwright + scrapers) |
-| Multi-step forms | None | Multi-step walker (Workday up to 6 steps) in extension + headless |
-| Mobile/iMessage | None | **WhatsApp (Twilio)** + **iMessage bridge** adapter + bot commands |
-| Server-side apply | Browser must stay open | **Playwright headless apply** + Celery batch queue |
-| Scale testing | 1 user / ~50 jobs | Batch headless API (up to 200) + E2E tests covering account → package → dry-run |
+| Capability | Evidence |
+|------------|----------|
+| Account register/login/me | Live API + pytest |
+| Greenhouse **live form fill** | Playwright filled `#first_name/#last_name/#email/#phone` + custom questions on real GitLab board; `core_ok=true`, **no submit** |
+| Lever **live form fill** | Playwright filled Wealthfront `/apply` (`name/email/phone/linkedin`); pytest green |
+| Headless apply via API | `POST /apply-engine/headless` on real Greenhouse URL → 11 fields, status `needs_user` |
+| Company discovery | Probed 163 boards → **74 live** (~10.3k jobs est.), directory **388** monitored |
+| Scale packaging | Batch-start **120** applications + hourly/daily quotas |
+| Extension ATS selectors | Greenhouse/Lever/Workday-specific fill paths in `form-filler.js` |
 
-## Key APIs
+## Still not Tsenta-class
 
-- `POST /api/v1/companies/seed` — seed monitored directory
-- `GET /api/v1/companies/coverage` — coverage metrics
-- `POST /api/v1/companies/import` — bulk import (scale to 50k)
-- `GET /api/v1/apply-engine/package/application/{id}` — fill plan for extension/headless
-- `POST /api/v1/apply-engine/answer` — open-ended answers
-- `POST /api/v1/apply-engine/headless` — unattended apply (`dry_run` supported)
-- `POST /api/v1/apply-engine/headless/batch` — scale queue
-- `POST /api/v1/apply-engine/messaging/inbound` — WhatsApp/iMessage bot commands
+| Gap | Reality |
+|-----|---------|
+| 50k career pages | **388** monitored + import/discovery pipeline — not 50k yet |
+| Seconds-after-posting | Hot poll **60s**, not webhooks / true push |
+| CAPTCHA solve in prod | Client wired; needs `TWOCAPTCHA_API_KEY`; fills stop at `needs_user` when CAPTCHA blocks submit |
+| Auto-submit unattended | **Intentionally off by default** (legal + CAPTCHA). Enable only with keys + `HEADLESS_APPLY_AUTO_SUBMIT` |
+| Workday 3–4 step mastery | Adapter exists (`data-automation-id`); listing pages often require picking a job / account — not at Greenhouse reliability yet |
+| Ashby SPA | Adapter waits for React inputs; less proven than GH/Lever |
+| WhatsApp / iMessage | Twilio + bridge adapters; need credentials / Mac host |
+| Proxy evasion | Pool + fingerprints ready; empty without `PROXY_POOL` |
+| Hundreds of **successful submits**/user | Packaging + quotas tested; live **submits** not load-tested (we don't spam employers) |
 
-## Env vars
+## Tests
+
+```bash
+cd backend
+python -m pytest tests/test_apply_engine.py tests/test_tsenta_e2e.py \
+  tests/test_scale_apply.py tests/test_live_ats_fill.py tests/test_smoke.py -v
+```
+
+**21 passed** including live Greenhouse + Lever fills.
+
+## Env for production hardening
 
 ```
 TWOCAPTCHA_API_KEY=
@@ -33,14 +44,9 @@ PROXY_POOL=http://user:pass@host:port,...
 TWILIO_ACCOUNT_SID=
 TWILIO_AUTH_TOKEN=
 TWILIO_WHATSAPP_FROM=whatsapp:+1...
-IMESSAGE_BRIDGE_URL=https://your-mac-bridge
+IMESSAGE_BRIDGE_URL=
 HEADLESS_APPLY_ENABLED=true
+HEADLESS_APPLY_AUTO_SUBMIT=false
 ```
 
-## Tests
-
-```bash
-cd backend && python -m pytest tests/test_apply_engine.py tests/test_tsenta_e2e.py -v
-```
-
-Account flow verified: register → login → `/auth/me` → company seed/coverage → apply package → headless dry-run → messaging HELP.
+Deploy images need: `playwright install --with-deps chromium` and Celery worker **+ beat**.
