@@ -5,7 +5,7 @@ from typing import AsyncGenerator, Generator
 
 from app.core.config import settings
 from app.models.base import Base
-from app.models import User, Job, Application, UserProfile, Skill
+from app.models import User, Job, Application, UserProfile, Skill, MonitoredCompany, ApplyRun  # noqa: F401
 
 # Sync engine (for migrations, Alembic)
 sync_engine = create_engine(settings.DATABASE_URL)

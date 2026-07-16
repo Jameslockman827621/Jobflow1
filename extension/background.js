@@ -1,7 +1,7 @@
 // JobScale Background Service Worker
 
 const DASHBOARD_URL = 'http://localhost:3000';
-const API_BASE = `${DASHBOARD_URL}/api/v1`;
+const API_BASE = 'http://localhost:8000/api/v1';
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
@@ -48,6 +48,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     handleAutoApply(sendResponse);
     return true;
   }
+
+  if (request.action === 'applyFillComplete') {
+    // Telemetry hook — could POST to apply-engine later
+    console.log('Apply fill complete', request);
+    sendResponse({ ok: true });
+  }
 });
 
 async function handleAutoApply(sendResponse) {
@@ -73,12 +79,16 @@ async function handleAutoApply(sendResponse) {
 
     for (const app of apps) {
       if (app.job_url) {
+        await chrome.storage.local.set({
+          pending_application_id: app.application_id,
+          auto_fill_on_open: true,
+        });
         await chrome.tabs.create({ url: app.job_url, active: false });
-        await new Promise(r => setTimeout(r, 1500));
+        await new Promise(r => setTimeout(r, 1800));
       }
     }
 
-    sendResponse({ success: true, count: apps.length, applications: apps });
+    sendResponse({ success: true, count: apps.length, applications: apps, autofill: true });
   } catch (err) {
     sendResponse({ error: err.message });
   }

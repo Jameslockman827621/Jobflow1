@@ -67,9 +67,27 @@ services:
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/jobscale
       - REDIS_URL=redis://redis:6379/0
+      - HEADLESS_APPLY_ENABLED=true
     depends_on:
       - db
       - redis
+
+  # Celery Beat (schedules near-real-time + 2h monitoring)
+  beat:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: jobscale-beat
+    command: celery -A app.tasks.celery_app beat --loglevel=info
+    volumes:
+      - ../backend:/app
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/jobscale
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - db
+      - redis
+      - worker
 
   # Frontend (Next.js)
   frontend:

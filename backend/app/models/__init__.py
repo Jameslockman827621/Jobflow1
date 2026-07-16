@@ -8,5 +8,23 @@ from .auto_apply import UserAutoApplyJob
 from .cv import CV
 from .preferences import UserPreferences
 from .search_cache import SearchCache
+from .company import MonitoredCompany, ApplyRun
 
-__all__ = ["User", "Job", "JobSource", "Application", "UserProfile", "Skill", "ReferralCode", "Referral", "CompanyReview", "InterviewReview", "UserAutoApplyJob", "CV", "UserPreferences", "SearchCache"]
+__all__ = [
+    "User",
+    "Job",
+    "JobSource",
+    "Application",
+    "UserProfile",
+    "Skill",
+    "ReferralCode",
+    "Referral",
+    "CompanyReview",
+    "InterviewReview",
+    "UserAutoApplyJob",
+    "CV",
+    "UserPreferences",
+    "SearchCache",
+    "MonitoredCompany",
+    "ApplyRun",
+]

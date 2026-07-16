@@ -437,13 +437,13 @@ class OnDemandSearchService:
             title_conds = [Job.title.ilike(f"%{r}%") for r in roles[:6]]
             q = q.filter(or_(*title_conds))
 
-        rows = q.order_by(Job.posted_date.desc().nullslast()).limit(50).all()
+        rows = q.order_by(Job.posted_date.desc().nullslast()).limit(500).all()
         if not rows:
             rows = (
                 self.db.query(Job)
                 .filter(Job.is_active == True)
                 .order_by(Job.posted_date.desc().nullslast())
-                .limit(50)
+                .limit(500)
                 .all()
             )
         return [j.id for j in rows]
@@ -579,7 +579,7 @@ class OnDemandSearchService:
             return []
         
         jobs = self.db.query(Job).filter(
-            Job.id.in_(job_ids[:50]),  # Limit to 50 jobs for display
+            Job.id.in_(job_ids[:500]),  # Scale: allow hundreds of jobs per user
             Job.is_active == True
         ).all()
         

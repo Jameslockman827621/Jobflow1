@@ -30,6 +30,19 @@ class Settings(BaseSettings):
     PROXY_POOL: Optional[List[str]] = None
     REQUEST_DELAY_MS: int = 1000
     APIFY_API_KEY: Optional[str] = None
+
+    # CAPTCHA (2Captcha)
+    TWOCAPTCHA_API_KEY: Optional[str] = None
+
+    # Headless apply
+    HEADLESS_APPLY_ENABLED: bool = True
+    HEADLESS_APPLY_AUTO_SUBMIT: bool = False
+
+    # Messaging bots
+    TWILIO_ACCOUNT_SID: Optional[str] = None
+    TWILIO_AUTH_TOKEN: Optional[str] = None
+    TWILIO_WHATSAPP_FROM: Optional[str] = None  # e.g. whatsapp:+14155238886
+    IMESSAGE_BRIDGE_URL: Optional[str] = None  # BlueBubbles / custom Mac bridge
     
     # Email
     SMTP_HOST: str = "smtp.gmail.com"
@@ -70,6 +83,18 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             parts = [s.strip() for s in v.split(",") if s.strip()]
             return parts if parts else ["http://localhost:3000"]
+        return v
+
+    @field_validator("PROXY_POOL", mode="before")
+    @classmethod
+    def parse_proxy_pool(cls, v):
+        if v is None or v == "":
+            return None
+        if isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            parts = [s.strip() for s in v.split(",") if s.strip()]
+            return parts or None
         return v
 
     def cors_origins(self) -> List[str]:

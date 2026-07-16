@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
   "name": "JobScale - AI Job Applications",
-  "version": "1.0.0",
-  "description": "Apply to jobs with AI-powered CV tailoring and cover letters. One-click applications from any job board.",
+  "version": "2.0.0",
+  "description": "Multi-step ATS auto-fill, CAPTCHA handoff, and one-click apply from Greenhouse, Lever, Workday, Ashby, and more.",
   "permissions": [
     "activeTab",
     "storage",
     "tabs",
-    "contextMenus"
+    "contextMenus",
+    "scripting"
   ],
   "host_permissions": [
     "https://*.linkedin.com/*",
@@ -16,6 +17,9 @@
     "https://*.greenhouse.io/*",
     "https://*.lever.co/*",
     "https://*.workable.com/*",
+    "https://jobs.ashbyhq.com/*",
+    "https://*.myworkdayjobs.com/*",
+    "https://*.workday.com/*",
     "http://localhost:3000/*",
     "http://localhost:8000/*"
   ],
@@ -39,10 +43,14 @@
         "https://*.glassdoor.com/*",
         "https://jobs.ashbyhq.com/*",
         "https://*.greenhouse.io/*",
-        "https://*.lever.co/*"
+        "https://*.lever.co/*",
+        "https://*.workable.com/*",
+        "https://*.myworkdayjobs.com/*",
+        "https://*.workday.com/*"
       ],
-      "js": ["content.js"],
-      "css": ["styles.css"]
+      "js": ["form-filler.js", "content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
     },
     {
       "matches": ["http://localhost:3000/*"],

@@ -2,7 +2,7 @@
 // User selects jobs in extension → clicks Apply → extension opens each URL and starts application
 
 const DASHBOARD_URL = 'http://localhost:3000';
-const API_BASE = `${DASHBOARD_URL}/api/v1`;
+const API_BASE = 'http://localhost:8000/api/v1';
 
 document.addEventListener('DOMContentLoaded', async () => {
   const loadingEl = document.getElementById('loading');
