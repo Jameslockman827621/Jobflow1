@@ -169,6 +169,8 @@ def test_dry_run_never_submits(client, fixture_server):
         ("ats_workday_apply.html", "workday"),
         ("ats_ashby_apply.html", "ashby"),
         ("ats_lever_apply.html", "lever"),
+        ("ats_workable_apply.html", "workable"),
+        ("ats_indeed_apply.html", "indeed"),
     ],
 )
 def test_ats_fixture_genuine_submit(client, fixture_server, fixture, source):
@@ -179,6 +181,8 @@ def test_ats_fixture_genuine_submit(client, fixture_server, fixture, source):
     body = _headless(client, headers, app_id, auto_submit=True)
     assert body.get("ok") is True, body
     assert body.get("submitted") is True, body
+    # Indeed apply form has input[name=email] — must NOT false-positive as login wall
+    assert body.get("blocked_reason") != "login_required"
 
 
 def test_fill_only_sets_needs_user(client, fixture_server):
@@ -363,3 +367,129 @@ def test_live_indeed_without_session_returns_connect_hint(client):
     body = _headless(client, headers, app_id, auto_submit=True)
     assert body.get("submitted") is not True
     assert body.get("needs_user") is True or body.get("status") == "needs_user"
+
+
+# --- Indeed login wall (strong signals only) ---
+
+
+def test_indeed_login_wall_fixture_needs_user(client, fixture_server):
+    headers, email = _auth(client, "ilw")
+    _opt_in(client, headers)
+    url = f"{fixture_server}/ats_indeed_login_wall.html"
+    app_id = _start(client, headers, email, url, "indeed")
+    body = _headless(client, headers, app_id, auto_submit=True)
+    assert body.get("submitted") is not True
+    assert body.get("needs_user") is True or body.get("status") == "needs_user"
+    assert body.get("blocked_reason") == "login_required", body
+    assert body.get("connect_hint") or "login" in (body.get("error") or "").lower()
+
+
+# --- Stale session invalidation ---
+
+
+def test_login_wall_invalidates_board_session(client, fixture_server):
+    """Expired Connect cookies that still hit a login wall must mark session invalid."""
+    headers, email = _auth(client, "inv")
+    _opt_in(client, headers)
+
+    # Seed a "connected" LinkedIn session (raw storage_state path)
+    put = client.put(
+        "/api/v1/apply-engine/board-sessions/linkedin",
+        headers=headers,
+        json={
+            "storage_state": {
+                "cookies": [
+                    {
+                        "name": "li_at",
+                        "value": "fake-expired-token",
+                        "domain": ".linkedin.com",
+                        "path": "/",
+                        "expires": -1,
+                        "httpOnly": True,
+                        "secure": True,
+                        "sameSite": "Lax",
+                    }
+                ],
+                "origins": [],
+            },
+            "label": "stale-test",
+        },
+    )
+    assert put.status_code == 200, put.text
+
+    url = f"{fixture_server}/ats_linkedin_login_wall.html"
+    app_id = _start(client, headers, email, url, "linkedin")
+    body = _headless(client, headers, app_id, auto_submit=True)
+    assert body.get("submitted") is not True
+    assert body.get("status") == "needs_user" or body.get("needs_user") is True
+    assert body.get("blocked_reason") == "login_required", body
+    # Session must no longer be valid for Easy Apply
+    listed = client.get("/api/v1/apply-engine/board-sessions", headers=headers)
+    assert listed.status_code == 200
+    li = next((s for s in listed.json()["sessions"] if s["board"] == "linkedin"), None)
+    assert li is not None
+    assert li.get("is_valid") in (False, 0)
+
+    # get_board_session filters is_valid=1 → 404
+    g = client.get("/api/v1/apply-engine/board-sessions/linkedin", headers=headers)
+    assert g.status_code == 404
+
+
+# --- Progress heartbeat / stale sweeper ---
+
+
+def test_stale_sweeper_spares_runs_with_recent_progress(client):
+    from datetime import datetime, timedelta
+
+    from app.tasks.headless_apply_tasks import fail_stale_apply_runs
+
+    headers, email = _auth(client, "hb")
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == email).first()
+        alive = ApplyRun(
+            user_id=user.id,
+            mode="headless",
+            status="running",
+            started_at=datetime.utcnow() - timedelta(minutes=45),
+            meta_json=json.dumps(
+                {
+                    "last_progress_at": datetime.utcnow().isoformat() + "Z",
+                    "last_step": "navigated",
+                }
+            ),
+        )
+        dead = ApplyRun(
+            user_id=user.id,
+            mode="headless",
+            status="running",
+            started_at=datetime.utcnow() - timedelta(minutes=45),
+            meta_json=json.dumps(
+                {
+                    "last_progress_at": (
+                        datetime.utcnow() - timedelta(minutes=40)
+                    ).isoformat()
+                    + "Z",
+                    "last_step": "browser_ready",
+                }
+            ),
+        )
+        db.add(alive)
+        db.add(dead)
+        db.commit()
+        alive_id, dead_id = alive.id, dead.id
+    finally:
+        db.close()
+
+    out = fail_stale_apply_runs(max_age_minutes=30)
+    assert out.get("ok") is True
+    assert out.get("marked_stale", 0) >= 1
+
+    db = SessionLocal()
+    try:
+        a = db.query(ApplyRun).filter(ApplyRun.id == alive_id).first()
+        d = db.query(ApplyRun).filter(ApplyRun.id == dead_id).first()
+        assert a.status == "running", "recent heartbeat must spare the run"
+        assert d.status == "stale"
+    finally:
+        db.close()

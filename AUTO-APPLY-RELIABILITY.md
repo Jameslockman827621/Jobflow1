@@ -1,6 +1,6 @@
 # Auto-Apply Reliability Report
 
-Last hardened: 2026-07-16  
+Last hardened: 2026-07-17 (wave 2)  
 Rule: **Never claim live Easy Apply success without Connect + Celery + ToS-aware smoke.**
 
 ## Can we say “applies for all your jobs every time”?
@@ -9,9 +9,9 @@ Rule: **Never claim live Easy Apply success without Connect + Celery + ToS-aware
 
 **What we can say with evidence:**
 
-> With genuine submit opted in, Celery workers running, and LinkedIn/Indeed Connected when needed, JobScale’s headless engine **reliably submits** on supported ATS fixture flows (Greenhouse, Lever, Ashby, Workday) and **fails closed** (needs_user / connect_hint / no fake submitted) on every edge case we automated.
+> With genuine submit opted in, Celery workers running, and LinkedIn/Indeed Connected when needed, JobScale’s headless engine **reliably submits** on supported ATS fixture flows (Greenhouse, Lever, Ashby, Workday, Workable, Indeed Apply) and **fails closed** (needs_user / connect_hint / no fake submitted) on every edge case we automated.
 
-## Hardenings in this pass
+## Hardenings — wave 1
 
 | Fix | Why |
 |-----|-----|
@@ -23,33 +23,44 @@ Rule: **Never claim live Easy Apply success without Connect + Celery + ToS-aware
 | Board session temp files `chmod 600` + deleted in `finally` | Cookie leak on disk |
 | Lever HTML fixture + edge matrix suite | Lever had no E2E parity |
 
+## Hardenings — wave 2
+
+| Fix | Why |
+|-----|-----|
+| Indeed login wall uses strong signals only (`#login-email-input`, “Sign in to Indeed”) | Bare `input[name=email]` on apply forms was false-positive login_required |
+| Captcha detect returns immediately when no iframe/sitekey markers | Removed multi-second wait tax on every apply |
+| Submit confirm re-poll (2s) after uncertain click | SPA late-paint confirmations were marked submit_unconfirmed |
+| `_touch_run_progress` heartbeats during navigate/fill | Stale sweeper killed long-but-alive applies |
+| `fail_stale_apply_runs` prefers `meta.last_progress_at` | Same — progress-aware timeout (default 30m) |
+| Login wall with Connect session → `is_valid=0` + reconnect | Expired cookies left “connected” UI lying |
+| Workable + Indeed Apply fixtures in edge matrix | Parity gaps vs Greenhouse/Lever/Ashby/Workday |
+| LinkedIn/Indeed login detection: no mixed CSS+`text=/…/` selectors | Playwright threw → silent `False` → missed login walls |
+
 ## Edge-case matrix (proven)
 
-Suite: `backend/tests/test_auto_apply_edge_matrix.py` — **14 passed** (2026-07-16).
+Suite: `backend/tests/test_auto_apply_edge_matrix.py`
 
 | Case | Result |
 |------|--------|
 | Opt-in required for genuine submit | PASS — no silent submit |
 | Dry-run never submits | PASS |
-| Greenhouse multi-step + EEO genuine submit | PASS |
-| Workday multi-step genuine submit | PASS |
-| Ashby multi-step genuine submit | PASS |
-| Lever apply genuine submit | PASS |
+| Greenhouse / Workday / Ashby / Lever / Workable / Indeed Apply genuine submit | PASS |
+| Indeed apply form email input is NOT login wall | PASS |
+| Indeed login wall fixture → needs_user | PASS |
 | Fill-only → needs_user (no submit) | PASS |
 | Weak page text `"applied"` is NOT confirmation | PASS |
 | Strong “thank you for applying” IS confirmation | PASS |
 | `login_required` runs do not burn quota | PASS |
 | 5× `submitted` burns free daily quota | PASS |
 | Batch status exposes meta + needs_reconnect | PASS |
-| Live LinkedIn.com URL without Connect → connect_hint | PASS |
-| Live Indeed.com URL without Connect → connect_hint | PASS |
-
-Also covered in sibling suites: connect cookie → session, session encryption, stale-run sweeper, fan-out batch, Workable fixture.
+| Live LinkedIn.com / Indeed.com without Connect → connect_hint | PASS |
+| Login wall invalidates BoardSession | PASS |
+| Stale sweeper spares runs with recent `last_progress_at` | PASS |
 
 ## Reliability contract (product truth)
 
 ```
-IF job is Greenhouse / Lever / Ashby / Workday (direct ATS URL)
+IF job is Greenhouse / Lever / Ashby / Workday / Workable (direct ATS URL)
 AND user.auto_apply_submit = true
 AND platform HEADLESS_APPLY_AUTO_SUBMIT = true
 AND Celery worker on queue `apply` is running
@@ -62,8 +73,14 @@ IF job is LinkedIn.com / Indeed.com
 AND BoardSession missing/invalid
 THEN status=needs_user + connect_hint (never launch empty browser as success)
 
+IF BoardSession present but page is a login wall
+THEN invalidate session + needs_user + connect_hint
+
 IF confirmation uncertain after click
-THEN needs_user + submit_unconfirmed (never mark submitted)
+THEN re-poll once; still uncertain → needs_user + submit_unconfirmed (never mark submitted)
+
+IF apply run is running but last_progress_at older than stale threshold
+THEN mark stale (alive heartbeats are spared)
 ```
 
 ## Still required for production “apply for you”
@@ -81,8 +98,6 @@ Without (1)–(3), the product correctly refuses or queues — it does **not** p
 cd backend
 ./venv/bin/python -m pytest \
   tests/test_auto_apply_edge_matrix.py \
-  tests/test_genuine_auto_apply.py \
-  tests/test_workday_ashby_fixtures.py \
-  tests/test_connect_boards_e2e.py \
+  tests/test_scale_reliability.py::test_fail_stale_apply_runs \
   -q --tb=line
 ```

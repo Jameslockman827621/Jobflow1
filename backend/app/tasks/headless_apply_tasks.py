@@ -134,28 +134,53 @@ def apply_batch(
 
 
 @celery_app.task(name="app.tasks.headless_apply_tasks.fail_stale_apply_runs")
-def fail_stale_apply_runs(max_age_minutes: int = 15):
-    """Mark ApplyRuns stuck in running as failed/stale so quota + dashboards stay honest."""
+def fail_stale_apply_runs(max_age_minutes: int = 30):
+    """Mark ApplyRuns stuck in running with no recent progress as stale.
+
+    Prefers ``meta.last_progress_at`` (worker heartbeat) so long-but-alive
+    fills are not killed mid-apply. Falls back to ``started_at``.
+    """
     db = SessionLocal()
     try:
-        cutoff = datetime.utcnow() - timedelta(minutes=max_age_minutes)
-        rows = (
+        age_min = max(5, int(max_age_minutes or 30))
+        cutoff = datetime.utcnow() - timedelta(minutes=age_min)
+        # Broad candidate set — filter by progress heartbeat in Python.
+        candidates = (
             db.query(ApplyRun)
             .filter(ApplyRun.status == "running", ApplyRun.started_at < cutoff)
+            .limit(300)
             .all()
         )
-        for r in rows:
-            r.status = "stale"
-            r.error = (r.error or "") + ";stale_timeout" if r.error else "stale_timeout"
-            r.finished_at = datetime.utcnow()
+        marked = 0
+        for r in candidates:
             try:
                 meta = json.loads(r.meta_json or "{}")
             except Exception:
                 meta = {}
+            progress_raw = meta.get("last_progress_at")
+            progress_at = None
+            if isinstance(progress_raw, str) and progress_raw.strip():
+                try:
+                    progress_at = datetime.fromisoformat(
+                        progress_raw.replace("Z", "+00:00")
+                    )
+                    if progress_at.tzinfo is not None:
+                        progress_at = progress_at.replace(tzinfo=None)
+                except Exception:
+                    progress_at = None
+            anchor = progress_at or r.started_at
+            if anchor is not None and anchor >= cutoff:
+                continue
+            r.status = "stale"
+            r.error = (r.error or "") + ";stale_timeout" if r.error else "stale_timeout"
+            r.finished_at = datetime.utcnow()
             meta["stale"] = True
-            meta["stale_after_minutes"] = max_age_minutes
+            meta["stale_after_minutes"] = age_min
+            meta["stale_anchor"] = "last_progress_at" if progress_at else "started_at"
             r.meta_json = json.dumps(meta)
-        db.commit()
-        return {"ok": True, "marked_stale": len(rows)}
+            marked += 1
+        if marked:
+            db.commit()
+        return {"ok": True, "marked_stale": marked}
     finally:
         db.close()

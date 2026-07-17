@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Dict
 
 from app.services.apply_engine import answer_open_ended
@@ -21,13 +22,16 @@ class LinkedInAdapter(BaseATSAdapter):
     max_steps = 8
 
     async def _detect_login_wall(self, page) -> bool:
+        """True on LinkedIn auth walls. Engines queried separately (no mixed CSS+text)."""
         try:
-            return bool(
-                await page.locator(
-                    "input#username, input[name='session_key'], "
-                    "text=/sign in to continue/i, text=/join linkedin/i"
-                ).count()
-            )
+            # Query engines separately — Playwright rejects mixed CSS + text=/.../ in one string
+            if await page.locator("input#username, input[name='session_key']").count():
+                return True
+            if await page.get_by_text(re.compile(r"sign in to continue", re.I)).count():
+                return True
+            if await page.get_by_text(re.compile(r"join linkedin", re.I)).count():
+                return True
+            return False
         except Exception:
             return False
 
@@ -37,7 +41,9 @@ class LinkedInAdapter(BaseATSAdapter):
         """
         # Already applied?
         try:
-            if await page.locator("text=/already applied/i, button:has-text('Applied')").count():
+            if await page.get_by_text(re.compile(r"already applied", re.I)).count():
+                return "already"
+            if await page.locator("button:has-text('Applied')").count():
                 return "already"
         except Exception:
             pass

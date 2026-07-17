@@ -205,7 +205,11 @@ async def advance_with_validation_recovery(
 
 
 async def detect_and_solve_captcha(page, result) -> None:
-    """Detect reCAPTCHA/hCaptcha and solve via captcha_service when available."""
+    """Detect reCAPTCHA/hCaptcha and solve via captcha_service when available.
+
+    Fast path: if no captcha markers on first query, return immediately
+    (no multi-second wait_for_selector tax on every application).
+    """
     try:
         result.captcha_present = bool(
             await page.locator(
@@ -216,14 +220,7 @@ async def detect_and_solve_captcha(page, result) -> None:
         result.captcha_present = False
 
     if not result.captcha_present:
-        try:
-            await page.wait_for_selector(
-                'iframe[src*="recaptcha"], iframe[src*="hcaptcha"], [data-sitekey]',
-                timeout=4000,
-            )
-            result.captcha_present = True
-        except Exception:
-            return
+        return
 
     if not captcha_service.available:
         result.meta["blocked_reason"] = result.meta.get("blocked_reason") or BLOCK_CAPTCHA
@@ -387,6 +384,29 @@ async def attempt_genuine_submit_gated(
             else:
                 await refill_from_validation_errors(page, applicant, errors)
             continue
+
+        # Clicked submit but no confirmation yet — re-poll once (SPA late paint)
+        if (
+            attempt == 0
+            and submit_result.get("action") == "clicked_submit"
+            and submit_result.get("uncertain")
+        ):
+            result.meta["confirm_repoll"] = 1
+            try:
+                await page.wait_for_timeout(2000)
+                from .submit import detect_submission_success
+
+                again = await detect_submission_success(page)
+                result.meta["submit"]["confirmation_repoll"] = again
+                if again.get("confirmed"):
+                    result.submitted = True
+                    result.needs_user = False
+                    result.meta["submit"]["confirmed"] = True
+                    result.meta["submit"]["uncertain"] = False
+                    result.meta.pop("blocked_reason", None)
+                    return
+            except Exception:
+                pass
 
         result.submitted = False
         result.needs_user = True

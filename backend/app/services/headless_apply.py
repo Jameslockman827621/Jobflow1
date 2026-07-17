@@ -36,6 +36,26 @@ logger = logging.getLogger(__name__)
 SCREENSHOT_DIR = "/tmp/jobscale_screenshots"
 
 
+def _touch_run_progress(db: Session, run: ApplyRun, step: str) -> None:
+    """Heartbeat so the stale sweeper uses last progress, not only started_at."""
+    try:
+        meta = json.loads(run.meta_json or "{}")
+    except Exception:
+        meta = {}
+    meta["last_progress_at"] = datetime.utcnow().isoformat() + "Z"
+    meta["last_step"] = step
+    run.meta_json = json.dumps(meta)
+    try:
+        db.add(run)
+        db.commit()
+        db.refresh(run)
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+
 async def _save_failure_screenshot(page, apply_run_id: int) -> Optional[str]:
     try:
         os.makedirs(SCREENSHOT_DIR, exist_ok=True)
@@ -136,6 +156,7 @@ async def run_headless_apply(
     db.add(run)
     db.commit()
     db.refresh(run)
+    _touch_run_progress(db, run, "queued")
 
     if dry_run:
         adapter = get_adapter(ats)
@@ -301,14 +322,17 @@ async def run_headless_apply(
                 page = await context.new_page()
                 await page.add_init_script(stealth_init_script)
                 await human_delay(300, 900)
+                _touch_run_progress(db, run, "browser_ready")
                 await page.goto(job.external_url, wait_until="domcontentloaded", timeout=60000)
                 await human_delay(800, 1600)
+                _touch_run_progress(db, run, "navigated")
 
                 result = await adapter.fill(
                     page,
                     applicant,
                     auto_submit=should_submit,
                 )
+                _touch_run_progress(db, run, "adapter_done")
                 await browser.close()
                 browser = None
             break  # success

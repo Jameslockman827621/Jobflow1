@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Dict
 
 from app.services.apply_engine import answer_open_ended
@@ -21,23 +22,33 @@ class IndeedAdapter(BaseATSAdapter):
     max_steps = 6
 
     async def _detect_login_wall(self, page) -> bool:
+        """True only on authentic Indeed auth walls — never bare email inputs on apply forms."""
         try:
-            return bool(
-                await page.locator(
-                    "input[name='email'], #login-email-input, "
-                    "text=/sign in to indeed/i, text=/create an account to apply/i"
-                ).count()
-                and not await page.locator(
-                    "input[name='name'], #jobscale-indeed-name, button:has-text('Indeed Apply')"
-                ).count()
-            )
+            # CSS and text engines must be queried separately (Playwright parse error otherwise)
+            strong = 0
+            strong += await page.locator("#login-email-input").count()
+            for pat in (
+                r"sign in to indeed",
+                r"create an account to apply",
+                r"sign in to continue",
+            ):
+                strong += await page.get_by_text(re.compile(pat, re.I)).count()
+            if not strong:
+                return False
+            # Apply form already visible → not a login wall
+            apply_form = await page.locator(
+                "input[name='name'], #jobscale-indeed-name, "
+                "button:has-text('Indeed Apply'), #indeedApplyButton, "
+                "#jobscale-indeed-apply, form[id*='ia-' i]"
+            ).count()
+            return apply_form == 0
         except Exception:
             return False
 
     async def _start_apply(self, page, result: AdapterResult) -> str:
         """Returns easy_apply | external | already | none"""
         try:
-            if await page.locator("text=/already applied/i, text=/you applied/i").count():
+            if await page.get_by_text(re.compile(r"already applied|you applied", re.I)).count():
                 return "already"
         except Exception:
             pass

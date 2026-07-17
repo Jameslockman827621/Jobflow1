@@ -116,6 +116,6 @@ beat_schedule = {
     "fail-stale-apply-runs": {
         "task": "app.tasks.headless_apply_tasks.fail_stale_apply_runs",
         "schedule": 300.0,
-        "kwargs": {"max_age_minutes": 15},
+        "kwargs": {"max_age_minutes": 30},
     },
 }
