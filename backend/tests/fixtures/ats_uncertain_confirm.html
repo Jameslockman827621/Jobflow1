@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Apply — Uncertain Confirm</title>
+</head>
+<body>
+  <h1>Backend Engineer</h1>
+  <form id="application" onsubmit="return handleSubmit(event)">
+    <label for="first_name">First Name</label>
+    <input id="first_name" name="first_name" autocomplete="given-name" required />
+    <label for="last_name">Last Name</label>
+    <input id="last_name" name="last_name" autocomplete="family-name" required />
+    <label for="email">Email</label>
+    <input id="email" name="email" type="email" required />
+    <button type="submit" id="submit_app">Submit application</button>
+  </form>
+  <!-- After submit: form gone but NO thank-you confirmation text (must not mark submitted on URL alone without thank) -->
+  <script>
+    function handleSubmit(e) {
+      e.preventDefault();
+      document.getElementById('application').style.display = 'none';
+      // Intentionally weak: only URL hint, no confirmation copy
+      history.pushState({}, '', location.pathname + '?submitted=true');
+      document.body.insertAdjacentHTML('beforeend', '<p>Processing…</p>');
+      return false;
+    }
+  </script>
+</body>
+</html>

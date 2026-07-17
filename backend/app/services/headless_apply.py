@@ -95,6 +95,29 @@ async def run_headless_apply(
             "submitted": True,
         }
 
+    # Concurrency lock: one active headless run per application
+    if not dry_run:
+        active = (
+            db.query(ApplyRun)
+            .filter(
+                ApplyRun.application_id == application.id,
+                ApplyRun.status.in_(["running", "queued"]),
+            )
+            .order_by(ApplyRun.id.asc())
+            .first()
+        )
+        if active:
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": "already_running",
+                "application_id": application.id,
+                "apply_run_id": active.id,
+                "status": active.status,
+                "submitted": False,
+                "genuine_apply": False,
+            }
+
     job = db.query(Job).filter(Job.id == application.job_id).first()
     if not job or not job.external_url:
         return {"ok": False, "error": "job_not_found"}
@@ -157,6 +180,40 @@ async def run_headless_apply(
     db.commit()
     db.refresh(run)
     _touch_run_progress(db, run, "queued")
+
+    # Race: if another running/queued run for this app already exists and is older, abort
+    if not dry_run:
+        siblings = (
+            db.query(ApplyRun)
+            .filter(
+                ApplyRun.application_id == application.id,
+                ApplyRun.status.in_(["running", "queued"]),
+            )
+            .order_by(ApplyRun.id.asc())
+            .all()
+        )
+        if len(siblings) > 1 and siblings[0].id != run.id:
+            run.status = "skipped"
+            run.error = "already_running"
+            run.finished_at = datetime.utcnow()
+            run.meta_json = json.dumps(
+                {
+                    "skipped_reason": "already_running",
+                    "winner_run_id": siblings[0].id,
+                    "batch_id": batch_id,
+                }
+            )
+            db.commit()
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": "already_running",
+                "application_id": application.id,
+                "apply_run_id": run.id,
+                "status": "skipped",
+                "submitted": False,
+                "genuine_apply": False,
+            }
 
     if dry_run:
         adapter = get_adapter(ats)
@@ -332,6 +389,14 @@ async def run_headless_apply(
                     applicant,
                     auto_submit=should_submit,
                 )
+                # Capture evidence on fail-closed paths (ops debugging)
+                if result is not None and (
+                    result.needs_user
+                    or (result.meta or {}).get("submit_uncertain")
+                    or ((result.meta or {}).get("blocked_reason") or "").startswith("login")
+                    or (result.captcha_present and not result.captcha_solved)
+                ):
+                    screenshot_path = await _save_failure_screenshot(page, run.id)
                 _touch_run_progress(db, run, "adapter_done")
                 await browser.close()
                 browser = None
@@ -413,6 +478,15 @@ async def run_headless_apply(
         meta = result.to_dict()
         meta["resume_local_path"] = applicant.get("resume_local_path")
         meta["board"] = board_info
+        # String board key for dashboard reconnect CTAs (never a nested dict)
+        board_key = None
+        if ats in ("linkedin", "indeed"):
+            board_key = ats
+        elif isinstance(board_info, dict):
+            b = board_info.get("board") or board_info.get("ats")
+            if b in ("linkedin", "indeed"):
+                board_key = b
+        meta["board_key"] = board_key or (ats if ats else None)
         meta["apply_mode"] = (result.meta or {}).get("apply_mode") or board_info.get("apply_mode")
         meta["session_used"] = bool(storage_state_path)
         if batch_id:
@@ -479,6 +553,7 @@ async def run_headless_apply(
             "session_used": bool(storage_state_path),
             "blocked_reason": (result.meta or {}).get("blocked_reason"),
             "connect_hint": meta.get("connect_hint") or package.get("connect_hint"),
+            "board_key": meta.get("board_key"),
         }
     finally:
         # Never leave board cookies on disk after Playwright exits

@@ -574,6 +574,9 @@
           steps_completed: result.steps || 0,
           status,
           ats: result.ats || detectATS(),
+          confirmation_detected: !!(result.submitted && result.confirmed),
+          page_url: typeof location !== 'undefined' ? location.href : null,
+          confirmation_snippet: (result.confirmation_snippet || '').slice(0, 240) || null,
           error: (result.captcha && result.captcha.error)
             || (result.uncertain ? 'submit_uncertain' : null),
         }),

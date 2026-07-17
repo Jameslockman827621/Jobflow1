@@ -179,6 +179,55 @@ function DashboardPage() {
     boards: Array<'linkedin' | 'indeed'>;
     hint?: string;
   } | null>(null);
+  const [retrying, setRetrying] = useState(false);
+
+  function resolveBoardKey(raw: unknown): 'linkedin' | 'indeed' | null {
+    if (raw === 'linkedin' || raw === 'indeed') return raw;
+    if (raw && typeof raw === 'object') {
+      const b = (raw as { board?: string; ats?: string }).board
+        || (raw as { board?: string; ats?: string }).ats;
+      if (b === 'linkedin' || b === 'indeed') return b;
+    }
+    return null;
+  }
+
+  async function retryNeedsUserApplies() {
+    setRetrying(true);
+    try {
+      const res = await authFetch('/api/v1/apply-engine/headless/retry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          statuses: ['needs_user', 'failed', 'stale'],
+          auto_submit: genuineSubmit,
+          limit: 20,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(
+          typeof err.detail === 'string'
+            ? err.detail
+            : err.detail?.reason || 'Retry queue failed'
+        );
+        return;
+      }
+      const data = await res.json();
+      toast.success(
+        data.queued
+          ? `Re-queued ${data.queued} apply${data.queued === 1 ? '' : 's'}`
+          : data.message || 'Nothing to retry'
+      );
+      if (data.queued) {
+        setReconnectNeeded(null);
+        await loadAutomationMetrics();
+      }
+    } catch {
+      toast.error('Retry request failed');
+    } finally {
+      setRetrying(false);
+    }
+  }
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -219,6 +268,13 @@ function DashboardPage() {
     try {
       // Prefer extension bridge (real cookie sync)
       const ext = (window as any).JobScaleExtension;
+      const extInstalled = !!(ext && (ext.installed === true || typeof ext.connectBoard === 'function'));
+      if (!extInstalled) {
+        toast.error(
+          boardConnect?.message
+            || 'Install the JobScale Chrome extension, then click Connect again. Options → set API URL if needed.'
+        );
+      }
       if (ext && typeof ext.connectBoard === 'function') {
         const result = await ext.connectBoard(board);
         if (result?.ok) {
@@ -241,15 +297,24 @@ function DashboardPage() {
       window.open(url, '_blank', 'noopener,noreferrer');
       toast.success(`Log into ${board === 'linkedin' ? 'LinkedIn' : 'Indeed'} in the new tab — JobScale extension will sync your session`);
       // Poll for up to ~40s
+      let connected = false;
       for (let i = 0; i < 10; i++) {
         await new Promise((r) => setTimeout(r, 4000));
         await loadConnectStatus();
-        const connected = (await authFetch('/api/v1/apply-engine/connect/status').then((r) => r.json()).catch(() => null))
+        connected = !!(await authFetch('/api/v1/apply-engine/connect/status').then((r) => r.json()).catch(() => null))
           ?.boards?.[board]?.connected;
         if (connected) {
           toast.success(`${board === 'linkedin' ? 'LinkedIn' : 'Indeed'} connected`);
+          setReconnectNeeded(null);
           break;
         }
+      }
+      if (!connected) {
+        toast.error(
+          extInstalled
+            ? `${board === 'linkedin' ? 'LinkedIn' : 'Indeed'} did not connect in time — log in on the board tab, then click Connect again.`
+            : 'Extension required to sync your board session. Install JobScale extension, then retry Connect.'
+        );
       }
       await loadConnectStatus();
     } finally {
@@ -451,29 +516,60 @@ function DashboardPage() {
             } else {
               const hlData = await hlRes.json().catch(() => ({}));
               const batchId = hlData.batch_id as string | undefined;
+              if (hlData.session_warnings?.length || hlData.needs_reconnect) {
+                const boards = (hlData.session_warnings || [])
+                  .map((w: { board?: string }) => resolveBoardKey(w.board))
+                  .filter(Boolean) as Array<'linkedin' | 'indeed'>;
+                setReconnectNeeded({
+                  boards: boards.length ? boards : ['linkedin', 'indeed'],
+                  hint:
+                    hlData.session_warnings?.[0]?.connect_hint ||
+                    hlData.message ||
+                    'Connect LinkedIn/Indeed before Easy Apply on those boards.',
+                });
+              }
               if (batchId) {
                 setApplyBatchId(batchId);
                 setApplyBatchStatus({ total: applicationIds.length, by_status: { queued: applicationIds.length } });
                 // Poll real ApplyRun outcomes (not mock)
+                let finalStatus: any = null;
                 for (let i = 0; i < 24; i++) {
                   await new Promise((r) => setTimeout(r, 2500));
                   const stRes = await authFetch(`/api/v1/apply-engine/headless/batch/${batchId}`);
                   if (!stRes.ok) continue;
                   const st = await stRes.json();
+                  finalStatus = st;
                   setApplyBatchStatus(st);
                   const by = st.by_status || {};
                   const runs = st.runs || [];
-                  const needsReconnect = runs.filter(
-                    (r: any) =>
-                      r?.meta?.blocked_reason === 'login_required' ||
-                      r?.meta?.connect_hint ||
-                      (r?.status === 'needs_user' && String(r?.error || '').toLowerCase().includes('login'))
-                  );
-                  if (needsReconnect.length > 0) {
+                  const needsReconnect =
+                    (st.needs_reconnect || 0) > 0
+                      ? runs.filter(
+                          (r: any) =>
+                            r?.meta?.blocked_reason === 'login_required' ||
+                            r?.meta?.connect_hint ||
+                            r?.meta?.session_invalidated ||
+                            (r?.status === 'needs_user' &&
+                              String(r?.error || '').toLowerCase().includes('login'))
+                        )
+                      : runs.filter(
+                          (r: any) =>
+                            r?.meta?.blocked_reason === 'login_required' ||
+                            r?.meta?.connect_hint ||
+                            r?.meta?.session_invalidated
+                        );
+                  if (needsReconnect.length > 0 || (st.needs_reconnect || 0) > 0) {
                     const boards = Array.from(
                       new Set(
                         needsReconnect
-                          .map((r: any) => (r?.meta?.board === 'indeed' ? 'indeed' : 'linkedin'))
+                          .map(
+                            (r: any) =>
+                              resolveBoardKey(r?.meta?.board_key) ||
+                              resolveBoardKey(r?.meta?.board) ||
+                              (r?.ats_type === 'indeed' || r?.ats_type === 'linkedin'
+                                ? r.ats_type
+                                : null)
+                          )
                           .filter(Boolean)
                       )
                     ) as Array<'linkedin' | 'indeed'>;
@@ -483,7 +579,6 @@ function DashboardPage() {
                         needsReconnect[0]?.meta?.connect_hint ||
                         'Session expired or missing — reconnect LinkedIn/Indeed to continue Easy Apply.',
                     });
-                    // Bring board connections into view
                     try {
                       document.getElementById('board-connections')?.scrollIntoView({
                         behavior: 'smooth',
@@ -499,16 +594,35 @@ function DashboardPage() {
                     (by.filled || 0) +
                     (by.needs_user || 0) +
                     (by.failed || 0) +
-                    (by.stale || 0);
+                    (by.stale || 0) +
+                    (by.skipped || 0) +
+                    (by.deferred || 0);
                   const total = st.total || applicationIds.length;
                   if (done >= total && total > 0) break;
                 }
+                const by = finalStatus?.by_status || {};
+                const needsUser = by.needs_user || 0;
+                const submitted = by.submitted || 0;
+                const failed = (by.failed || 0) + (by.stale || 0);
+                if (needsUser > 0 || failed > 0) {
+                  toast.error(
+                    `Apply finished: ${submitted} submitted, ${needsUser} need you, ${failed} failed` +
+                      (needsUser ? ' — reconnect or retry below' : '')
+                  );
+                } else {
+                  toast.success(
+                    genuineSubmit
+                      ? `${submitted || data.total} genuine auto-apply completed`
+                      : `${data.total} applications started — headless fill queued (${applicationIds.length})`
+                  );
+                }
+              } else {
+                toast.success(
+                  genuineSubmit
+                    ? `${data.total} queued for genuine auto-apply (fill + submit)`
+                    : `${data.total} applications started — headless fill queued (${applicationIds.length})`
+                );
               }
-              toast.success(
-                genuineSubmit
-                  ? `${data.total} queued for genuine auto-apply (fill + submit)`
-                  : `${data.total} applications started — headless fill queued (${applicationIds.length})`
-              );
             }
           } catch {
             toast.error('Applications started, but headless queue request failed');
@@ -648,9 +762,19 @@ function DashboardPage() {
             {(applyBatchStatus.runs || []).some(
               (r) => r.status === 'needs_user' || (r.meta && (r.meta.blocked_reason === 'login_required' || r.meta.connect_hint))
             ) && (
-              <p className="text-xs text-amber-700 mt-2">
-                Some applies need you — Connect LinkedIn/Indeed below, or complete CAPTCHA/profile gaps.
-              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <p className="text-xs text-amber-700">
+                  Some applies need you — Connect LinkedIn/Indeed below, or complete CAPTCHA/profile gaps.
+                </p>
+                <button
+                  type="button"
+                  disabled={retrying}
+                  onClick={() => retryNeedsUserApplies()}
+                  className="px-2.5 py-1 text-xs font-semibold rounded-md border border-amber-300 text-amber-900 hover:bg-amber-50 disabled:opacity-50"
+                >
+                  {retrying ? 'Retrying…' : 'Retry needs-you'}
+                </button>
+              </div>
             )}
           </div>
         )}
@@ -673,6 +797,14 @@ function DashboardPage() {
                     : `Reconnect ${board === 'linkedin' ? 'LinkedIn' : 'Indeed'}`}
                 </button>
               ))}
+              <button
+                type="button"
+                disabled={retrying}
+                onClick={() => retryNeedsUserApplies()}
+                className="px-3 py-1.5 text-xs font-semibold rounded-md border border-amber-400 text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+              >
+                {retrying ? 'Retrying…' : 'Retry after reconnect'}
+              </button>
               <button
                 type="button"
                 onClick={() => setReconnectNeeded(null)}

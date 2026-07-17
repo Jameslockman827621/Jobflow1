@@ -74,6 +74,10 @@ class ApplyReportRequest(BaseModel):
     status: str = "filled"
     ats: Optional[str] = None
     error: Optional[str] = None
+    # World-class honesty: extension must prove confirmation before status=submitted
+    confirmation_detected: bool = False
+    page_url: Optional[str] = None
+    confirmation_snippet: Optional[str] = None
 
 
 class AutoApplySettingsUpdate(BaseModel):
@@ -301,6 +305,47 @@ async def headless_batch(
         quota = check_apply_quota(db, current_user.id, requested=len(to_queue), user=current_user)
         if not quota["allowed"]:
             raise HTTPException(status_code=429, detail=quota)
+
+    # Session preflight: warn (do not block) when LI/Indeed jobs lack Connect
+    from app.services.board_session import get_board_session
+    from app.services.board_classify import classify_url
+
+    session_warnings = []
+    apps = (
+        db.query(Application)
+        .filter(
+            Application.user_id == current_user.id,
+            Application.id.in_(to_queue),
+        )
+        .all()
+    )
+    job_ids = [a.job_id for a in apps if a.job_id]
+    jobs = {j.id: j for j in db.query(Job).filter(Job.id.in_(job_ids)).all()} if job_ids else {}
+    need_boards = set()
+    for a in apps:
+        job = jobs.get(a.job_id)
+        if not job or not job.external_url:
+            continue
+        info = classify_url(job.external_url)
+        board = info.get("board") or info.get("ats")
+        host = (job.external_url or "").lower()
+        if "linkedin.com" in host or board == "linkedin":
+            need_boards.add("linkedin")
+        if "indeed.com" in host or board == "indeed":
+            need_boards.add("indeed")
+    for board in sorted(need_boards):
+        if not get_board_session(db, current_user.id, board):
+            session_warnings.append(
+                {
+                    "board": board,
+                    "blocked_reason": "login_required",
+                    "connect_hint": (
+                        f"Connect {board.title()} from Dashboard → Board connections "
+                        "before Easy Apply on that board."
+                    ),
+                }
+            )
+
     import uuid as _uuid
 
     batch_id = str(_uuid.uuid4())
@@ -321,9 +366,16 @@ async def headless_batch(
         "queued_count": len(to_queue),
         "deferred_count": max(0, requested - len(to_queue)),
         "fan_out": True,
+        "session_warnings": session_warnings,
+        "needs_reconnect": len(session_warnings),
         "message": (
             f"Batch headless apply queued: {len(to_queue)}/{requested} "
             f"(batch {batch_id})"
+            + (
+                f" — Connect {', '.join(w['board'] for w in session_warnings)} for Easy Apply"
+                if session_warnings
+                else ""
+            )
         ),
     }
 
@@ -403,6 +455,22 @@ async def headless_batch_status(
                     "submit_uncertain": metas[i].get("submit_uncertain"),
                     "already_applied": metas[i].get("already_applied"),
                     "session_used": metas[i].get("session_used"),
+                    # Prefer string board_key for reconnect CTAs (not nested board dict)
+                    "board_key": (
+                        metas[i].get("board_key")
+                        or (
+                            metas[i].get("board")
+                            if isinstance(metas[i].get("board"), str)
+                            else None
+                        )
+                        or (
+                            (metas[i].get("board") or {}).get("board")
+                            if isinstance(metas[i].get("board"), dict)
+                            else None
+                        )
+                        or (r.ats_type if r.ats_type in ("linkedin", "indeed") else None)
+                    ),
+                    "screenshot_path": metas[i].get("screenshot_path"),
                 },
             }
             for i, r in enumerate(matched[:100])
@@ -564,7 +632,11 @@ async def report_extension_apply(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Extension reports a fill attempt → create ApplyRun(mode=extension)."""
+    """Extension reports a fill attempt → create ApplyRun(mode=extension).
+
+    World-class rule: ``status=submitted`` is only accepted when
+    ``confirmation_detected=true``. Otherwise coerce to needs_user.
+    """
     application = (
         db.query(Application)
         .filter(Application.id == body.application_id, Application.user_id == current_user.id)
@@ -574,26 +646,40 @@ async def report_extension_apply(
         raise HTTPException(status_code=404, detail="Application not found")
 
     now = datetime.utcnow()
+    status = (body.status or "filled").strip().lower()
+    meta = {
+        "page_url": body.page_url,
+        "confirmation_detected": bool(body.confirmation_detected),
+        "confirmation_snippet": (body.confirmation_snippet or "")[:240] or None,
+        "source": "extension_report",
+    }
+    if status == "submitted" and not body.confirmation_detected:
+        status = "needs_user"
+        meta["blocked_reason"] = "submit_unconfirmed_extension"
+        meta["submit_uncertain"] = True
+        meta["coerced_from"] = "submitted"
+
     run = ApplyRun(
         user_id=current_user.id,
         application_id=application.id,
         job_id=application.job_id,
         mode="extension",
         ats_type=body.ats,
-        status=body.status or "filled",
+        status=status,
         steps_completed=body.steps_completed or 0,
         fields_filled=body.fields_filled or 0,
         error=(body.error[:2000] if body.error else None),
         started_at=now,
         finished_at=now,
+        meta_json=json.dumps(meta),
     )
     db.add(run)
-    if body.status == "submitted":
+    if status == "submitted":
         application.status = "submitted"
         application.stage = "applied"
         application.submitted_at = application.submitted_at or now
         application.applied_via = "extension"
-    elif body.status in ("filled", "needs_user", "captcha"):
+    elif status in ("filled", "needs_user", "captcha"):
         if application.status in ("draft", "ready_to_apply"):
             application.status = "in_progress"
         application.applied_via = application.applied_via or "extension"
@@ -606,6 +692,9 @@ async def report_extension_apply(
         "status": run.status,
         "fields_filled": run.fields_filled,
         "steps_completed": run.steps_completed,
+        "confirmation_required": True,
+        "coerced": meta.get("coerced_from") == "submitted",
+        "blocked_reason": meta.get("blocked_reason"),
     }
 
 

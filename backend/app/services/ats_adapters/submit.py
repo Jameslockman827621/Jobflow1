@@ -66,22 +66,12 @@ async def detect_submission_success(page) -> Dict[str, Any]:
         )
 
         # Strict success: confirmation pattern preferred; URL hint alone is weak
-        ok = bool(matched) or bool(url_hint and matched is None and "thank" in text_l)
+        # Require thank-you language alongside URL hint (never form-gone alone)
+        ok = bool(matched) or bool(url_hint and "thank" in text_l)
 
-        # URL hint + form gone is acceptable secondary signal
-        form_count = 0
-        submit_still = 0
-        try:
-            form_count = await page.locator("form").count()
-            submit_still = await page.locator(
-                "button:has-text('Submit application'), button:has-text('Submit Application'), #submit_app"
-            ).count()
-        except Exception:
-            pass
-
-        if not ok and url_hint and form_count == 0 and submit_still == 0:
-            ok = True
-            matched = matched or "url_and_form_gone"
+        # Secondary: URL hint + explicit "application submitted" already covered by patterns.
+        # Do NOT accept url_changed / form-gone without confirmation language — that caused
+        # false submitted marks on SPA "Processing…" pages.
 
         return {
             "confirmed": ok,
