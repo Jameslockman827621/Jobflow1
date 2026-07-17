@@ -38,7 +38,7 @@ Rule: **Never claim live Easy Apply success without Connect + Celery + ToS-aware
 
 ## Edge-case matrix (proven)
 
-Suite: `backend/tests/test_auto_apply_edge_matrix.py`
+Suite: `backend/tests/test_auto_apply_edge_matrix.py` — **19 collected** (verified 2026-07-17).
 
 | Case | Result |
 |------|--------|
