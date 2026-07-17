@@ -115,8 +115,8 @@ Legend: **PASS** = automated test green · **MANUAL** = ToS smoke · **DEFERRED*
 
 | ID | Edge case | Pass metric | Status |
 |----|-----------|-------------|--------|
-| F1 | SmartRecruiters adapter + fixture | C-class submit | DEFERRED adapter |
-| F2 | iCIMS adapter + fixture | C-class submit | DEFERRED |
+| F1 | SmartRecruiters adapter + fixture | C-class submit | **PASS** (fixture 2026-07-17) |
+| F2 | iCIMS adapter + fixture | C-class submit | **PASS** (fixture 2026-07-17) |
 | F3 | Taleo / SuccessFactors | C-class or honest generic fail | DEFERRED |
 | F4 | Live ToS smoke LI Easy Apply | manual checklist | MANUAL |
 | F5 | Durable screenshot storage (S3) | not /tmp only | DEFERRED |
@@ -136,7 +136,19 @@ Legend: **PASS** = automated test green · **MANUAL** = ToS smoke · **DEFERRED*
 | **W4** | Session preflight on batch for LI/Indeed | B-class warning in API + test |
 | **W5+** | F-tier ATS adapters one-by-one | each F* → C-class |
 
-**Stop condition:** All A–E automated metrics PASS. F* tracked openly, not pretended done.
+**Stop condition:** All A–E automated metrics PASS. F1–F2 fixture PASS. Remaining F* tracked openly, not pretended done.
+
+### Wave status (2026-07-17)
+
+| Wave | Status |
+|------|--------|
+| W0 Plan + metrics harness | DONE |
+| W1 Concurrency, board_key, extension honesty, screenshots | DONE — metrics green |
+| W2 Dashboard reconnect/retry/extension UX | DONE |
+| W3 Captcha + uncertain confirm + kill-switch | DONE |
+| W4 Batch session preflight | DONE |
+| W5 SmartRecruiters + iCIMS adapters | DONE (fixture) |
+| W6+ Taleo/SuccessFactors, S3 artifacts, live ToS | OPEN |
 
 ---
 

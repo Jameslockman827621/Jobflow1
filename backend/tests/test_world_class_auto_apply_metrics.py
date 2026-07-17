@@ -306,10 +306,12 @@ def test_D1_concurrent_running_skips_second(client):
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.email == email).first()
-        src = JobSource(name="greenhouse", base_url="https://example.com")
-        db.add(src)
-        db.commit()
-        db.refresh(src)
+        src = db.query(JobSource).filter_by(name="greenhouse").first()
+        if not src:
+            src = JobSource(name="greenhouse", base_url="https://example.com")
+            db.add(src)
+            db.commit()
+            db.refresh(src)
         job = Job(
             source_id=src.id,
             external_id=f"d1-{uuid.uuid4().hex[:8]}",
@@ -430,7 +432,41 @@ def test_E2_headless_retry_endpoint_queues(client, monkeypatch):
     assert data["queued"] >= 1
 
 
-# --- Batch session preflight ---
+# --- F1 / F2 SmartRecruiters + iCIMS ---
+
+
+def test_F1_smartrecruiters_genuine_submit(client, fixture_server):
+    headers, email = _auth(client, "f1")
+    _opt_in(client, headers)
+    url = f"{fixture_server}/ats_smartrecruiters_apply.html"
+    app_id = _start(client, headers, email, url, "smartrecruiters")
+    body = _headless(client, headers, app_id, auto_submit=True)
+    assert body.get("ok") is True, body
+    assert body.get("submitted") is True, body
+    assert body.get("ats") == "smartrecruiters" or body.get("adapter") == "smartrecruiters"
+
+
+def test_F2_icims_genuine_submit(client, fixture_server):
+    headers, email = _auth(client, "f2")
+    _opt_in(client, headers)
+    url = f"{fixture_server}/ats_icims_apply.html"
+    app_id = _start(client, headers, email, url, "icims")
+    body = _headless(client, headers, app_id, auto_submit=True)
+    assert body.get("ok") is True, body
+    assert body.get("submitted") is True, body
+    assert body.get("ats") == "icims" or body.get("adapter") == "icims"
+
+
+def test_F1b_detect_ats_smartrecruiters():
+    from app.services.apply_engine import detect_ats
+
+    assert detect_ats("https://jobs.smartrecruiters.com/Company/123") == "smartrecruiters"
+
+
+def test_F2b_detect_ats_icims():
+    from app.services.apply_engine import detect_ats
+
+    assert detect_ats("https://careers-acme.icims.com/jobs/123/job") == "icims"
 
 
 def test_W4_batch_session_preflight_warns(client, monkeypatch):

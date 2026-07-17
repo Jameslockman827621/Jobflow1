@@ -18,7 +18,9 @@ APPLY_MODES = (
     "unknown",
 )
 
-ATS_DIRECT = frozenset({"greenhouse", "lever", "ashby", "workday", "workable"})
+ATS_DIRECT = frozenset(
+    {"greenhouse", "lever", "ashby", "workday", "workable", "smartrecruiters", "icims"}
+)
 
 
 def classify_url(url: str) -> Dict[str, Any]:

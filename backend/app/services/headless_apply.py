@@ -134,6 +134,8 @@ async def run_headless_apply(
             "ashby",
             "workday",
             "workable",
+            "smartrecruiters",
+            "icims",
             "linkedin",
             "indeed",
         ):

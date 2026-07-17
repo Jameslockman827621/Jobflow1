@@ -171,6 +171,8 @@ def test_dry_run_never_submits(client, fixture_server):
         ("ats_lever_apply.html", "lever"),
         ("ats_workable_apply.html", "workable"),
         ("ats_indeed_apply.html", "indeed"),
+        ("ats_smartrecruiters_apply.html", "smartrecruiters"),
+        ("ats_icims_apply.html", "icims"),
     ],
 )
 def test_ats_fixture_genuine_submit(client, fixture_server, fixture, source):

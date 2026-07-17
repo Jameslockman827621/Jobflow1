@@ -6,6 +6,8 @@ from .lever import LeverAdapter
 from .ashby import AshbyAdapter
 from .workday import WorkdayAdapter
 from .workable import WorkableAdapter
+from .smartrecruiters import SmartRecruitersAdapter
+from .icims import IcimsAdapter
 from .linkedin import LinkedInAdapter
 from .indeed import IndeedAdapter
 from .generic import GenericAdapter
@@ -19,6 +21,8 @@ __all__ = [
     "AshbyAdapter",
     "WorkdayAdapter",
     "WorkableAdapter",
+    "SmartRecruitersAdapter",
+    "IcimsAdapter",
     "LinkedInAdapter",
     "IndeedAdapter",
     "GenericAdapter",

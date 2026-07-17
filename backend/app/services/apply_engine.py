@@ -30,6 +30,8 @@ ATS_PATTERNS = {
     "workable": [r"workable\.com", r"apply\.workable"],
     "ashby": [r"ashbyhq\.com", r"jobs\.ashbyhq"],
     "workday": [r"myworkdayjobs\.com", r"workday\.com"],
+    "smartrecruiters": [r"smartrecruiters\.com", r"jobs\.smartrecruiters"],
+    "icims": [r"icims\.com", r"careers-[a-z0-9]+\.icims"],
     "linkedin": [r"linkedin\.com/jobs"],
     "indeed": [r"indeed\.com"],
 }

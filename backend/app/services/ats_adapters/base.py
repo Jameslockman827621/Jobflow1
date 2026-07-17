@@ -202,6 +202,8 @@ def get_adapter(ats: str) -> BaseATSAdapter:
     from .ashby import AshbyAdapter
     from .workday import WorkdayAdapter
     from .workable import WorkableAdapter
+    from .smartrecruiters import SmartRecruitersAdapter
+    from .icims import IcimsAdapter
     from .linkedin import LinkedInAdapter
     from .indeed import IndeedAdapter
     from .generic import GenericAdapter
@@ -213,6 +215,8 @@ def get_adapter(ats: str) -> BaseATSAdapter:
         "ashby": AshbyAdapter,
         "workday": WorkdayAdapter,
         "workable": WorkableAdapter,
+        "smartrecruiters": SmartRecruitersAdapter,
+        "icims": IcimsAdapter,
         "linkedin": LinkedInAdapter,
         "indeed": IndeedAdapter,
         "generic": GenericAdapter,

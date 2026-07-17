@@ -31,7 +31,9 @@ class GenericAdapter(BaseATSAdapter):
                     'lever.co', 'jobs.lever',
                     'ashbyhq.com',
                     'myworkdayjobs.com',
-                    'workable.com', 'apply.workable'
+                    'workable.com', 'apply.workable',
+                    'smartrecruiters.com', 'jobs.smartrecruiters',
+                    'icims.com'
                   ];
                   for (const a of Array.from(document.querySelectorAll('a[href]'))) {
                     const h = (a.href || '').toLowerCase();
