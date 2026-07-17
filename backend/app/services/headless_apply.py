@@ -476,6 +476,14 @@ async def run_headless_apply(
             application.applied_via = "headless"
 
         meta = result.to_dict()
+        try:
+            prev_meta = json.loads(run.meta_json or "{}")
+        except Exception:
+            prev_meta = {}
+        if prev_meta.get("last_progress_at"):
+            meta["last_progress_at"] = prev_meta["last_progress_at"]
+        if prev_meta.get("last_step"):
+            meta["last_step"] = prev_meta["last_step"]
         meta["resume_local_path"] = applicant.get("resume_local_path")
         meta["board"] = board_info
         # String board key for dashboard reconnect CTAs (never a nested dict)

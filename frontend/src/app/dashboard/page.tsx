@@ -828,6 +828,11 @@ function DashboardPage() {
               <p className="text-xs font-semibold text-slate-900 uppercase tracking-wide">Board connections</p>
               <p className="text-xs text-slate-500 mt-0.5 max-w-xl">
                 Install the JobScale Chrome extension, click Connect, log in — we sync your session so Easy Apply can run for you.
+                {boardConnect?.extension_required && (
+                  <span className="block mt-1 text-amber-700">
+                    Extension required for Connect. {boardConnect.message || 'Install from the Chrome Web Store, then return here.'}
+                  </span>
+                )}
               </p>
             </div>
           </div>
