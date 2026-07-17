@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Job Application for Fixture Engineer at JobScaleTest</title>
+</head>
+<body>
+  <h1>Apply for Fixture Engineer</h1>
+  <form id="application_form" onsubmit="return handleSubmit(event)">
+    <label for="first_name">First Name*</label>
+    <input id="first_name" autocomplete="given-name" aria-label="First Name" type="text" required />
+
+    <label for="last_name">Last Name*</label>
+    <input id="last_name" autocomplete="family-name" aria-label="Last Name" type="text" required />
+
+    <label for="email">Email*</label>
+    <input id="email" autocomplete="email" aria-label="Email" type="text" required />
+
+    <label for="phone">Phone</label>
+    <input id="phone" type="tel" aria-label="Phone" />
+
+    <label for="question_linkedin">LinkedIn Profile</label>
+    <input id="question_linkedin" aria-label="LinkedIn Profile" type="text" />
+
+    <label for="question_sponsor">Will you now or in the future require sponsorship for a visa?*</label>
+    <input id="question_sponsor" aria-label="Will you now or in the future require sponsorship for a visa?*" type="text" />
+
+    <button type="submit" id="submit_app">Submit application</button>
+  </form>
+
+  <div id="confirmation" style="display:none">
+    <h2>Thank you for applying</h2>
+    <p>Your application was submitted successfully. We've received your application.</p>
+  </div>
+
+  <script>
+    function handleSubmit(e) {
+      e.preventDefault();
+      document.getElementById('application_form').style.display = 'none';
+      document.getElementById('confirmation').style.display = 'block';
+      history.pushState({}, '', location.pathname + '?submitted=true');
+      return false;
+    }
+  </script>
+</body>
+</html>

@@ -42,14 +42,20 @@ class GreenhouseScraper(BaseScraper):
                 return []
     
     async def scrape_all_jobs(self, limit: int = 100) -> List[JobData]:
-        """
-        Greenhouse doesn't have a global job search endpoint.
-        This would require a list of known company subdomains.
-        For MVP, we'll maintain a curated list or use job board aggregators.
-        """
-        # TODO: Implement with curated company list
-        print("Greenhouse: scrape_all_jobs not implemented - needs company list")
-        return []
+        """Scrape curated Greenhouse company boards until limit is reached."""
+        from app.scrapers.companies import GREENHOUSE_COMPANIES
+
+        jobs: List[JobData] = []
+        for company in GREENHOUSE_COMPANIES:
+            if len(jobs) >= limit:
+                break
+            try:
+                batch = await self.scrape_company_jobs(company)
+                jobs.extend(batch)
+            except Exception as exc:
+                print(f"Greenhouse scrape_all skip {company}: {exc}")
+                continue
+        return jobs[:limit]
     
     def _parse_job(self, job: Dict, company: str) -> JobData:
         """Parse Greenhouse job API response"""

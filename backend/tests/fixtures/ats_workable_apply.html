@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Workable Apply Fixture</title>
+</head>
+<body>
+  <h1>Apply at JobScaleTest</h1>
+  <form id="application" onsubmit="return handleSubmit(event)">
+    <label for="firstname">First Name</label>
+    <input id="firstname" name="firstname" autocomplete="given-name" type="text" required />
+
+    <label for="lastname">Last Name</label>
+    <input id="lastname" name="lastname" autocomplete="family-name" type="text" required />
+
+    <label for="email">Email</label>
+    <input id="email" name="email" type="email" required />
+
+    <label for="phone">Phone</label>
+    <input id="phone" name="phone" type="tel" />
+
+    <button type="submit" id="submit_app">Submit application</button>
+  </form>
+  <div id="confirmation" style="display:none">
+    <h2>Thank you for applying</h2>
+    <p>We've received your application.</p>
+  </div>
+  <script>
+    function handleSubmit(e) {
+      e.preventDefault();
+      document.getElementById('application').style.display = 'none';
+      document.getElementById('confirmation').style.display = 'block';
+      history.pushState({}, '', location.pathname + '?submitted=true');
+      return false;
+    }
+  </script>
+</body>
+</html>

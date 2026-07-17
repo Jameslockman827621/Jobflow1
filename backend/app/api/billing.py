@@ -20,8 +20,8 @@ router = APIRouter()
 
 class CheckoutRequest(BaseModel):
     plan: str  # "pro_monthly", "pro_yearly", "premium_monthly", "premium_yearly"
-    success_url: str = "http://localhost:3000/billing/success"
-    cancel_url: str = "http://localhost:3000/billing/cancel"
+    success_url: Optional[str] = None
+    cancel_url: Optional[str] = None
 
 
 class CheckoutResponse(BaseModel):
@@ -63,14 +63,17 @@ async def create_checkout_session(
         )
 
     stripe.api_key = settings.STRIPE_SECRET_KEY
+    app_base = settings.APP_URL.rstrip("/")
+    success_url = (request.success_url or f"{app_base}/billing/success").strip()
+    cancel_url = (request.cancel_url or f"{app_base}/billing/cancel").strip()
 
     try:
         session = stripe.checkout.Session.create(
             payment_method_types=["card"],
             line_items=[{"price": price_id, "quantity": 1}],
             mode="subscription",
-            success_url=f"{request.success_url}?session_id={{CHECKOUT_SESSION_ID}}",
-            cancel_url=request.cancel_url,
+            success_url=f"{success_url}?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=cancel_url,
             metadata={
                 "user_id": str(current_user.id),
                 "plan": request.plan,
@@ -183,6 +186,12 @@ async def stripe_webhook(request: Request):
                     if cid:
                         user.stripe_customer_id = cid
                     db.commit()
+                    try:
+                        from app.services.referral_rewards import try_fulfill_pending_referral_credits
+
+                        try_fulfill_pending_referral_credits(db, user)
+                    except Exception:
+                        pass
             finally:
                 db.close()
 
@@ -197,6 +206,65 @@ async def stripe_webhook(request: Request):
                     user.subscription_plan = "free"
                     user.subscription_status = "cancelled"
                     db.commit()
+            finally:
+                db.close()
+
+    elif event["type"] in (
+        "customer.subscription.updated",
+        "customer.subscription.created",
+    ):
+        sub = event["data"]["object"]
+        cust_id = sub.get("customer")
+        status = sub.get("status") or "active"
+        # Infer plan from price nickname / metadata / product name
+        plan = "pro"
+        items = (sub.get("items") or {}).get("data") or []
+        if items:
+            price = items[0].get("price") or {}
+            meta = price.get("metadata") or {}
+            nickname = (price.get("nickname") or meta.get("plan") or "").lower()
+            if "premium" in nickname:
+                plan = "premium"
+            elif "free" in nickname:
+                plan = "free"
+            elif "pro" in nickname:
+                plan = "pro"
+            # Match configured price IDs (check each ID independently)
+            pid = price.get("id") or ""
+            premium_ids = {
+                settings.STRIPE_PRICE_PREMIUM_MONTHLY,
+                settings.STRIPE_PRICE_PREMIUM_YEARLY,
+            } - {None, ""}
+            pro_ids = {
+                settings.STRIPE_PRICE_PRO_MONTHLY,
+                settings.STRIPE_PRICE_PRO_YEARLY,
+            } - {None, ""}
+            if pid and pid in premium_ids:
+                plan = "premium"
+            elif pid and pid in pro_ids:
+                plan = "pro"
+        if status in ("canceled", "unpaid", "incomplete_expired"):
+            plan = "free"
+        if cust_id:
+            db = SessionLocal()
+            try:
+                user = db.query(User).filter(User.stripe_customer_id == cust_id).first()
+                if user:
+                    user.subscription_plan = plan
+                    user.subscription_status = status
+                    period_end = sub.get("current_period_end")
+                    if period_end:
+                        from datetime import datetime
+
+                        user.subscription_end = datetime.utcfromtimestamp(period_end)
+                    db.commit()
+                    # Fulfill any pending referral Stripe credits now that customer exists
+                    try:
+                        from app.services.referral_rewards import try_fulfill_pending_referral_credits
+
+                        try_fulfill_pending_referral_credits(db, user)
+                    except Exception:
+                        pass
             finally:
                 db.close()
 

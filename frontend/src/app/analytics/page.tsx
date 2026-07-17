@@ -95,30 +95,42 @@ export default function AnalyticsPage() {
     );
   }
 
+  const totalApplications = overview?.total_applications ?? overview?.applications?.total_applications ?? 0;
+  const byStage: Record<string, number> = overview?.by_stage || overview?.applications?.by_stage || {};
+  const appliedCount =
+    (byStage.applied || 0) +
+    (byStage.phone_screen || 0) +
+    (byStage.technical || 0) +
+    (byStage.onsite || 0) +
+    (byStage.offer || 0) ||
+    totalApplications;
+  const phone = byStage.phone_screen || 0;
+  const technical = (byStage.technical || 0) + (byStage.onsite || 0);
+  const offer = byStage.offer || overview?.success?.offers_received || 0;
+  const pct = (n: number) => (appliedCount > 0 ? Math.round((n / appliedCount) * 100) : 0);
+
   const stats = {
-    totalApplications: overview?.total_applications ?? 15,
-    interviewRate: overview?.interview_rate ?? 20,
-    offerRate: overview?.offer_rate ?? 6.7,
-    responseRate: overview?.response_rate ?? 73,
-    profileCompleteness: overview?.profile_completeness ?? 80,
+    totalApplications,
+    interviewRate: overview?.interview_rate ?? overview?.interviews?.interview_rate ?? 0,
+    offerRate: overview?.offer_rate ?? overview?.success?.offer_rate ?? 0,
+    responseRate: overview?.response_rate ?? 0,
+    profileCompleteness: overview?.profile_completeness ?? 0,
   };
 
   const funnel = [
-    { stage: "Applied", count: 15, percentage: 100 },
-    { stage: "Phone Screen", count: 8, percentage: 53 },
-    { stage: "Technical Interview", count: 5, percentage: 33 },
-    { stage: "Offer", count: 1, percentage: 7 },
+    { stage: "Applied", count: appliedCount || totalApplications, percentage: 100 },
+    { stage: "Phone Screen", count: phone, percentage: pct(phone) },
+    { stage: "Technical Interview", count: technical, percentage: pct(technical) },
+    { stage: "Offer", count: offer, percentage: pct(offer) },
   ];
 
-  const companies = [
-    { name: "Stripe", jobs: 566, location: "Fintech -- San Francisco" },
-    { name: "Airbnb", jobs: 234, location: "Travel -- San Francisco" },
-    { name: "GitLab", jobs: 161, location: "DevTools -- Remote" },
-    { name: "Figma", jobs: 171, location: "Design -- San Francisco" },
-    { name: "Monzo", jobs: 60, location: "Fintech -- London" },
-  ];
+  const companies = (marketInsights?.top_hiring_companies || []).slice(0, 8).map((name: string) => ({
+    name,
+    jobs: null as number | null,
+    location: "",
+  }));
 
-  const skills = ["Python", "React", "AWS", "Kubernetes", "TypeScript", "Node.js", "PostgreSQL", "Docker"];
+  const skills: string[] = marketInsights?.trending_skills || [];
 
   return (
     <AppShell>
@@ -250,10 +262,13 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
-        {/* Top Companies */}
+        {/* Top Companies — real market insights only */}
         <div className="bg-white border border-slate-200 rounded-xl p-6">
           <h2 className="text-base font-semibold text-slate-900 mb-4">Top Hiring Companies</h2>
           <div className="space-y-3">
+            {companies.length === 0 && (
+              <p className="text-sm text-slate-500">No active job inventory yet — metrics appear when jobs are scraped.</p>
+            )}
             {companies.map((company, i) => (
               <div
                 key={company.name}
@@ -265,12 +280,8 @@ export default function AnalyticsPage() {
                   </div>
                   <div>
                     <div className="text-sm font-medium text-slate-900">{company.name}</div>
-                    <div className="text-xs text-slate-500">{company.location}</div>
+                    <div className="text-xs text-slate-500">{company.location || "From live job board"}</div>
                   </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-sm font-semibold text-slate-900">{company.jobs}</div>
-                  <div className="text-xs text-slate-500">open</div>
                 </div>
               </div>
             ))}
@@ -289,6 +300,9 @@ export default function AnalyticsPage() {
               Trending Skills
             </h3>
             <div className="flex flex-wrap gap-2">
+              {skills.length === 0 && (
+                <p className="text-sm text-slate-500">No skill signals yet.</p>
+              )}
               {skills.map((skill) => (
                 <span
                   key={skill}

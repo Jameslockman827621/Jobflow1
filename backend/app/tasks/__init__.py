@@ -6,7 +6,17 @@ celery_app = Celery(
     "jobscale",
     broker=settings.REDIS_URL,
     backend=settings.REDIS_URL,
-    include=["app.tasks.jobs", "app.tasks.applications", "app.tasks.notifications", "app.tasks.alerts"],
+    include=[
+        "app.tasks.jobs",
+        "app.tasks.applications",
+        "app.tasks.notifications",
+        "app.tasks.alerts",
+        "app.tasks.on_demand_search",
+        "app.tasks.monitoring",
+        "app.tasks.headless_apply_tasks",
+        "app.tasks.apify_scraper",
+        "app.tasks.deduplication",
+    ],
 )
 
 celery_app.conf.update(
@@ -17,5 +27,20 @@ celery_app.conf.update(
     enable_utc=True,
     task_track_started=True,
     task_time_limit=300,  # 5 minute max per task
+    task_soft_time_limit=240,
+    worker_prefetch_multiplier=1,
+    task_acks_late=True,
+    task_reject_on_worker_lost=True,
+    task_default_rate_limit="30/m",
     beat_schedule=beat_schedule,
+    task_routes={
+        "app.tasks.headless_apply_tasks.apply_one": {"queue": "apply"},
+        "app.tasks.headless_apply_tasks.apply_batch": {"queue": "apply"},
+        "app.tasks.headless_apply_tasks.fail_stale_apply_runs": {"queue": "celery"},
+    },
+    task_annotations={
+        "app.tasks.headless_apply_tasks.apply_one": {
+            "rate_limit": "20/m",
+        },
+    },
 )

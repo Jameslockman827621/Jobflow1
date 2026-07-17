@@ -48,9 +48,20 @@ class LeverScraper(BaseScraper):
                 return []
     
     async def scrape_all_jobs(self, limit: int = 100) -> List[JobData]:
-        """Lever doesn't have global search - needs company list"""
-        print("Lever: scrape_all_jobs not implemented - needs company list")
-        return []
+        """Scrape curated Lever company boards until limit is reached."""
+        from app.scrapers.companies import LEVER_COMPANIES
+
+        jobs: List[JobData] = []
+        for company in LEVER_COMPANIES:
+            if len(jobs) >= limit:
+                break
+            try:
+                batch = await self.scrape_company_jobs(company)
+                jobs.extend(batch)
+            except Exception as exc:
+                print(f"Lever scrape_all skip {company}: {exc}")
+                continue
+        return jobs[:limit]
     
     def _parse_lever_html(self, html: str, company: str) -> List[JobData]:
         """Parse Lever HTML response to extract job postings"""

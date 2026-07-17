@@ -1,6 +1,6 @@
 import asyncio
 from app.tasks import celery_app
-from app.scrapers import GreenhouseScraper, LeverScraper
+from app.scrapers import GreenhouseScraper, LeverScraper, WorkableScraper
 from app.database import SessionLocal
 from app.models.job import Job, JobSource
 from app.scrapers.base import JobData
@@ -187,6 +187,67 @@ def scrape_lever_companies(company_subdomains: List[str]):
         source.last_scraped = datetime.utcnow()
         db.commit()
         
+        return {"status": "completed", "total_jobs": total_jobs}
+    finally:
+        db.close()
+
+
+@celery_app.task
+def scrape_workable_companies(company_subdomains: List[str]):
+    """Scrape jobs from multiple Workable companies"""
+    scraper = WorkableScraper()
+    db = SessionLocal()
+
+    try:
+        source = db.query(JobSource).filter_by(name="workable").first()
+        if not source:
+            source = JobSource(name="workable", base_url=scraper.base_url)
+            db.add(source)
+            db.commit()
+
+        total_jobs = 0
+        for subdomain in company_subdomains:
+            try:
+                jobs = _run_async(scraper.scrape_company_jobs(subdomain))
+                total_jobs += len(jobs)
+                print(f"  {subdomain}: {len(jobs)} jobs")
+
+                saved = 0
+                skipped = 0
+                for job_data in jobs:
+                    is_dup, _reason = _check_duplicate(db, source.id, job_data)
+                    if is_dup:
+                        skipped += 1
+                        continue
+                    job = Job(
+                        source_id=source.id,
+                        external_id=job_data.external_id,
+                        external_url=job_data.external_url,
+                        title=job_data.title,
+                        company=job_data.company,
+                        location=job_data.location,
+                        remote=job_data.remote,
+                        hybrid=job_data.hybrid,
+                        description=job_data.description,
+                        department=job_data.department,
+                        seniority=job_data.seniority,
+                        min_salary=job_data.min_salary,
+                        max_salary=job_data.max_salary,
+                        scraped_at=datetime.utcnow(),
+                        posted_date=job_data.posted_date,
+                    )
+                    db.merge(job)
+                    saved += 1
+
+                db.commit()
+                print(f"    Saved: {saved}, Skipped (duplicates): {skipped}")
+            except Exception as e:
+                print(f"Error scraping {subdomain}: {e}")
+                continue
+
+        source.last_scraped = datetime.utcnow()
+        db.commit()
+
         return {"status": "completed", "total_jobs": total_jobs}
     finally:
         db.close()

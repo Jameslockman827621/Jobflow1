@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Indeed Apply Fixture — Backend Engineer</title>
+</head>
+<body>
+  <h1>Backend Engineer</h1>
+  <button id="jobscale-indeed-apply" onclick="showForm()">Indeed Apply</button>
+
+  <form id="indeed-form" style="display:none" onsubmit="return submitIndeed(event)">
+    <label>Name</label>
+    <input id="jobscale-indeed-name" name="name" autocomplete="name" />
+    <label>Email</label>
+    <input id="jobscale-indeed-email" type="email" name="email" />
+    <label>Phone</label>
+    <input id="jobscale-indeed-phone" type="tel" name="phone" />
+    <button type="submit" id="jobscale-indeed-submit">Submit your application</button>
+  </form>
+
+  <div id="confirmation" style="display:none">
+    <h2>Your application has been submitted</h2>
+    <p>Application submitted successfully.</p>
+  </div>
+
+  <script>
+    function showForm() {
+      document.getElementById('indeed-form').style.display = 'block';
+    }
+    function submitIndeed(e) {
+      e.preventDefault();
+      document.getElementById('indeed-form').style.display = 'none';
+      document.getElementById('confirmation').style.display = 'block';
+      history.pushState({}, '', location.pathname + '?submitted=true');
+      return false;
+    }
+  </script>
+</body>
+</html>

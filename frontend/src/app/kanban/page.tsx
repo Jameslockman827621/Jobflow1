@@ -10,12 +10,53 @@ interface Application {
   job_id: number;
   status: string;
   stage: string;
+  apply_run?: {
+    id: number;
+    status: string;
+    mode?: string;
+    error?: string | null;
+    meta?: {
+      blocked_reason?: string;
+      connect_hint?: string;
+      board?: string;
+    } | null;
+  } | null;
   job?: {
     title: string;
     company: string;
     location: string;
     external_url?: string;
   } | null;
+}
+
+function applyRunBadge(run?: Application['apply_run']) {
+  if (!run?.status) return null;
+  const status = run.status;
+  const loginRequired =
+    run.meta?.blocked_reason === 'login_required' || !!run.meta?.connect_hint;
+  let label = status;
+  let className = 'bg-slate-100 text-slate-600';
+  if (status === 'submitted') {
+    label = 'Submitted';
+    className = 'bg-emerald-50 text-emerald-700';
+  } else if (status === 'filled') {
+    label = 'Filled';
+    className = 'bg-sky-50 text-sky-700';
+  } else if (status === 'needs_user' || loginRequired) {
+    label = loginRequired ? 'Reconnect' : 'Needs you';
+    className = 'bg-amber-50 text-amber-800';
+  } else if (status === 'failed' || status === 'stale') {
+    label = status === 'stale' ? 'Stale' : 'Failed';
+    className = 'bg-red-50 text-red-700';
+  } else if (status === 'queued' || status === 'running') {
+    label = status === 'running' ? 'Running' : 'Queued';
+    className = 'bg-slate-100 text-slate-600';
+  }
+  return (
+    <span className={`inline-flex mt-2 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${className}`}>
+      {label}
+    </span>
+  );
 }
 
 function ClipboardIcon({ className }: { className?: string }) {
@@ -136,6 +177,21 @@ export default function KanbanPage() {
     }
   }
 
+  async function moveStage(appId: number, stage: string) {
+    const prev = applications;
+    setApplications((apps) =>
+      apps.map((a) => (a.id === appId ? { ...a, stage, status: stage === 'applied' ? 'submitted' : a.status } : a))
+    );
+    const res = await authFetch(`/api/v1/applications/${appId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stage }),
+    });
+    if (!res.ok) {
+      setApplications(prev);
+    }
+  }
+
   if (authLoading || loading) {
     return (
       <AppShell>
@@ -209,18 +265,51 @@ export default function KanbanPage() {
                   </span>
                 </div>
 
-                <div className="space-y-2">
+                <div
+                  className="space-y-2 min-h-[80px]"
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const appId = Number(e.dataTransfer.getData('text/app-id'));
+                    if (!appId) return;
+                    const targetStage = stage.id === 'wishlist' ? 'not_started' : stage.id;
+                    moveStage(appId, targetStage);
+                  }}
+                >
                   {stageApps.map((app) => (
                     <div
                       key={app.id}
-                      className="bg-white rounded-lg p-3.5 shadow-sm hover:shadow-md transition-shadow cursor-pointer border border-slate-100"
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData('text/app-id', String(app.id));
+                        e.dataTransfer.effectAllowed = 'move';
+                      }}
+                      className="bg-white rounded-lg p-3.5 shadow-sm hover:shadow-md transition-shadow border border-slate-100 cursor-grab active:cursor-grabbing"
                     >
                       <h3 className="font-semibold text-slate-900 text-sm leading-snug">{app.job?.title || 'Untitled'}</h3>
                       <p className="text-sm text-slate-500 mt-1">{app.job?.company || 'Unknown'}</p>
+                      {applyRunBadge(app.apply_run)}
                       <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
                         <LocationIcon className="w-3 h-3" />
                         <span>{app.job?.location || ''}</span>
                       </p>
+                      <label className="block mt-2 text-[10px] uppercase tracking-wide text-slate-400">
+                        Move to
+                        <select
+                          className="mt-0.5 w-full text-xs rounded border border-slate-200 bg-white px-2 py-1 text-slate-700"
+                          value={app.stage || 'not_started'}
+                          onChange={(e) => moveStage(app.id, e.target.value)}
+                        >
+                          {STAGES.map((s) => (
+                            <option key={s.id} value={s.id === 'wishlist' ? 'not_started' : s.id}>
+                              {s.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
                     </div>
                   ))}
 
@@ -272,14 +361,29 @@ export default function KanbanPage() {
                 {stageApps.map((app) => (
                   <div
                     key={app.id}
-                    className="p-4 hover:bg-slate-50 transition-colors cursor-pointer"
+                    className="p-4 hover:bg-slate-50 transition-colors"
                   >
                     <h3 className="font-semibold text-slate-900 text-base">{app.job?.title || 'Untitled'}</h3>
                     <p className="text-sm text-slate-500 mt-1">{app.job?.company || 'Unknown'}</p>
+                    {applyRunBadge(app.apply_run)}
                     <div className="mt-2 flex items-center text-xs text-slate-400 gap-1">
                       <LocationIcon className="w-3 h-3" />
                       <span>{app.job?.location || ''}</span>
                     </div>
+                    <label className="block mt-3 text-[10px] uppercase tracking-wide text-slate-400">
+                      Move to
+                      <select
+                        className="mt-0.5 w-full text-xs rounded border border-slate-200 bg-white px-2 py-1.5 text-slate-700"
+                        value={app.stage || 'not_started'}
+                        onChange={(e) => moveStage(app.id, e.target.value)}
+                      >
+                        {STAGES.map((s) => (
+                          <option key={s.id} value={s.id === 'wishlist' ? 'not_started' : s.id}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                   </div>
                 ))}
               </div>
