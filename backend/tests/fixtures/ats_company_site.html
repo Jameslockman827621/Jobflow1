@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Careers — Acme Corp</title>
+</head>
+<body>
+  <h1>Join Acme</h1>
+  <p>Apply below or via our ATS partner.</p>
+  <a id="jobscale-ats-handoff" data-jobscale-handoff href="HANDOFF_URL">Apply via Greenhouse</a>
+
+  <form id="company-form" onsubmit="return coSubmit(event)" style="margin-top:24px">
+    <h2>Or apply directly</h2>
+    <label>First name</label>
+    <input id="jobscale-co-first" autocomplete="given-name" required />
+    <label>Last name</label>
+    <input id="jobscale-co-last" autocomplete="family-name" required />
+    <label>Email</label>
+    <input id="jobscale-co-email" type="email" required />
+    <button type="submit" id="submit_app">Submit application</button>
+  </form>
+  <div id="confirmation" style="display:none">
+    <h2>Thank you for applying</h2>
+    <p>We've received your application.</p>
+  </div>
+  <script>
+    function coSubmit(e) {
+      e.preventDefault();
+      document.getElementById('company-form').style.display = 'none';
+      document.getElementById('confirmation').style.display = 'block';
+      history.pushState({}, '', location.pathname + '?submitted=true');
+      return false;
+    }
+  </script>
+</body>
+</html>

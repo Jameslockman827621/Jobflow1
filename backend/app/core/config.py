@@ -21,6 +21,13 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "change-me-in-production-please"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    EXTENSION_TOKEN_EXPIRE_DAYS: int = 30
+    # Comma-separated emails that may trigger scrapes / admin ops
+    ADMIN_EMAILS: Union[str, List[str]] = ""
+
+    # Rate limiting (requests per window per IP; 0 disables)
+    RATE_LIMIT_PER_MINUTE: int = 120
+    RATE_LIMIT_AUTH_PER_MINUTE: int = 30
     
     # AI/LLM
     OPENAI_API_KEY: Optional[str] = None
@@ -30,6 +37,26 @@ class Settings(BaseSettings):
     PROXY_POOL: Optional[List[str]] = None
     REQUEST_DELAY_MS: int = 1000
     APIFY_API_KEY: Optional[str] = None
+
+    # CAPTCHA (2Captcha)
+    TWOCAPTCHA_API_KEY: Optional[str] = None
+    CAPTCHA_MOCK: bool = False  # or set TWOCAPTCHA_API_KEY=mock for test tokens
+
+    # Headless apply
+    HEADLESS_APPLY_ENABLED: bool = True
+    # Platform kill-switch for genuine submits (user must ALSO opt in via auto_apply_submit)
+    HEADLESS_APPLY_AUTO_SUBMIT: bool = True
+    # Allow tests/CI to hit local fixture pages
+    ALLOW_FIXTURE_SUBMIT: bool = True
+
+    # Messaging bots
+    TWILIO_ACCOUNT_SID: Optional[str] = None
+    TWILIO_AUTH_TOKEN: Optional[str] = None
+    TWILIO_WHATSAPP_FROM: Optional[str] = None  # e.g. whatsapp:+14155238886
+    IMESSAGE_BRIDGE_URL: Optional[str] = None  # BlueBubbles / custom Mac bridge
+
+    # Generic inbound webhook HMAC (messaging / partner hooks)
+    WEBHOOK_SECRET: Optional[str] = None
     
     # Email
     SMTP_HOST: str = "smtp.gmail.com"
@@ -38,7 +65,7 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: Optional[str] = None
     FROM_EMAIL: str = "noreply@jobscale.local"
     SENDGRID_API_KEY: Optional[str] = None
-    
+
     # Stripe (set price IDs from Stripe Dashboard → Products → Price API IDs)
     STRIPE_SECRET_KEY: Optional[str] = None
     STRIPE_WEBHOOK_SECRET: Optional[str] = None
@@ -53,12 +80,28 @@ class Settings(BaseSettings):
     # CORS — comma-separated origins in env, e.g. "https://app.example.com,http://localhost:3000"
     CORS_ORIGINS: Union[str, List[str]] = "http://localhost:3000"
 
-    # When no scrapers return jobs, seed curated demo rows once (disable in real production)
+    # Optional observability
+    SENTRY_DSN: Optional[str] = None
+    # OpenTelemetry OTLP HTTP endpoint, e.g. http://localhost:4318 (empty = disabled)
+    OTEL_EXPORTER_OTLP_ENDPOINT: Optional[str] = None
+    OTEL_SERVICE_NAME: str = "jobscale-api"
+
+    # Google OAuth (optional — endpoints return 503 when unset)
+    GOOGLE_CLIENT_ID: Optional[str] = None
+    GOOGLE_CLIENT_SECRET: Optional[str] = None
+    GOOGLE_REDIRECT_URI: Optional[str] = None  # defaults to {API}/auth/google/callback
+
+    # When no scrapers return jobs, seed curated demo rows once (never in production)
     AUTO_SEED_DEMO_JOBS: bool = True
-    
+
     class Config:
         env_file = ".env"
         case_sensitive = True
+
+    def model_post_init(self, __context) -> None:
+        # Pydantic v2 hook — force-disable demo seed in production
+        if str(self.ENVIRONMENT).lower() == "production":
+            object.__setattr__(self, "AUTO_SEED_DEMO_JOBS", False)
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
@@ -72,10 +115,29 @@ class Settings(BaseSettings):
             return parts if parts else ["http://localhost:3000"]
         return v
 
+    @field_validator("PROXY_POOL", mode="before")
+    @classmethod
+    def parse_proxy_pool(cls, v):
+        if v is None or v == "":
+            return None
+        if isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            parts = [s.strip() for s in v.split(",") if s.strip()]
+            return parts or None
+        return v
+
     def cors_origins(self) -> List[str]:
         if isinstance(self.CORS_ORIGINS, list):
             return self.CORS_ORIGINS
         return [self.CORS_ORIGINS]
+
+    def admin_emails(self) -> List[str]:
+        if isinstance(self.ADMIN_EMAILS, list):
+            return [e.lower().strip() for e in self.ADMIN_EMAILS if e]
+        if isinstance(self.ADMIN_EMAILS, str):
+            return [e.lower().strip() for e in self.ADMIN_EMAILS.split(",") if e.strip()]
+        return []
 
     def stripe_checkout_price_ids(self) -> dict:
         m = {}
@@ -96,6 +158,19 @@ class Settings(BaseSettings):
         if weak:
             raise RuntimeError(
                 "ENVIRONMENT=production requires a strong SECRET_KEY (32+ chars, not the default)."
+            )
+        # Never ship with DEBUG console email short-circuit
+        object.__setattr__(self, "DEBUG", False)
+        origins = self.cors_origins()
+        if not origins:
+            raise RuntimeError("ENVIRONMENT=production requires CORS_ORIGINS to be set.")
+        if any(o.strip() == "*" for o in origins):
+            raise RuntimeError("ENVIRONMENT=production forbids CORS_ORIGINS=*")
+        # Prefer explicit HTTPS app origins (allow localhost only if explicitly listed for staged prod)
+        https_origins = [o for o in origins if o.startswith("https://")]
+        if not https_origins:
+            raise RuntimeError(
+                "ENVIRONMENT=production requires at least one https:// origin in CORS_ORIGINS."
             )
 
 

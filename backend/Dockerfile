@@ -2,15 +2,19 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install system deps
+# Install system deps (build + common libs; Playwright adds Chromium deps below)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python deps
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Install Playwright Chromium + OS dependencies for headless apply
+RUN playwright install --with-deps chromium
 
 # Copy app
 COPY . .

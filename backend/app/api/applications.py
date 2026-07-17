@@ -1,6 +1,8 @@
 """
 Application Tracking API Routes
 """
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -9,6 +11,7 @@ from pydantic import BaseModel
 
 from app.database import get_db
 from app.models.application import Application
+from app.models.company import ApplyRun
 from app.models.job import Job
 from app.models.cv import CV
 from app.models.user import User
@@ -22,19 +25,55 @@ class StartApplicationRequest(BaseModel):
     job_id: int
 
 
+def _latest_apply_runs(db: Session, user_id: int, application_ids: List[int]) -> dict:
+    """Map application_id → latest ApplyRun summary."""
+    if not application_ids:
+        return {}
+    runs = (
+        db.query(ApplyRun)
+        .filter(
+            ApplyRun.user_id == user_id,
+            ApplyRun.application_id.in_(application_ids),
+        )
+        .order_by(ApplyRun.created_at.desc())
+        .all()
+    )
+    out = {}
+    for run in runs:
+        aid = run.application_id
+        if aid is None or aid in out:
+            continue
+        meta = None
+        if run.meta_json:
+            try:
+                meta = json.loads(run.meta_json)
+            except Exception:
+                meta = None
+        out[aid] = {
+            "id": run.id,
+            "status": run.status,
+            "mode": run.mode,
+            "error": run.error,
+            "meta": meta,
+            "created_at": run.created_at.isoformat() if run.created_at else None,
+        }
+    return out
+
+
 @router.get("")
 async def get_applications(
     status: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get all applications for current user"""
+    """Get all applications for current user (includes latest apply-run badge)."""
     query = db.query(Application).filter(Application.user_id == current_user.id)
     
     if status:
         query = query.filter(Application.status == status)
     
     applications = query.order_by(Application.created_at.desc()).all()
+    run_map = _latest_apply_runs(db, current_user.id, [a.id for a in applications])
 
     result = []
     for app in applications:
@@ -52,6 +91,7 @@ async def get_applications(
             "interview_count": app.interview_count,
             "outcome": app.outcome,
             "confidence_score": app.confidence_score,
+            "apply_run": run_map.get(app.id),
             "job": {
                 "title": job.title if job else "Unknown",
                 "company": job.company if job else "Unknown",
@@ -257,10 +297,20 @@ async def update_application(
 @router.post("/{application_id}/submit")
 async def submit_application(
     application_id: int,
+    manual: bool = Query(
+        False,
+        description="Set true only to record that YOU applied externally. "
+        "JobScale does not contact the employer on this path.",
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Mark application as submitted"""
+    """
+    Honest submit endpoint.
+
+    - Default: refuses status-only “fake apply”. Use POST /apply-engine/headless for genuine submit.
+    - manual=true: records that the user applied outside JobScale (tracker only).
+    """
     application = db.query(Application).filter(
         Application.id == application_id,
         Application.user_id == current_user.id
@@ -268,23 +318,38 @@ async def submit_application(
     
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
+
+    if not manual:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "genuine_submit_required",
+                "message": (
+                    "This endpoint does not apply to the employer. "
+                    "Queue a real apply via POST /api/v1/apply-engine/headless "
+                    "(with Connect session for LinkedIn/Indeed), "
+                    "or pass ?manual=true to record an external self-apply."
+                ),
+                "apply_engine": "/api/v1/apply-engine/headless",
+            },
+        )
     
     application.status = "submitted"
     application.stage = "applied"
     application.submitted_at = datetime.utcnow()
+    application.applied_via = "manual"
     
     db.commit()
     try:
-        job = db.query(Job).filter(Job.id == application.job_id).first()
-        if job:
-            send_application_confirmation_task.delay(application.id)
+        send_application_confirmation_task.delay(application.id)
     except Exception:
-        pass  # Don't fail submission if email fails
+        pass
     db.refresh(application)
     
     return {
-        "message": "Application marked as submitted",
-        "application": application
+        "message": "Recorded as manually submitted (external). JobScale did not apply for you.",
+        "manual": True,
+        "application": application,
     }
 
 

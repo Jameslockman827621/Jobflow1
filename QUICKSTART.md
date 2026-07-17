@@ -42,10 +42,9 @@ pip install -r requirements.txt
 # Copy environment file
 cp .env.example .env
 
-# Initialize database
-cd scripts
-python init_db.py
-cd ..
+# Initialize database (Alembic — creates core tables on empty Postgres)
+alembic upgrade head
+# equivalent: python -c "from app.database import init_db; init_db()"
 
 # Start backend
 uvicorn app.main:app --reload
@@ -53,13 +52,24 @@ uvicorn app.main:app --reload
 
 Backend API: http://localhost:8000
 
-### 3. Start Celery Worker (optional, for background jobs)
+### 3. Start Celery Worker + Beat (required for genuine headless apply)
 
 ```bash
 cd backend
 source venv/bin/activate
-celery -A app.tasks.celery_app worker --loglevel=info
+# Dedicated apply queue — keep concurrency=1 for Playwright stability
+celery -A app.tasks.celery_app worker -Q apply,celery --concurrency=1 --loglevel=info
+# Separate terminal: stale ApplyRun sweeper + scheduled jobs
+celery -A app.tasks.celery_app beat --loglevel=info
 ```
+
+Readiness (DB / Redis / Celery / Playwright package):
+
+```bash
+curl -s http://localhost:8000/api/v1/health/ready | python -m json.tool
+```
+
+> `ENVIRONMENT=production` disables demo job seeding. Extension Options must point at your HTTPS API/dashboard.
 
 ### 4. Frontend Setup
 
@@ -109,6 +119,60 @@ LLM_MODEL=gpt-4-turbo-preview
 ```
 
 This enables AI-powered CV tailoring and cover letter generation.
+
+## Apply engine (headless + monitoring)
+
+Server-side apply uses Playwright + Celery. Extension still fills forms in-browser; the dashboard can optionally queue headless runs.
+
+### Playwright (local)
+
+```bash
+cd backend
+source venv/bin/activate
+pip install -r requirements.txt
+playwright install --with-deps chromium
+```
+
+Docker images already run `playwright install --with-deps chromium` (see `backend/Dockerfile`).
+
+### Celery worker + beat
+
+Beat drives hot/warm/cold company monitoring and other schedules. Run both in separate terminals:
+
+```bash
+cd backend
+source venv/bin/activate
+celery -A app.tasks.celery_app worker --loglevel=info
+celery -A app.tasks.celery_app beat --loglevel=info
+```
+
+### Env vars (apply / messaging)
+
+See `backend/.env.example`. Key knobs:
+
+```
+TWOCAPTCHA_API_KEY=
+CAPTCHA_MOCK=false
+PROXY_POOL=
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_WHATSAPP_FROM=
+IMESSAGE_BRIDGE_URL=
+HEADLESS_APPLY_ENABLED=true
+HEADLESS_APPLY_AUTO_SUBMIT=false
+WEBHOOK_SECRET=
+```
+
+Readiness: `GET /api/v1/health/ready` reports DB, Redis (degraded if down), captcha, proxy pool, messaging, and headless flag.
+
+### Scale smoke (optional)
+
+With API up and DB reachable:
+
+```bash
+cd backend
+python scripts/scale_apply_smoke.py --users 5 --jobs 20
+```
 
 ## Next Steps
 

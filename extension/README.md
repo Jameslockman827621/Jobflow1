@@ -1,54 +1,42 @@
 # JobScale Chrome Extension
 
-Select jobs in the extension → Click Apply → Extension opens all job URLs and starts applications for you.
-
-## How It Works
-
-1. **Open extension** – Click the JobScale icon in your toolbar
-2. **Select jobs** – Check the boxes next to jobs you want to apply to (from your dashboard search)
-3. **Click Apply** – Extension opens each job URL in a new tab and starts the application. No need to visit each page manually.
+Select jobs in the extension → Apply → opens job URLs and auto-fills applications using your JobScale profile.
 
 ## Installation (Development)
 
-1. Open Chrome and go to `chrome://extensions/`
-2. Enable "Developer mode" (toggle in top right)
-3. Click "Load unpacked"
-4. Select this `extension/` folder
-5. Extension icon should appear in toolbar
+1. Open Chrome → `chrome://extensions/`
+2. Enable **Developer mode**
+3. **Load unpacked** → select this `extension/` folder
 
-## Setup
+## Setup (local or production)
 
-1. **Login** – Sign in at http://localhost:3000/login
-2. **Sync token** – Visit your dashboard at http://localhost:3000/dashboard (extension syncs your auth token)
-3. **Run a search** – On the dashboard, run a job search so jobs appear
-4. **Select & Apply** – In the extension popup, check jobs and click "Apply to Selected Jobs"
+1. Open the extension **Options** page (right-click icon → Options).
+2. Set:
+   - **API base** — e.g. `http://localhost:8000/api/v1` or `https://api.yourdomain.com/api/v1`
+   - **Dashboard URL** — e.g. `http://localhost:3000` or `https://app.yourdomain.com`
+3. Sign in on the dashboard. Visiting the dashboard syncs your auth token into the extension (or use **Get extension token** from the app if offered).
+4. Run a job search on the dashboard so jobs appear in the popup.
+5. **Connect boards** (LinkedIn / Indeed) from the dashboard when using Easy Apply — the extension syncs session cookies via `board-sessions/.../from-cookies`.
+
+Popup, background, content script, and form-filler all read `api_base` / `dashboard_url` from `chrome.storage` (defaults are localhost for local dev only).
 
 ## Features
 
-- ✨ Select jobs in extension, click Apply → opens all URLs automatically
-- 📋 No need to visit each job page – extension does it for you
-- 🤖 AI tailors CV and cover letter
-- 📊 Track all applications in dashboard
-
-## Building for Production
-
-```bash
-# Install dependencies (if any)
-npm install
-
-# Build (if using TypeScript/React)
-npm run build
-
-# Load packed extension or publish to Chrome Web Store
-```
+- Select jobs → Apply opens each URL and starts fill/submit flows
+- Form filler for Greenhouse / Lever / Ashby / Workday / LinkedIn / Indeed patterns
+- Connect LinkedIn & Indeed for headless Easy Apply sessions
+- Long-lived extension JWT (`POST /auth/extension-token`) for background sync
+- Icons: real 16 / 48 / 128 PNGs under `icons/`
 
 ## Permissions
 
-- `activeTab` - Detect job postings on current page
-- `storage` - Save login token and preferences
-- `tabs` - Open dashboard
-- `contextMenus` - Right-click "Apply with JobScale" option
+- `storage` — token, API/dashboard bases, pending application id
+- `tabs` / `cookies` — Connect boards + open dashboard
+- `host_permissions` — localhost (dev) plus production HTTPS app/API hosts in `manifest.json`
+- `contextMenus` — Connect LinkedIn / Indeed shortcuts
 
-## Icons
+## Production notes
 
-Replace placeholder icons in `icons/` folder with actual JobScale branding.
+- Configure Options **before** expecting Connect or autofill to hit your API.
+- Pack/publish this folder as-is (Manifest V3; no separate `npm run build` step for this tree).
+- See `CONNECT-BOARDS-E2E.md` in the repo root for the Connect → Easy Apply path.

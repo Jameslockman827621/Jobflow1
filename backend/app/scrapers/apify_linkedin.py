@@ -244,26 +244,64 @@ class ApifyLinkedInScraper(BaseScraper):
         
         return None
     
-    async def scrape_company_jobs(self, company_subdomain: str) -> List[JobData]:
+    async def scrape_company_jobs(
+        self,
+        company_subdomain: str,
+        max_jobs: int = 50,
+        location: str = "United States",
+    ) -> List[JobData]:
         """
-        Not implemented for LinkedIn - use search_jobs() instead
-        
-        LinkedIn doesn't support company-based scraping via URL pattern.
-        Use search_jobs with company name as keyword instead.
+        Scrape LinkedIn jobs for a company via Apify search.
+
+        LinkedIn has no stable company-URL scrape in this actor; we search with
+        the company name as the keyword filter (same path as ``search_jobs``).
         """
-        raise NotImplementedError(
-            "Use search_jobs(keywords='Software Engineer at {company}') for LinkedIn"
+        company = (company_subdomain or "").strip()
+        if not company:
+            return []
+        return await self.search_jobs(
+            keywords=f"jobs at {company}",
+            location=location,
+            max_jobs=max_jobs,
         )
-    
-    async def scrape_all_jobs(self, limit: int = 100) -> List[JobData]:
+
+    async def scrape_all_jobs(
+        self,
+        limit: int = 100,
+        location: str = "United States",
+        companies: Optional[List[str]] = None,
+    ) -> List[JobData]:
         """
-        Not implemented for LinkedIn - use search_jobs() with specific keywords
-        
-        LinkedIn requires specific search terms.
+        Scrape LinkedIn for a curated company list via sequential Apify searches.
+
+        Requires ``APIFY_API_KEY``. Pass ``companies`` or uses a short seed list.
         """
-        raise NotImplementedError(
-            "Use search_jobs() with specific keywords for LinkedIn"
-        )
+        seed = companies or [
+            "Google",
+            "Microsoft",
+            "Amazon",
+            "Meta",
+            "Apple",
+            "Netflix",
+            "Stripe",
+            "Airbnb",
+        ]
+        per_company = max(1, limit // max(len(seed), 1))
+        all_jobs: List[JobData] = []
+        for company in seed:
+            try:
+                jobs = await self.scrape_company_jobs(
+                    company_subdomain=company,
+                    max_jobs=per_company,
+                    location=location,
+                )
+                all_jobs.extend(jobs)
+                if len(all_jobs) >= limit:
+                    return all_jobs[:limit]
+            except Exception as e:
+                print(f"Apify LinkedIn scrape failed for {company}: {e}")
+                continue
+        return all_jobs[:limit]
     
     async def search_multiple(
         self,

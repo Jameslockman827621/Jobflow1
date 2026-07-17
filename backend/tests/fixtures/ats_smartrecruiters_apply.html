@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>SmartRecruiters Apply Fixture</title>
+</head>
+<body>
+  <h1>Apply via SmartRecruiters</h1>
+  <form id="sr-application" onsubmit="return handleSubmit(event)">
+    <label for="jobscale-sr-first">First Name</label>
+    <input id="jobscale-sr-first" name="firstName" autocomplete="given-name" required />
+    <label for="jobscale-sr-last">Last Name</label>
+    <input id="jobscale-sr-last" name="lastName" autocomplete="family-name" required />
+    <label for="jobscale-sr-email">Email</label>
+    <input id="jobscale-sr-email" name="email" type="email" required />
+    <label for="jobscale-sr-phone">Phone</label>
+    <input id="jobscale-sr-phone" name="phoneNumber" type="tel" />
+    <button type="submit" id="submit_app">Submit application</button>
+  </form>
+  <div id="confirmation" style="display:none">
+    <h2>Thank you for applying</h2>
+    <p>We've received your application.</p>
+  </div>
+  <script>
+    function handleSubmit(e) {
+      e.preventDefault();
+      document.getElementById('sr-application').style.display = 'none';
+      document.getElementById('confirmation').style.display = 'block';
+      history.pushState({}, '', location.pathname + '?submitted=true');
+      return false;
+    }
+  </script>
+</body>
+</html>

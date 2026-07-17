@@ -1,9 +1,6 @@
 // JobScale Extension Popup
 // User selects jobs in extension → clicks Apply → extension opens each URL and starts application
 
-const DASHBOARD_URL = 'http://localhost:3000';
-const API_BASE = `${DASHBOARD_URL}/api/v1`;
-
 document.addEventListener('DOMContentLoaded', async () => {
   const loadingEl = document.getElementById('loading');
   const loggedOutEl = document.getElementById('logged-out');
@@ -18,12 +15,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   const statInterviews = document.getElementById('stat-interviews');
   const statOffers = document.getElementById('stat-offers');
 
+  const stored = await chrome.storage.local.get(['jobscale_token', 'api_base', 'dashboard_url']);
+  const API_BASE = (stored.api_base || 'http://localhost:8000/api/v1').replace(/\/$/, '');
+  const DASHBOARD_URL = (stored.dashboard_url || 'http://localhost:3000').replace(/\/$/, '');
+
   loadingEl.style.display = 'flex';
   loggedOutEl.classList.add('hidden');
   loggedInEl.classList.add('hidden');
 
-  const { jobscale_token } = await chrome.storage.local.get('jobscale_token');
-  const token = jobscale_token;
+  const token = stored.jobscale_token;
 
   if (!token) {
     loadingEl.style.display = 'none';
@@ -52,6 +52,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       loadingEl.style.display = 'none';
       loggedInEl.classList.remove('hidden');
 
+      await refreshConnectStatus();
       await loadJobs();
     } catch (error) {
       console.error('Error:', error);
@@ -157,6 +158,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (startRes.ok) {
           const data = await startRes.json();
           if (data.job_url) {
+            await chrome.storage.local.set({
+              pending_application_id: data.application_id || data.id,
+              auto_fill_on_open: true,
+            });
             chrome.tabs.create({ url: data.job_url });
           }
         }
@@ -179,6 +184,51 @@ document.addEventListener('DOMContentLoaded', async () => {
   dashboardBtn.addEventListener('click', () => {
     chrome.tabs.create({ url: `${DASHBOARD_URL}/dashboard` });
   });
+
+  async function refreshConnectStatus() {
+    const el = document.getElementById('connect-status');
+    if (!el) return;
+    chrome.runtime.sendMessage({ action: 'getConnectStatus' }, (resp) => {
+      if (!resp || !resp.ok) {
+        el.textContent = 'Boards: sign in to sync status';
+        return;
+      }
+      const li = resp.boards && resp.boards.linkedin;
+      const ind = resp.boards && resp.boards.indeed;
+      el.textContent =
+        `LinkedIn: ${li && li.connected ? '✓ connected' : 'not connected'} · `
+        + `Indeed: ${ind && ind.connected ? '✓ connected' : 'not connected'}`;
+      const liBtn = document.getElementById('connect-linkedin-btn');
+      const indBtn = document.getElementById('connect-indeed-btn');
+      if (liBtn) liBtn.textContent = li && li.connected ? 'Reconnect LinkedIn' : 'Connect LinkedIn';
+      if (indBtn) indBtn.textContent = ind && ind.connected ? 'Reconnect Indeed' : 'Connect Indeed';
+    });
+  }
+
+  const connectLi = document.getElementById('connect-linkedin-btn');
+  const connectInd = document.getElementById('connect-indeed-btn');
+  if (connectLi) {
+    connectLi.addEventListener('click', () => {
+      connectLi.disabled = true;
+      connectLi.textContent = 'Connecting…';
+      chrome.runtime.sendMessage({ action: 'connectBoard', board: 'linkedin' }, (resp) => {
+        connectLi.disabled = false;
+        alert(resp && resp.ok ? 'LinkedIn connected for Easy Apply.' : (resp && resp.error) || 'Connect failed — log into LinkedIn then try again.');
+        refreshConnectStatus();
+      });
+    });
+  }
+  if (connectInd) {
+    connectInd.addEventListener('click', () => {
+      connectInd.disabled = true;
+      connectInd.textContent = 'Connecting…';
+      chrome.runtime.sendMessage({ action: 'connectBoard', board: 'indeed' }, (resp) => {
+        connectInd.disabled = false;
+        alert(resp && resp.ok ? 'Indeed connected for Easy Apply.' : (resp && resp.error) || 'Connect failed — log into Indeed then try again.');
+        refreshConnectStatus();
+      });
+    });
+  }
 });
 
 function escapeHtml(str) {

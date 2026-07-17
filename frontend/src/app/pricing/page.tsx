@@ -30,8 +30,8 @@ const PLANS: {
     period: 'forever',
     description: 'For getting started with your job search',
     features: [
-      '5 applications per month',
-      'Basic CV tailoring',
+      '5 applications per month (5/day cap)',
+      'Basic CV tailoring (requires OpenAI on server)',
       'Job matching',
       'Application tracking',
       'Email support',
@@ -47,11 +47,11 @@ const PLANS: {
     period: 'per month',
     description: 'For active job seekers',
     features: [
-      'Unlimited applications',
+      '500 applications per month (100/day)',
       'Priority processing',
       'Advanced matching (80%+ only)',
       'Interview prep questions',
-      'Cover letter generation',
+      'Cover letter generation (requires OpenAI on server)',
       'Daily job alerts',
       'Application analytics',
       'Priority support',
@@ -67,22 +67,18 @@ const PLANS: {
     price: 79,
     yearlyPrice: 63,
     period: 'per month',
-    description: 'Full-service job search support',
+    description: 'Higher apply volume + coaching tools',
     features: [
       'Everything in Pro',
-      'Interview coaching',
-      'Resume review by experts',
-      'Salary negotiation guidance',
+      '2,000 applications per month (200/day)',
+      'Interview coaching (requires OpenAI key on server)',
       'Career path recommendations',
-      'Recruiter network access',
-      'Monthly 1-on-1 coaching',
-      'Dedicated support',
+      'Priority support',
     ],
-    cta: 'Contact sales',
+    cta: 'Subscribe to Premium',
     highlighted: false,
     checkoutPlanMonthly: 'premium_monthly',
     checkoutPlanYearly: 'premium_yearly',
-    contactOnly: true,
   },
 ];
 
@@ -95,12 +91,17 @@ const FAQ = [
   {
     question: "What if I don't get interviews?",
     answer:
-      'We offer a 30-day money-back guarantee. If you are not seeing results, we will work with you to improve your profile or refund your subscription.',
+      'Results depend on your profile, market, and roles you target. Use Career insights and Interview coach (when configured) to strengthen applications. Cancel anytime from billing settings — we do not advertise a money-back guarantee.',
   },
   {
     question: 'Can I cancel anytime?',
     answer:
       'Yes. Cancel from billing settings (Stripe Customer Portal) at any time. No questions asked.',
+  },
+  {
+    question: 'What are the real apply limits?',
+    answer:
+      'Free: 5/day and 5/month. Pro: 100/day and 500/month. Premium: 200/day and 2,000/month. Limits count genuine apply attempts (submitted, filled, running, queued, needs user) — not failed or dry-run runs.',
   },
   {
     question: 'Which industries do you support?',
@@ -140,10 +141,6 @@ export default function PricingPage() {
   const startCheckout = async (plan: (typeof PLANS)[number]) => {
     if (plan.key === 'free') {
       router.push('/login?mode=signup');
-      return;
-    }
-    if (plan.contactOnly) {
-      router.push('/contact');
       return;
     }
     const priceKey = billingPeriod === 'yearly' ? plan.checkoutPlanYearly : plan.checkoutPlanMonthly;

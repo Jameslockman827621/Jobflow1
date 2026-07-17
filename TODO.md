@@ -3,6 +3,45 @@
 **Created:** 2026-03-07  
 **Priority:** Critical gaps first, then enhancements
 
+> **World-class SaaS gap tracker (detailed, living):** [`WORLD-CLASS-SAAS-TODO.md`](./WORLD-CLASS-SAAS-TODO.md)
+
+---
+
+## ✅ Connect LinkedIn / Indeed → Easy Apply (E2E) — 2026-07-16
+
+Full checklist: [`CONNECT-BOARDS-E2E.md`](./CONNECT-BOARDS-E2E.md)
+
+### Product flow
+- [x] Dashboard Connect LinkedIn / Connect Indeed + status + Disconnect
+- [x] Extension cookie sync (`li_at`, Indeed auth) → BoardSession / Playwright `storage_state`
+- [x] Headless apply uses saved session automatically
+- [x] Missing session on live board host → `needs_user` + `connect_hint` (not silent fail)
+- [x] Stale session (login wall) → invalidate BoardSession + reconnect hint
+- [x] Genuine submit still gated by user opt-in + platform kill-switch
+
+### Backend
+- [x] `GET /api/v1/apply-engine/connect/status`
+- [x] `POST /api/v1/apply-engine/board-sessions/{board}/from-cookies`
+- [x] Cookie validation (`li_at` / Indeed auth cookies)
+- [x] Package capabilities: `needs_session`, `board_session`, `connect_hint`
+- [x] Source-name ATS fallback for fixture / custom domains
+
+### Extension
+- [x] `cookies` permission + LinkedIn/Indeed content script
+- [x] Popup Connect buttons + dashboard bridge `JobScaleExtension.connectBoard`
+- [x] Auto-sync when logged into board with JobScale token present
+
+### Tests (automated)
+- [x] Cookie → storage_state unit + API
+- [x] Connect → LinkedIn Easy Apply fixture → submitted
+- [x] Live `linkedin.com` URL without session → blocked with connect hint
+- [x] Board coverage suite (LinkedIn / Indeed / company / handoff)
+
+### Remaining (manual / ops)
+- [ ] Point extension `API_BASE` + host_permissions at production HTTPS
+- [ ] Live LinkedIn Easy Apply smoke with real account (ToS-aware)
+- [ ] Session refresh UX polish when cookies expire mid-batch
+
 ---
 
 ## 🔴 CRITICAL (BLOCKING) - Must Fix Before Testing

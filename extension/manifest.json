@@ -1,13 +1,15 @@
 {
   "manifest_version": 3,
   "name": "JobScale - AI Job Applications",
-  "version": "1.0.0",
-  "description": "Apply to jobs with AI-powered CV tailoring and cover letters. One-click applications from any job board.",
+  "version": "2.2.0",
+  "description": "Connect LinkedIn/Indeed, multi-step ATS auto-fill, and genuine Easy Apply.",
   "permissions": [
     "activeTab",
     "storage",
     "tabs",
-    "contextMenus"
+    "contextMenus",
+    "scripting",
+    "cookies"
   ],
   "host_permissions": [
     "https://*.linkedin.com/*",
@@ -16,8 +18,20 @@
     "https://*.greenhouse.io/*",
     "https://*.lever.co/*",
     "https://*.workable.com/*",
+    "https://jobs.ashbyhq.com/*",
+    "https://*.myworkdayjobs.com/*",
+    "https://*.workday.com/*",
     "http://localhost:3000/*",
-    "http://localhost:8000/*"
+    "http://localhost:8000/*",
+    "http://127.0.0.1:3000/*",
+    "http://127.0.0.1:8000/*",
+    "https://*.jobscale.app/*",
+    "https://jobscale.app/*",
+    "https://*.pages.dev/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://*/*"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -28,10 +42,22 @@
     },
     "default_title": "JobScale"
   },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
+    {
+      "matches": [
+        "https://*.linkedin.com/*",
+        "https://*.indeed.com/*"
+      ],
+      "js": ["board-connect.js"],
+      "run_at": "document_idle"
+    },
     {
       "matches": [
         "https://*.linkedin.com/jobs/*",
@@ -39,13 +65,23 @@
         "https://*.glassdoor.com/*",
         "https://jobs.ashbyhq.com/*",
         "https://*.greenhouse.io/*",
-        "https://*.lever.co/*"
+        "https://*.lever.co/*",
+        "https://*.workable.com/*",
+        "https://*.myworkdayjobs.com/*",
+        "https://*.workday.com/*"
       ],
-      "js": ["content.js"],
-      "css": ["styles.css"]
+      "js": ["form-filler.js", "content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
     },
     {
-      "matches": ["http://localhost:3000/*"],
+      "matches": [
+        "http://localhost:3000/*",
+        "http://127.0.0.1:3000/*",
+        "https://*.jobscale.app/*",
+        "https://jobscale.app/*",
+        "https://*.pages.dev/*"
+      ],
       "js": ["dashboard-bridge.js"]
     }
   ],

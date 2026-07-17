@@ -36,6 +36,27 @@ interface ApplicationPackage {
   status: string;
 }
 
+interface CoverageStats {
+  monitored_career_pages: number;
+  coverage_pct?: number;
+}
+
+interface ApplyQuota {
+  remaining_today: number;
+  daily_limit: number;
+  daily_used: number;
+  allowed: boolean;
+}
+
+interface ApplyRunSummary {
+  id: number;
+  status: string;
+  ats_type?: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+  error?: string | null;
+}
+
 function SkeletonCard() {
   return (
     <div className="bg-white rounded-lg border border-slate-200 p-5 animate-pulse">
@@ -135,6 +156,78 @@ function DashboardPage() {
   const [selectedJobs, setSelectedJobs] = useState<Set<number>>(new Set());
   const [error, setError] = useState('');
   const [appCount, setAppCount] = useState(0);
+  const [coverage, setCoverage] = useState<CoverageStats | null>(null);
+  const [applyQuota, setApplyQuota] = useState<ApplyQuota | null>(null);
+  const [lastApplyRun, setLastApplyRun] = useState<ApplyRunSummary | null>(null);
+  const [queueHeadless, setQueueHeadless] = useState(false);
+  const [genuineSubmit, setGenuineSubmit] = useState(false);
+  const [monitorAutoQueue, setMonitorAutoQueue] = useState(false);
+  const [boardConnect, setBoardConnect] = useState<{
+    linkedin?: { connected: boolean; connect_url?: string };
+    indeed?: { connected: boolean; connect_url?: string };
+    extension_required?: boolean;
+    message?: string;
+  } | null>(null);
+  const [connectingBoard, setConnectingBoard] = useState<string | null>(null);
+  const [applyBatchId, setApplyBatchId] = useState<string | null>(null);
+  const [applyBatchStatus, setApplyBatchStatus] = useState<{
+    total?: number;
+    by_status?: Record<string, number>;
+    runs?: Array<{ status?: string; error?: string; meta?: any }>;
+  } | null>(null);
+  const [reconnectNeeded, setReconnectNeeded] = useState<{
+    boards: Array<'linkedin' | 'indeed'>;
+    hint?: string;
+  } | null>(null);
+  const [retrying, setRetrying] = useState(false);
+
+  function resolveBoardKey(raw: unknown): 'linkedin' | 'indeed' | null {
+    if (raw === 'linkedin' || raw === 'indeed') return raw;
+    if (raw && typeof raw === 'object') {
+      const b = (raw as { board?: string; ats?: string }).board
+        || (raw as { board?: string; ats?: string }).ats;
+      if (b === 'linkedin' || b === 'indeed') return b;
+    }
+    return null;
+  }
+
+  async function retryNeedsUserApplies() {
+    setRetrying(true);
+    try {
+      const res = await authFetch('/api/v1/apply-engine/headless/retry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          statuses: ['needs_user', 'failed', 'stale'],
+          auto_submit: genuineSubmit,
+          limit: 20,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(
+          typeof err.detail === 'string'
+            ? err.detail
+            : err.detail?.reason || 'Retry queue failed'
+        );
+        return;
+      }
+      const data = await res.json();
+      toast.success(
+        data.queued
+          ? `Re-queued ${data.queued} apply${data.queued === 1 ? '' : 's'}`
+          : data.message || 'Nothing to retry'
+      );
+      if (data.queued) {
+        setReconnectNeeded(null);
+        await loadAutomationMetrics();
+      }
+    } catch {
+      toast.error('Retry request failed');
+    } finally {
+      setRetrying(false);
+    }
+  }
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -152,6 +245,132 @@ function DashboardPage() {
     }
   }, [searchParams]);
 
+  async function loadConnectStatus() {
+    try {
+      const res = await authFetch('/api/v1/apply-engine/connect/status');
+      if (res.ok) {
+        const data = await res.json();
+        setBoardConnect({
+          linkedin: data.boards?.linkedin,
+          indeed: data.boards?.indeed,
+          extension_required: data.extension_required,
+          message: data.message,
+        });
+      }
+    } catch {
+      /* non-blocking */
+    }
+  }
+
+  async function connectBoard(board: 'linkedin' | 'indeed') {
+    setConnectingBoard(board);
+    setError('');
+    try {
+      // Prefer extension bridge (real cookie sync)
+      const ext = (window as any).JobScaleExtension;
+      const extInstalled = !!(ext && (ext.installed === true || typeof ext.connectBoard === 'function'));
+      if (!extInstalled) {
+        toast.error(
+          boardConnect?.message
+            || 'Install the JobScale Chrome extension, then click Connect again. Options → set API URL if needed.'
+        );
+      }
+      if (ext && typeof ext.connectBoard === 'function') {
+        const result = await ext.connectBoard(board);
+        if (result?.ok) {
+          toast.success(`${board === 'linkedin' ? 'LinkedIn' : 'Indeed'} connected for Easy Apply`);
+          setReconnectNeeded(null);
+          await loadConnectStatus();
+          return;
+        }
+        // Fall through to open board + poll if extension returned error
+        if (result?.error && !String(result.error).includes('timeout')) {
+          toast.error(result.error);
+        }
+      } else {
+        // Dispatch for content-script bridge if present without JobScaleExtension
+        window.dispatchEvent(new CustomEvent('jobscale-connect-board', { detail: { board } }));
+      }
+      const url =
+        boardConnect?.[board]?.connect_url
+        || (board === 'linkedin' ? 'https://www.linkedin.com/feed/' : 'https://www.indeed.com/');
+      window.open(url, '_blank', 'noopener,noreferrer');
+      toast.success(`Log into ${board === 'linkedin' ? 'LinkedIn' : 'Indeed'} in the new tab — JobScale extension will sync your session`);
+      // Poll for up to ~40s
+      let connected = false;
+      for (let i = 0; i < 10; i++) {
+        await new Promise((r) => setTimeout(r, 4000));
+        await loadConnectStatus();
+        connected = !!(await authFetch('/api/v1/apply-engine/connect/status').then((r) => r.json()).catch(() => null))
+          ?.boards?.[board]?.connected;
+        if (connected) {
+          toast.success(`${board === 'linkedin' ? 'LinkedIn' : 'Indeed'} connected`);
+          setReconnectNeeded(null);
+          break;
+        }
+      }
+      if (!connected) {
+        toast.error(
+          extInstalled
+            ? `${board === 'linkedin' ? 'LinkedIn' : 'Indeed'} did not connect in time — log in on the board tab, then click Connect again.`
+            : 'Extension required to sync your board session. Install JobScale extension, then retry Connect.'
+        );
+      }
+      await loadConnectStatus();
+    } finally {
+      setConnectingBoard(null);
+    }
+  }
+
+  async function disconnectBoard(board: 'linkedin' | 'indeed') {
+    const res = await authFetch(`/api/v1/apply-engine/board-sessions/${board}`, { method: 'DELETE' });
+    if (res.ok) {
+      toast.success(`${board === 'linkedin' ? 'LinkedIn' : 'Indeed'} disconnected`);
+      await loadConnectStatus();
+    }
+  }
+
+  async function loadAutomationMetrics() {
+    try {
+      const [covRes, quotaRes, runsRes, settingsRes] = await Promise.all([
+        authFetch('/api/v1/companies/coverage'),
+        authFetch('/api/v1/apply-engine/quota'),
+        authFetch('/api/v1/apply-engine/runs?limit=5'),
+        authFetch('/api/v1/apply-engine/settings'),
+        loadConnectStatus(),
+      ]);
+      if (settingsRes.ok) {
+        const st = await settingsRes.json();
+        setGenuineSubmit(!!st.auto_apply_submit);
+        setMonitorAutoQueue(!!st.monitor_auto_queue);
+        if (st.auto_apply_submit) setQueueHeadless(true);
+      }
+      if (covRes.ok) {
+        const cov = await covRes.json();
+        setCoverage({
+          monitored_career_pages: cov.monitored_career_pages ?? 0,
+          coverage_pct: cov.coverage_pct,
+        });
+      }
+      if (quotaRes.ok) {
+        const q = await quotaRes.json();
+        setApplyQuota({
+          remaining_today: q.remaining_today ?? 0,
+          daily_limit: q.daily_limit ?? 0,
+          daily_used: q.daily_used ?? 0,
+          allowed: q.allowed !== false,
+        });
+      }
+      if (runsRes.ok) {
+        const runsData = await runsRes.json();
+        const runs = runsData.runs || [];
+        setLastApplyRun(runs[0] || null);
+      }
+    } catch {
+      /* non-blocking */
+    }
+  }
+
   async function loadDashboard() {
     try {
       setLoading(true);
@@ -163,12 +382,14 @@ function DashboardPage() {
           router.push('/onboarding');
           return;
         }
-        if (status.has_cached_jobs) {
-          const searchRes = await authFetch('/api/v1/onboarding/search', { method: 'POST' });
-          if (searchRes.ok) {
-            const searchData = await searchRes.json();
-            setJobs(searchData.jobs || []);
-          }
+        // Always re-search — do not gate on has_cached_jobs (empty dashboard bug)
+        const searchRes = await authFetch('/api/v1/onboarding/search', { method: 'POST' });
+        if (searchRes.ok) {
+          const searchData = await searchRes.json();
+          setJobs(searchData.jobs || []);
+        } else {
+          setError('Could not load matched jobs — try Refresh');
+          toast.error('Failed to load matched jobs');
         }
         const autoApplyRes = await authFetch('/api/v1/auto-apply/jobs');
         if (autoApplyRes.ok) {
@@ -181,6 +402,7 @@ function DashboardPage() {
         const stats = await statsRes.json();
         setAppCount(stats.total || 0);
       }
+      await loadAutomationMetrics();
     } catch (err: any) {
       setError(err.message || 'Failed to load dashboard');
     } finally {
@@ -248,18 +470,172 @@ function DashboardPage() {
       });
       if (!res.ok) {
         const err = await res.json();
-        if (err.detail?.includes('No CV found')) {
+        if (typeof err.detail === 'string' && err.detail.includes('No CV found')) {
           toast.error('Please create a CV first');
           router.push('/cv-builder');
           return;
         }
-        throw new Error(err.detail || 'Failed to start applications');
+        throw new Error(
+          typeof err.detail === 'string' ? err.detail : 'Failed to start applications'
+        );
       }
       const data = await res.json();
-      setBatchResults(data.applications || []);
+      const applications = data.applications || [];
+      setBatchResults(applications);
+
+      if (queueHeadless) {
+        const applicationIds = applications
+          .map((a: { application_id?: number }) => a.application_id)
+          .filter((id: number | undefined): id is number => typeof id === 'number');
+        if (applicationIds.length > 0) {
+          try {
+            // Persist opt-in before genuine submit queue
+            if (genuineSubmit) {
+              await authFetch('/api/v1/apply-engine/settings', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ auto_apply_submit: true }),
+              });
+            }
+            const hlRes = await authFetch('/api/v1/apply-engine/headless/batch', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                application_ids: applicationIds,
+                dry_run: false,
+                auto_submit: genuineSubmit,
+              }),
+            });
+            if (!hlRes.ok) {
+              const hlErr = await hlRes.json().catch(() => ({}));
+              const detail =
+                typeof hlErr.detail === 'string'
+                  ? hlErr.detail
+                  : hlErr.detail?.reason || 'Headless queue failed';
+              toast.error(`Applications started, but headless queue failed: ${detail}`);
+            } else {
+              const hlData = await hlRes.json().catch(() => ({}));
+              const batchId = hlData.batch_id as string | undefined;
+              if (hlData.session_warnings?.length || hlData.needs_reconnect) {
+                const boards = (hlData.session_warnings || [])
+                  .map((w: { board?: string }) => resolveBoardKey(w.board))
+                  .filter(Boolean) as Array<'linkedin' | 'indeed'>;
+                setReconnectNeeded({
+                  boards: boards.length ? boards : ['linkedin', 'indeed'],
+                  hint:
+                    hlData.session_warnings?.[0]?.connect_hint ||
+                    hlData.message ||
+                    'Connect LinkedIn/Indeed before Easy Apply on those boards.',
+                });
+              }
+              if (batchId) {
+                setApplyBatchId(batchId);
+                setApplyBatchStatus({ total: applicationIds.length, by_status: { queued: applicationIds.length } });
+                // Poll real ApplyRun outcomes (not mock)
+                let finalStatus: any = null;
+                for (let i = 0; i < 24; i++) {
+                  await new Promise((r) => setTimeout(r, 2500));
+                  const stRes = await authFetch(`/api/v1/apply-engine/headless/batch/${batchId}`);
+                  if (!stRes.ok) continue;
+                  const st = await stRes.json();
+                  finalStatus = st;
+                  setApplyBatchStatus(st);
+                  const by = st.by_status || {};
+                  const runs = st.runs || [];
+                  const needsReconnect =
+                    (st.needs_reconnect || 0) > 0
+                      ? runs.filter(
+                          (r: any) =>
+                            r?.meta?.blocked_reason === 'login_required' ||
+                            r?.meta?.connect_hint ||
+                            r?.meta?.session_invalidated ||
+                            (r?.status === 'needs_user' &&
+                              String(r?.error || '').toLowerCase().includes('login'))
+                        )
+                      : runs.filter(
+                          (r: any) =>
+                            r?.meta?.blocked_reason === 'login_required' ||
+                            r?.meta?.connect_hint ||
+                            r?.meta?.session_invalidated
+                        );
+                  if (needsReconnect.length > 0 || (st.needs_reconnect || 0) > 0) {
+                    const boards = Array.from(
+                      new Set(
+                        needsReconnect
+                          .map(
+                            (r: any) =>
+                              resolveBoardKey(r?.meta?.board_key) ||
+                              resolveBoardKey(r?.meta?.board) ||
+                              (r?.ats_type === 'indeed' || r?.ats_type === 'linkedin'
+                                ? r.ats_type
+                                : null)
+                          )
+                          .filter(Boolean)
+                      )
+                    ) as Array<'linkedin' | 'indeed'>;
+                    setReconnectNeeded({
+                      boards: boards.length ? boards : ['linkedin', 'indeed'],
+                      hint:
+                        needsReconnect[0]?.meta?.connect_hint ||
+                        'Session expired or missing — reconnect LinkedIn/Indeed to continue Easy Apply.',
+                    });
+                    try {
+                      document.getElementById('board-connections')?.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'center',
+                      });
+                    } catch {
+                      /* ignore */
+                    }
+                    await loadConnectStatus();
+                  }
+                  const done =
+                    (by.submitted || 0) +
+                    (by.filled || 0) +
+                    (by.needs_user || 0) +
+                    (by.failed || 0) +
+                    (by.stale || 0) +
+                    (by.skipped || 0) +
+                    (by.deferred || 0);
+                  const total = st.total || applicationIds.length;
+                  if (done >= total && total > 0) break;
+                }
+                const by = finalStatus?.by_status || {};
+                const needsUser = by.needs_user || 0;
+                const submitted = by.submitted || 0;
+                const failed = (by.failed || 0) + (by.stale || 0);
+                if (needsUser > 0 || failed > 0) {
+                  toast.error(
+                    `Apply finished: ${submitted} submitted, ${needsUser} need you, ${failed} failed` +
+                      (needsUser ? ' — reconnect or retry below' : '')
+                  );
+                } else {
+                  toast.success(
+                    genuineSubmit
+                      ? `${submitted || data.total} genuine auto-apply completed`
+                      : `${data.total} applications started — headless fill queued (${applicationIds.length})`
+                  );
+                }
+              } else {
+                toast.success(
+                  genuineSubmit
+                    ? `${data.total} queued for genuine auto-apply (fill + submit)`
+                    : `${data.total} applications started — headless fill queued (${applicationIds.length})`
+                );
+              }
+            }
+          } catch {
+            toast.error('Applications started, but headless queue request failed');
+          }
+        } else {
+          toast.success(`${data.total} applications started!`);
+        }
+      } else {
+        toast.success(`${data.total} applications started!`);
+      }
+
       setShowModal(true);
       setSelectedJobs(new Set());
-      toast.success(`${data.total} applications started!`);
       loadDashboard();
     } catch (err: any) {
       toast.error(err.message || 'Failed to apply');
@@ -308,7 +684,7 @@ function DashboardPage() {
         </div>
 
         {/* Stat cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <div className="bg-white rounded-lg border border-slate-200 p-5">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">Matched Jobs</span>
@@ -335,6 +711,169 @@ function DashboardPage() {
               </div>
             </div>
             <div className="text-2xl font-semibold text-teal-600 tabular-nums">{selectedJobs.size}</div>
+          </div>
+        </div>
+
+        {/* Automation strip */}
+        <div className="mb-8 px-4 py-3 border border-slate-200 rounded-lg bg-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold text-slate-900 uppercase tracking-wide">Automation</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Connect LinkedIn/Indeed, then queue genuine headless Easy Apply
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-slate-600">
+            <span>
+              <span className="text-slate-400 text-xs uppercase tracking-wide mr-1.5">Monitored</span>
+              <span className="font-medium text-slate-900 tabular-nums">
+                {coverage?.monitored_career_pages ?? '—'}
+              </span>
+            </span>
+            <span>
+              <span className="text-slate-400 text-xs uppercase tracking-wide mr-1.5">Quota left</span>
+              <span className="font-medium text-slate-900 tabular-nums">
+                {applyQuota != null ? applyQuota.remaining_today : '—'}
+                {applyQuota != null ? (
+                  <span className="text-slate-400 font-normal">/{applyQuota.daily_limit}</span>
+                ) : null}
+              </span>
+            </span>
+            <span>
+              <span className="text-slate-400 text-xs uppercase tracking-wide mr-1.5">Last run</span>
+              <span className="font-medium text-slate-900">
+                {lastApplyRun?.status ?? 'none'}
+              </span>
+            </span>
+          </div>
+        </div>
+
+        {applyBatchId && applyBatchStatus && (
+          <div className="mb-6 px-4 py-3 border border-slate-200 rounded-lg bg-white">
+            <p className="text-xs font-semibold text-slate-900 uppercase tracking-wide">Apply progress</p>
+            <p className="text-xs text-slate-500 mt-0.5">Batch {applyBatchId.slice(0, 8)}…</p>
+            <div className="flex flex-wrap gap-3 mt-2 text-sm text-slate-700">
+              {Object.entries(applyBatchStatus.by_status || {}).map(([k, v]) => (
+                <span key={k}>
+                  <span className="text-slate-400 text-xs uppercase mr-1">{k}</span>
+                  <span className="font-medium tabular-nums">{v as number}</span>
+                </span>
+              ))}
+            </div>
+            {(applyBatchStatus.runs || []).some(
+              (r) => r.status === 'needs_user' || (r.meta && (r.meta.blocked_reason === 'login_required' || r.meta.connect_hint))
+            ) && (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <p className="text-xs text-amber-700">
+                  Some applies need you — Connect LinkedIn/Indeed below, or complete CAPTCHA/profile gaps.
+                </p>
+                <button
+                  type="button"
+                  disabled={retrying}
+                  onClick={() => retryNeedsUserApplies()}
+                  className="px-2.5 py-1 text-xs font-semibold rounded-md border border-amber-300 text-amber-900 hover:bg-amber-50 disabled:opacity-50"
+                >
+                  {retrying ? 'Retrying…' : 'Retry needs-you'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {reconnectNeeded && (
+          <div className="mb-6 px-4 py-3 border border-amber-300 rounded-lg bg-amber-50">
+            <p className="text-xs font-semibold text-amber-900 uppercase tracking-wide">Reconnect required</p>
+            <p className="text-sm text-amber-900 mt-1">{reconnectNeeded.hint}</p>
+            <div className="flex flex-wrap gap-2 mt-3">
+              {reconnectNeeded.boards.map((board) => (
+                <button
+                  key={board}
+                  type="button"
+                  disabled={connectingBoard === board}
+                  onClick={() => connectBoard(board)}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-md bg-navy-900 text-white hover:bg-navy-800 disabled:opacity-50"
+                >
+                  {connectingBoard === board
+                    ? 'Connecting…'
+                    : `Reconnect ${board === 'linkedin' ? 'LinkedIn' : 'Indeed'}`}
+                </button>
+              ))}
+              <button
+                type="button"
+                disabled={retrying}
+                onClick={() => retryNeedsUserApplies()}
+                className="px-3 py-1.5 text-xs font-semibold rounded-md border border-amber-400 text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+              >
+                {retrying ? 'Retrying…' : 'Retry after reconnect'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setReconnectNeeded(null)}
+                className="px-3 py-1.5 text-xs text-amber-800 hover:text-amber-950"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Connect LinkedIn / Indeed */}
+        <div
+          id="board-connections"
+          className={`mb-8 px-4 py-4 border rounded-lg bg-white ${
+            reconnectNeeded ? 'border-amber-300 ring-2 ring-amber-100' : 'border-slate-200'
+          }`}
+        >
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
+            <div>
+              <p className="text-xs font-semibold text-slate-900 uppercase tracking-wide">Board connections</p>
+              <p className="text-xs text-slate-500 mt-0.5 max-w-xl">
+                Install the JobScale Chrome extension, click Connect, log in — we sync your session so Easy Apply can run for you.
+                {boardConnect?.extension_required && (
+                  <span className="block mt-1 text-amber-700">
+                    Extension required for Connect. {boardConnect.message || 'Install from the Chrome Web Store, then return here.'}
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            {(['linkedin', 'indeed'] as const).map((board) => {
+              const info = boardConnect?.[board];
+              const connected = !!info?.connected;
+              const label = board === 'linkedin' ? 'LinkedIn' : 'Indeed';
+              return (
+                <div
+                  key={board}
+                  className="flex items-center justify-between gap-3 rounded-md border border-slate-100 bg-slate-50/50 px-3 py-3"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">{label}</p>
+                    <p className={`text-xs mt-0.5 ${connected ? 'text-teal-700' : 'text-slate-500'}`}>
+                      {connected ? 'Connected · Easy Apply ready' : 'Not connected'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {connected && (
+                      <button
+                        type="button"
+                        onClick={() => disconnectBoard(board)}
+                        className="text-xs text-slate-500 hover:text-slate-800 px-2 py-1"
+                      >
+                        Disconnect
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      disabled={connectingBoard === board}
+                      onClick={() => connectBoard(board)}
+                      className="px-3 py-1.5 text-xs font-semibold rounded-md bg-navy-900 text-white hover:bg-navy-800 disabled:opacity-50"
+                    >
+                      {connectingBoard === board ? 'Connecting…' : connected ? 'Reconnect' : 'Connect'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -442,11 +981,64 @@ function DashboardPage() {
       {/* Fixed bottom action bar */}
       {selectedJobs.size > 0 && (
         <div className="fixed bottom-0 left-0 lg:left-56 right-0 z-30 bg-white border-t border-slate-200 shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <p className="text-sm text-slate-600">
               <span className="font-semibold text-navy-900">{selectedJobs.size}</span> job{selectedJobs.size !== 1 ? 's' : ''} selected
             </p>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={queueHeadless}
+                  onChange={(e) => setQueueHeadless(e.target.checked)}
+                  className="w-4 h-4 text-teal-500 border-slate-300 rounded focus:ring-teal-500 cursor-pointer"
+                />
+                <span>Queue headless apply (server-side)</span>
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={genuineSubmit}
+                  onChange={async (e) => {
+                    const on = e.target.checked;
+                    setGenuineSubmit(on);
+                    if (on) setQueueHeadless(true);
+                    try {
+                      await authFetch('/api/v1/apply-engine/settings', {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ auto_apply_submit: on }),
+                      });
+                    } catch {
+                      /* non-blocking */
+                    }
+                  }}
+                  className="w-4 h-4 text-teal-500 border-slate-300 rounded focus:ring-teal-500 cursor-pointer"
+                />
+                <span>Genuinely submit for me</span>
+                <span className="text-xs text-slate-400 font-normal">(fills + submits when confirmed)</span>
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={monitorAutoQueue}
+                  onChange={async (e) => {
+                    const on = e.target.checked;
+                    setMonitorAutoQueue(on);
+                    try {
+                      await authFetch('/api/v1/apply-engine/settings', {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ monitor_auto_queue: on }),
+                      });
+                    } catch {
+                      /* non-blocking */
+                    }
+                  }}
+                  className="w-4 h-4 text-teal-500 border-slate-300 rounded focus:ring-teal-500 cursor-pointer"
+                />
+                <span>Auto-queue high-match monitored jobs</span>
+              </label>
               <button
                 onClick={() => setSelectedJobs(new Set())}
                 className="px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-md transition-colors font-medium"
@@ -491,7 +1083,11 @@ function DashboardPage() {
               </div>
             </div>
             <div className="px-6 py-4">
-              <p className="text-sm text-slate-600 mb-4">Your applications have been prepared. The Chrome extension will auto-apply to these jobs, or you can apply manually using the links below.</p>
+              <p className="text-sm text-slate-600 mb-4">
+                {genuineSubmit
+                  ? 'JobScale queues genuine headless apply (fill + submit when opted in). Status updates above as runs finish.'
+                  : 'Headless fill is queued without submit unless “Genuine submit” is checked. Manual links below are optional.'}
+              </p>
               <div className="space-y-2">
                 {batchResults.map((result, i) => (
                   <div key={i} className={`p-3.5 rounded-lg border ${result.status === 'already_applied' ? 'border-amber-200 bg-amber-50/50' : 'border-slate-200 bg-slate-50/50'}`}>
